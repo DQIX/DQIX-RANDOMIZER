@@ -57,6 +57,8 @@ from monstres_nommes import MONSTRES
 # porte au-dessus du plus gros modele du jeu (42 408 octets) pour n'ecarter plus
 # personne.
 PLAFOND_MODELE = 48 * 1024
+ROM_ATTENDUE = ("Dragon Quest IX - Sentinels of the Starry Skies "
+                "(Europe) (En,Fr,De,Es,It).nds")
 import ndspy.code
 import ndspy.codeCompression as cc
 import ndspy.rom
@@ -400,6 +402,41 @@ def greffe_a2(adr):
     ], adr)
 
 
+def tailles_par_code():
+    """Rend {identifiant: taille du modele de terrain}, par le CODE du modele.
+
+    POURQUOI PAS `work/tailles_modeles.txt`. Ce releve indexe par identifiant et
+    il est incomplet : 400 entrees pour 441 monstres. Les manquants n'etaient
+    pas sans modele -- `squelette` en a un de 14 880 octets, `dragon vert` de
+    25 348 -- ils etaient simplement absents du fichier, et le bitmap les
+    ecartait en silence. Vingt-trois noms du bestiaire sur 256 y passaient.
+
+    On repart donc de la table de noms, qui donne le CODE du modele de chaque
+    espece, et on mesure l'archive. Les variantes de couleur partagent le
+    maillage de la premiere : `z000b` n'est pas un membre d'`enemy.gp2`, c'est
+    `z000a` qui porte les deux. D'ou le repli sur la variante `a`.
+    """
+    import monnames
+    import tailles_modeles
+    par_code = tailles_modeles.mesurer()
+    noms = monnames.charger(ROM_ATTENDUE, "fr")
+    out = {}
+    for i in range(BORNE):
+        try:
+            f = noms[i]
+        except (KeyError, IndexError):
+            continue
+        if not (isinstance(f, dict) and f.get("modele")):
+            continue
+        code = f["modele"]
+        n = par_code.get(code)
+        if n is None and code[-1:].isalpha() and code[-1] != "a":
+            n = par_code.get(code[:-1] + "a")
+        if n:
+            out[i] = n
+    return out
+
+
 def especes_tirables():
     """Rend la liste des identifiants que le tirage peut sortir.
 
@@ -412,12 +449,10 @@ def especes_tirables():
     terrain, hors = construire_pool(
         "Dragon Quest IX - Sentinels of the Starry Skies "
         "(Europe) (En,Fr,De,Es,It).nds")
-    tailles = charger_tailles()
+    tailles = tailles_par_code()
     try:
         import monnames
-        noms = monnames.charger(
-            "Dragon Quest IX - Sentinels of the Starry Skies "
-            "(Europe) (En,Fr,De,Es,It).nds", "fr")
+        noms = monnames.charger(ROM_ATTENDUE, "fr")
     except Exception:
         noms = None
     table, _ = construire_bitmap(terrain, tailles, hors=hors, noms=noms)
@@ -449,11 +484,14 @@ def construire_bitmap(terrain, tailles, hors=(), noms=None, plafond=PLAFOND_MODE
     """
     t = bytearray(BORNE // 8)
     compte = [0, 0]
-    for i in sorted(set(terrain) | set(hors)):
+    # ON PART DU BESTIAIRE, PAS DE CE QUI RODE EN VANILLA. Balayer
+    # `terrain | hors` laissait dehors les especes qui n'apparaissent ni comme
+    # symbole ni dans un combat scripte -- `luna-tique` par exemple, qui a
+    # pourtant un modele de 17 596 octets. La liste blanche des 256 est la seule
+    # source qui vaille : tout ce qui y figure doit pouvoir sortir.
+    for i in sorted(MONSTRES):
         if i >= BORNE:
             continue
-        if i not in MONSTRES:
-            continue                    # hors des 256 du bestiaire : un boss
         if noms is not None:
             # `monnames.charger` rend une LISTE indexee par identifiant, pas un
             # dictionnaire : `.get` n'existe pas et le test tombait toujours a
@@ -581,10 +619,10 @@ def patcher(rom, bavard=True, taille_max=0):
     terrain, boss = construire_pool(
         "Dragon Quest IX - Sentinels of the Starry Skies "
         "(Europe) (En,Fr,De,Es,It).nds")
-    tailles = charger_tailles()
+    tailles = tailles_par_code()
     if not tailles:
-        raise SystemExit("work/tailles_modeles.txt manque : lancer d'abord "
-                         "scripts/tailles_modeles.py")
+        raise SystemExit("aucun modele mesure : `enemy.gp2` est-il extrait "
+                         "dans work/extracted ?")
     try:
         import monnames
         noms = monnames.charger(

@@ -217,9 +217,9 @@ def construire(plafond=PLAFOND, site_declencheur=0, originaux=None,
         raise SystemExit("construire() exige les mots d'origine des douze sites")
     if not especes:
         raise SystemExit("construire() exige la liste des especes tirables")
-    if len(especes) > 255:
-        raise SystemExit(f"{len(especes)} especes : le compte doit tenir dans "
-                         f"un immediat de huit bits")
+    if len(especes) > 1000:
+        raise SystemExit(f"{len(especes)} especes : le tableau et les noeuds "
+                         f"deviendraient plus gros que le blob")
     pool, index = [], {}
 
     def lit(v):
@@ -487,7 +487,7 @@ def construire(plafond=PLAFOND, site_declencheur=0, originaux=None,
         "beq #{@sans_noeuds}",
         "sub r4, pc, #{@@H:especes}",
         "sub r4, r4, #{@@L:especes}",
-        "mov r5, #%d" % len(especes),
+        "ldr r5, [pc, #%s]" % lit(len(especes)),
         "push {r4, r5}",                    # sp[0] = tableau, sp[1] = compte
     ] + appel(BATIR_NOEUDS) + [
         "add sp, sp, #8",
