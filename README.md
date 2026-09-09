@@ -1,6 +1,6 @@
 # Dragon Quest IX Randomizer
 
-Version 1.1
+Version 1.0
 
 This project randomizes the field encounters in **Dragon Quest IX: Sentinels of the Starry Skies**.
 
