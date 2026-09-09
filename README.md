@@ -1,154 +1,197 @@
 # Dragon Quest IX Randomizer
 
-**Version 1.1** — every monster you meet in the field is drawn at random from the
-whole bestiary, and it really is the monster you see.
+Version 1.1
 
-Dragon Quest IX only keeps a handful of monster models in memory at a time, and
-it decides which ones when a map loads. That is why a naive encounter randomizer
-either shows you the wrong sprite or crashes. This patch rewrites the loading
-path so that a species can be drawn from all **256 field monsters** at any
-moment, loaded on demand, evicted when nothing is using it, and given its real
-behaviour parameters — so it moves, chases and flees the way that species
-should.
+This project randomizes the field encounters in **Dragon Quest IX: Sentinels of the Starry Skies**.
 
-## What it changes
+Each field monster is replaced with another monster chosen from the game's 256 field monsters. The overworld symbol and model are also changed to match the randomized monster.
 
-- **Field encounters.** Any of the 256 bestiary monsters can appear anywhere.
-  The draw is uniform: no species is rarer than another.
-- **The model matches the monster.** The symbol you see on the map is the
-  species you will actually fight, whatever it is.
-- **Bosses stay bosses.** The bestiary numbers its monsters 1 to 256 and puts
-  bosses beyond that; everything past 256 is excluded, including the seventeen
-  bosses that roam as grotto symbols in the unmodified game.
+Bosses are excluded from randomization. Monster stats, items, spells, and equipment are unchanged. Scripted story battles are also unchanged.
 
-Statistics, items, spells and equipment are untouched. This release randomizes
-encounters only. Scripted story battles keep their own pool, difficulty is not
-rebalanced, and the game can be finished normally.
+The randomizer does **not** rebalance the game's difficulty. Some randomized encounters may be significantly stronger or weaker than the original encounter.
 
----
-
-## Installing
+## Installation
 
 ### 1. Check your ROM
 
-The patch only works on the **European** release, and it will refuse anything
-else rather than produce a broken game.
+The patch only works on the **European multilingual** release, and it will refuse anything else rather than produce a broken game.
 
-| | |
-|---|---|
-| Serial | `YDQP` |
-| CRC32 | `FE8EC0E8` |
-| MD5 | `3a63438fff7db282fa3133e8fd020e85` |
-| Size | 268,435,456 bytes |
+The required ROM is:
+
+`Dragon Quest IX - Sentinels of the Starry Skies (Europe) (En,Fr,De,Es,It).nds`
+
+You do **not** need an English-only ROM. The English, French, German, Spanish and Italian languages are all included in this single European ROM.
+
+The ROM filename does not need to match the name above. The patch checks the ROM contents, not its filename.
+
+The ROM must have the following fingerprints:
+
+* **Serial:** `YDQP`
+* **CRC32:** `FE8EC0E8`
+* **MD5:** `3a63438fff7db282fa3133e8fd020e85`
+* **Size:** `268,435,456 bytes`
+
+You can check the MD5 hash of your ROM with:
 
 ```bash
 # Linux / macOS
-md5sum "Dragon Quest IX ... .nds"       # or md5 -q on macOS
+md5sum "Dragon Quest IX - Sentinels of the Starry Skies (Europe) (En,Fr,De,Es,It).nds"
 ```
+
+On macOS, you can also use:
+
+```bash
+md5 -q "Dragon Quest IX - Sentinels of the Starry Skies (Europe) (En,Fr,De,Es,It).nds"
+```
+
+On Windows PowerShell:
+
 ```powershell
-# Windows
-Get-FileHash -Algorithm MD5 "Dragon Quest IX ... .nds"
+Get-FileHash -Algorithm MD5 "Dragon Quest IX - Sentinels of the Starry Skies (Europe) (En,Fr,De,Es,It).nds"
 ```
+
+The expected MD5 is:
+
+`3a63438fff7db282fa3133e8fd020e85`
 
 No ROM is distributed here — use your own copy of the game.
 
 ### 2. Get xdelta3
 
-| Platform | |
-|---|---|
-| Windows | `scoop install xdelta` or `winget install xdelta3`, or the binary from [the releases page](https://github.com/jmacd/xdelta-gpl/releases) |
-| macOS | `brew install xdelta` |
-| Debian / Ubuntu | `sudo apt install xdelta3` |
-| Arch | `sudo pacman -S xdelta3` |
+You need `xdelta3` to apply the patch.
 
-If you would rather not touch a terminal, [Delta Patcher](https://github.com/marco-calautti/DeltaPatcher/releases)
-is a graphical front end for the same format: pick the ROM as *original file*,
-the `.xdelta` as *patch*, press *Apply patch*.
+| Platform | Installation                                                                                                                                                   |
+| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Linux    | Install `xdelta3` using your distribution's package manager                                                                                                    |
+| macOS    | Install `xdelta3` using Homebrew                                                                                                                               |
+| Windows  | Download the `xdelta3.exe` Windows binary from [the releases page](https://github.com/jmacd/xdelta-gpl/releases), or install it with Scoop/WinGet if available |
+
+On Windows, you do not need to install xdelta3 system-wide.
+
+You can simply put `xdelta3.exe` in the same directory as:
+
+* your Dragon Quest IX ROM
+* `DQIX-Randomizer-v1.1.xdelta`
+
+Then open PowerShell in that directory and run `.\xdelta3.exe`.
 
 ### 3. Apply the patch
 
-Download `patch/DQIX-Randomizer-v1.1.xdelta` from this repository, put it next
-to your ROM, and run:
+Download the patch:
+
+`patch/DQIX-Randomizer-v1.1.xdelta`
+
+#### Linux / macOS
 
 ```bash
-xdelta3 -d -s "Dragon Quest IX - Sentinels of the Starry Skies (Europe) (En,Fr,De,Es,It).nds" \
-            DQIX-Randomizer-v1.1.xdelta \
-            "DQIX Randomizer.nds"
+xdelta3 -d -s "Dragon Quest IX - Sentinels of the Starry Skies (Europe) (En,Fr,De,Es,It).nds" "DQIX-Randomizer-v1.1.xdelta" "DQIX Randomizer.nds"
 ```
 
-On Windows, the same on one line:
+#### Windows PowerShell
+
+If `xdelta3.exe`, the ROM and the patch are all in the same directory:
 
 ```powershell
-xdelta3 -d -s "Dragon Quest IX - Sentinels of the Starry Skies (Europe) (En,Fr,De,Es,It).nds" DQIX-Randomizer-v1.1.xdelta "DQIX Randomizer.nds"
+.\xdelta3.exe -d -f -s ".\Dragon Quest IX - Sentinels of the Starry Skies (Europe) (En,Fr,De,Es,It).nds" ".\DQIX-Randomizer-v1.1.xdelta" ".\DQIX Randomizer.nds"
 ```
 
-The patch carries only the differences, so it needs your ROM to produce
-anything. The result should be 268,435,456 bytes with MD5
-`13a9bf614263eaabbec58d80b0b45282`.
+The ROM filename can be different. Replace the filename in the command with the actual name of your ROM.
 
-**If it fails:**
+The `-f` option allows the output file to be overwritten if it already exists.
 
-| Message | Cause |
-|---|---|
-| `XD3_INVALID_INPUT` | wrong ROM — check the fingerprints above; the American and Japanese releases will not work |
-| `xdelta3: not found` | step 2 was skipped, or the terminal was opened before installing |
-| `No such file or directory` | the ROM filename does not match exactly; quote it, spaces and parentheses included |
+The resulting file should be:
+
+`DQIX Randomizer.nds`
+
+The expected output size is:
+
+`268,435,456 bytes`
+
+The expected MD5 hash of the patched ROM is:
+
+`13a9bf614263eaabbec58d80b0b45282`
+
+On Windows, you can verify it with:
+
+```powershell
+Get-FileHash -Algorithm MD5 ".\DQIX Randomizer.nds"
+```
+
+On Linux / macOS:
+
+```bash
+md5sum "DQIX Randomizer.nds"
+```
 
 ### 4. Play
 
-Open `DQIX Randomizer.nds` in a DS emulator and **start a new game**. Developed
-and tested on melonDS (through BizHawk). Save files from an unmodified game are
-not supported, and real hardware and flashcarts are untested.
+Run:
 
----
+`DQIX Randomizer.nds`
+
+in your Nintendo DS emulator.
+
+Start a **new game**.
+
+The randomization is applied when the patch is created, so every patched ROM can contain a different set of randomized encounters.
+
+The randomizer has been tested with **melonDS through BizHawk**.
+
+Unmodified save files are not supported.
+
+The randomizer has not been tested on real Nintendo DS hardware or flashcarts.
+
+## Building
+
+If you want to build the randomizer yourself, you need:
+
+* Python 3
+* `ndspy`
+* `keystone-engine`
+* `capstone`
+
+Install the Python dependencies with:
+
+```bash
+pip install ndspy keystone-engine capstone
+```
+
+Then run:
+
+```bash
+python randomizer.py
+```
+
+See the available command-line options with:
+
+```bash
+python randomizer.py --help
+```
+
+## Troubleshooting
+
+| Error                             | Solution                                                                                                                                   |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `XD3_INVALID_INPUT`               | Wrong ROM or corrupted patch — check the fingerprints above. The American and Japanese releases will not work.                             |
+| `xdelta3: not found`              | xdelta3 is not installed or is not in your `PATH`. On Windows, if `xdelta3.exe` is in the current directory, use `.\xdelta3.exe`.          |
+| `No such file or directory`       | A file or directory specified in the command cannot be found. Check the current directory and all filenames.                               |
+| The command appears to hang       | Make sure you are using a compatible xdelta3 binary and that the ROM and patch are accessible. The patch should normally complete quickly. |
+| The output ROM has the wrong size | Make sure you are using the correct European ROM and the correct `DQIX-Randomizer-v1.1.xdelta` patch.                                      |
+
+If the ROM does not match the fingerprints listed above, do not continue. The patch is designed specifically for that ROM revision.
 
 ## Known issues
 
-This is an early release. What is known:
+* **European multilingual release only.** The patch targets the European `(En,Fr,De,Es,It)` release. Other regions have different addresses; the patch refuses to apply to them.
+* If more than 6–7 monsters are visible on screen at once, the game may borrow models from other monsters.
+* Large monster models are more likely to cause visual/model issues.
+* The randomizer has only been tested from a fresh game start.
+* Some randomized encounters can be considerably stronger or weaker than the original encounters because the game is not rebalanced.
 
-- **A model can be borrowed.** The model heap holds six or seven monsters at a
-  time. If more than that are alive on screen at once, the next one to appear
-  may wear the appearance of another loaded monster. It is still the right
-  monster in battle.
-- **Large monsters make that more likely.** The heaviest models are around
-  42 KB; several of them together is the situation most likely to fall back to
-  a borrowed appearance.
-- **European release only.** Other regions have different addresses; the patch
-  refuses to apply to them.
-- **Only tested from a fresh start.**
+## Disclaimer
 
-If you hit a freeze, a black screen, or a monster that does not move, please
-open an issue and say where it happened and what was on screen. A savestate
-taken at the moment it breaks is worth more than any description.
+This project does not distribute any copyrighted game ROM or other copyrighted game assets.
 
-## Building it yourself
+You must provide your own legally obtained copy of **Dragon Quest IX: Sentinels of the Starry Skies**.
 
-`randomizer.py` produces the patched ROM from an unmodified one:
-
-```bash
-python randomizer.py "Dragon Quest IX ... .nds" \
-    --seed 1 --sans-rotation --place --blob --plafond 1 --garde 138240 \
-    -o "DQIX Randomizer.nds"
-```
-
-`--seed` picks the permutation; change it for a different game. The remaining
-flags select the on-demand loader, which is what makes the full bestiary
-reachable. Requires Python 3 with `ndspy`, `keystone-engine` and `capstone`.
-
-## How it works, in one paragraph
-
-The ARM9 binary has almost no free space, so the randomizer's code lives in a
-file added to the ROM's filesystem, read into a heap allocation when a map
-mounts, and installed by rewriting fourteen call sites at runtime. It removes
-itself when the map is torn down — the memory it lived in is reclaimed, and a
-stale pointer there is what a crash looks like. On top of that sit a gate that
-accepts any species, an on-demand model loader with eviction, and a graft that
-makes the game build the real behaviour record for every drawable species.
-`docs/RESEARCH.md` documents the file formats, the addresses and, more usefully,
-the measurements and the dead ends.
-
-## Credits
-
-Reverse engineering, patching and documentation done from scratch against the
-European release. The `dqix-functions` naming work of the Dragon Quest hacking
-community was a helpful cross-check on a few ARM9 symbols.
+The patch is provided as-is. Use it at your own risk.
