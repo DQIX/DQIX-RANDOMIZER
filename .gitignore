@@ -1,0 +1,5 @@
+__pycache__/
+*.nds
+*.sav
+*.State
+work/
