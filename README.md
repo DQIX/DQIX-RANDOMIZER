@@ -129,13 +129,13 @@ Run:
 
 `DQIX Randomizer.nds`
 
-in your Nintendo DS emulator.
+in your Nintendo DS emulator. ⚠️ If you want to use DeSmuME for its HD rendering, just disable the Dynamic Recompiler to test. You may get a crash if this option is on — if it disappears after deactivating it, that will pretty much confirm the cause.
 
 Start a **new game**.
 
 The randomization is applied when the patch is created, so every patched ROM can contain a different set of randomized encounters.
 
-The randomizer has been tested with **melonDS through BizHawk**.
+The randomizer has been tested with **melonDS through BizHawk**. and **desmume**
 
 Unmodified save files are not supported.
 
