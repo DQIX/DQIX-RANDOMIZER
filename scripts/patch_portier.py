@@ -12,11 +12,11 @@ LES TROIS VERROUS, ET CE QU'ON EN FAIT
    de la carte : `carte+0x2F8` (tableau d'enregistrements de 0x1C, recherche
    0x0206F500) et `carte+0x304` (liste chainee, recherche 0x0206EF28). Une espece
    absente est rejetee et le jeu reessaie en boucle -- 3 629 appels contre 2,
-   mesure de FORMAT.md 20. Les conteneurs ne portent que les especes declarees
+   mesure de RESEARCH.md 20. Les conteneurs ne portent que les especes declarees
    par la zone.
 
    On ne les remplit pas : le constructeur 0x0206F240 indexe un tableau de douze
-   octets et corrompt tout au-dela (FORMAT.md 64, greffe C retiree).
+   octets et corrompt tout au-dela (RESEARCH.md 64, greffe C retiree).
 
 2. LA TABLE SOURCE, ET C'EST LE JEU QUI LA DONNE. `0x0206EFE8(contexte, tas)` lit
    `data/prm/mon_data.gp2` et batit la table des 438 monstres SUR LE TAS QU'ON
@@ -37,7 +37,7 @@ LES TROIS VERROUS, ET CE QU'ON EN FAIT
 
 3. LE MODELE. `FindLoadedModel` (0x021A2738) rend 0 quand le modele de l'espece
    n'est pas charge, et l'apparition cree alors un acteur SANS modele : le
-   monstre invisible (FORMAT.md 36). On intercale une fonction qui, sur echec,
+   monstre invisible (RESEARCH.md 36). On intercale une fonction qui, sur echec,
    rend un modele deja charge tire au hasard parmi les emplacements 7 a 18.
    L'apparence est empruntee, mais l'espece de l'acteur -- donc le combat, la
    taille et la hitbox -- reste celle qui a ete tiree.

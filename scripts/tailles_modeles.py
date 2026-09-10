@@ -3,7 +3,7 @@
 
 POURQUOI. Le tas des modeles d'une carte tient environ 8 modeles. A 10 ou 12
 especes par zone, certains modeles ne se chargent pas et le monstre apparait
-sans modele -- invisible (docs/FORMAT.md 36). Mais toutes les especes ne coutent
+sans modele -- invisible (docs/RESEARCH.md 36). Mais toutes les especes ne coutent
 pas la meme chose : de 5,5 Kio a 61 Kio. En ecartant les plus gros modeles du
 tirage, on doit pouvoir tenir 10 ou 12 especes la ou 10 quelconques echouaient.
 
@@ -28,7 +28,8 @@ from gp2 import GP2
 from montable import TableMonstres
 from monnames import charger
 
-ROM = "Dragon Quest IX - Sentinels of the Starry Skies (Europe) (En,Fr,De,Es,It).nds"
+from rom_vanilla import chemin_vanilla
+ROM = chemin_vanilla()
 ARCHIVE = "work/extracted/data/pack_lv5/enemy.gp2"
 
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Aligne `encmons.bin` sur `encfld.bin` : la liste de prechargement suit le tirage.
 
-LE DIAGNOSTIC, etabli par mesure en jeu (docs/FORMAT.md §23).
+LE DIAGNOSTIC, etabli par mesure en jeu (docs/RESEARCH.md §23).
 
 Deux fichiers, deux roles, et ils etaient desynchronises :
 
@@ -44,7 +44,7 @@ Usage: python scripts/agrandir_encmons.py <rom.nds> <sortie.nds>
 OBSOLETE : remplace par `scripts/resync_zones.py`, qui reconstruit les deux
 fichiers ENSEMBLE. Deux erreurs ici : les moities de u16 nulles ne sont pas des
 terminateurs (elles sont sautees), et le champ 1 n'est pas libre mais une porte
-de position. Voir docs/FORMAT.md 24.
+de position. Voir docs/RESEARCH.md 24.
 """
 import os
 import struct

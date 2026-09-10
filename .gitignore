@@ -1,5 +1,28 @@
 __pycache__/
+*.pyc
+
+# La ROM est une oeuvre protegee : jamais dans le depot, sous aucune forme.
 *.nds
 *.sav
+*.dsv
 *.State
+
+# Banc de test : ROMs, savestates, sauvegardes de partie, patches d'archive.
+banc/
+
+# Outils portables (BizHawk, Ghidra, DeSmuME) et clones communautaires.
+tools/
+
+# Sources externes qui ne sont PAS notre oeuvre : le guide RNG de hurblub, les
+# codes Action Replay. On ne redistribue pas le travail de quelqu'un d'autre.
+ref/
+
+# Jetable : extractions, dumps, ROMs d'essai, journaux de build.
 work/
+
+# Configuration personnelle de l'outillage de dev : reste LOCAL, jamais publie.
+# Contient aussi la cle API Linear.
+CLAUDE.md
+.claude/
+.mcp.json
+scripts/linear.py

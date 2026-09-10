@@ -3,7 +3,7 @@
 
 CE QUE CE SCRIPT REMPLACE, ET POURQUOI. Les scripts precedents agrandissaient
 `encfld.bin` puis `encmons.bin` independamment. C'etait faux pour trois raisons,
-etablies par desassemblage (voir `work/re/RAPPORT.md` et docs/FORMAT.md §24) :
+etablies par desassemblage (voir `work/re/RAPPORT.md` et docs/RESEARCH.md §24) :
 
 1. Le conteneur RAM d'`encfld.bin` n'a que **6 emplacements par groupe** : un
    slot de 32 octets alloue par `AddGroup` (`0x0209BD50`, `lsl r4, r0, #5` puis
@@ -222,9 +222,12 @@ def reconstruire(rom, rng, n_especes=ESPECES_DEFAUT, bavard=True):
 
 def construire_pool_racine(rom):
     """Le pool doit venir du VANILLA, pas de la ROM en cours de modification."""
-    import glob
-    return construire_pool(
-        glob.glob("Dragon Quest IX*.nds")[0])
+    from rom_vanilla import chemin_vanilla
+    return construire_pool(chemin_vanilla())
+    raise SystemExit(
+        "ROM vanilla introuvable : elle est attendue dans banc/roms/dq9_vanilla.nds,\n"
+        "ou designee par la variable d'environnement DQ9_VANILLA.\n"
+        "Le pool d'especes doit venir du vanilla, pas de la ROM en cours de patch.")
 
 
 if __name__ == "__main__":

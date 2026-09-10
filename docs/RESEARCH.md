@@ -953,7 +953,7 @@ Structure DeSmuME (`Battery`, `Cheats`, `States`, `StateSlots`), issue d'une par
 réellement jouée. La ROM qu'il contenait est **identique au bit près** à la ROM de
 référence (`3a63438fff7db282fa3133e8fd020e85`), donc tous les offsets et adresses
 de ce document s'y appliquent sans revalidation. Ce doublon de 256 Mo a été
-supprimé ; les fichiers utiles sont recopiés dans `work/save_origine/`.
+supprimé ; les fichiers utiles sont recopiés dans `banc/states/`.
 
 ### Format `.dsv` de DeSmuME
 
@@ -968,7 +968,7 @@ Le fichier s'auto-documente : le marqueur `|<--Snip above here` indique exacteme
 la fin des données brutes. Ici **65 536 octets** (64 Kio, soit 512 Kibit), ce que
 confirme le champ `0x10000` du pied.
 
-Extraction : `work/save_origine/dq9.sav`.
+Extraction : `banc/states/dq9.sav`.
 
 ### Structure interne : deux copies miroir
 
@@ -1019,7 +1019,7 @@ Le code `94000130 FFFB0000` présent plusieurs fois est le conditionnel standard
 ### Confirmation en jeu des rencontres de terrain — CONFIRMÉ
 
 Obtenue avec une sauvegarde de partie avancée fournie par l'utilisateur, qui a
-amené le groupe en pleine plaine et enregistré un savestate (`work/save_origine/
+amené le groupe en pleine plaine et enregistré un savestate (`banc/states/
 plaine_utilisateur.State`).
 
 **Montage.** ROM `dq9_encsent3.nds` : les 4 510 références d'espèce des trois
@@ -1864,7 +1864,7 @@ Cout d'un modele de terrain, mesure sur les 289 `_f` :
 ## 31. Mesure sur le terrain : ce que v14 fait reellement
 
 Savestate pris par le joueur **en pleine plaine, sur la ROM v14 elle-meme**
-(`work/save_origine/terrain_v14.State`). C'est l'outil qui manquait depuis le
+(`banc/states/terrain_v14.State`). C'est l'outil qui manquait depuis le
 debut : le harnais automatique ne sait pas sortir de la ville, et un savestate
 pris sur une autre ROM annule le patch de code.
 
@@ -3201,7 +3201,7 @@ secondes.
 ## 58. Les deux fautes de deplacement, et ce que la sauvegarde du joueur a permis
 
 Le joueur a fourni une sauvegarde d'etat **sur une carte a rencontres, a l'arret**
-(`work/save_origine/transition_v36.State`). C'est l'etat qui manquait au banc
+(`banc/states/transition_v36.State`). C'est l'etat qui manquait au banc
 d'essai : le tic d'apparition y tourne vraiment -- 30 appels par 60 images -- donc
 la greffe B et la rotation y sont exercees. Les deux fautes ci-dessous etaient
 invisibles sans elle.
@@ -3907,7 +3907,7 @@ est appele 877 fois en 40 blocs, mais **le spawn `0x021A2128` n'est jamais
 atteint**, zero modele charge, douze emplacements d'acteur a -1. Et `c1=150` :
 c'est un vieux build **a greffe C**, celle qui corrompt les enregistrements. Tout
 zero mesure sur ce banc est un artefact. Banc valide : `work/dq9_p3.nds` +
-`work/save_origine/terrain_p3.State`.
+`banc/states/terrain_p3.State`.
 
 Lecon de methode : mettre un temoin sur une fonction **qu'on sait appelee** avant
 de croire un zero. Ici `getCurrentFieldStructure` (`0x02027CC0`) restait a zero
@@ -4011,7 +4011,7 @@ mesure de fragmentation, gratuite.
 
 ### La savestate de reference, et sa limite
 
-`work/save_origine/terrain_p3.State` (appariee a `work/dq9_p3.nds`) est **au
+`banc/states/terrain_p3.State` (appariee a `work/dq9_p3.nds`) est **au
 centre de la zone 20002** : aucune limite de zone atteignable en 15 s de marche
 dans les quatre directions (`scripts/lua/reperage.lua`). Elle sert donc a
 observer les apparitions, pas les montages. Pour les montages, seul
@@ -4420,7 +4420,7 @@ Ce qu'il faut observer en jeu :
 ## 71. Le chargement a la demande fonctionne -- et les quatre defauts qui ont suivi
 
 Premiere preuve mesuree, `scripts/lua/chargeur.lua` sur
-`work/save_origine/sortie_p5.State` (la savestate du joueur, juste hors de la
+`banc/states/sortie_p5.State` (la savestate du joueur, juste hors de la
 ville -- **le premier banc ou les apparitions tournent vraiment**, la carte y
 etant fraichement peuplee) :
 
@@ -4870,7 +4870,7 @@ negatif :
 
 - **la SaveRAM est nommee d'apres la ROM.** Une ROM neuve demarre sans
   sauvegarde et s'arrete sur « Create a new adventure log ». Il faut copier
-  `work/save_origine/dq9.sav` sur `tools/bizhawk/NDS/SaveRAM/dq9 <etiquette>.SaveRAM`
+  `banc/states/dq9.sav` sur `tools/bizhawk/NDS/SaveRAM/dq9 <etiquette>.SaveRAM`
   avant de lancer.
 - **l'overlay 17 arrive avant le jeu**, des le menu de chargement. S'arreter a
   « l'overlay est charge » laisse la sonde dans la boite de dialogue, ou les

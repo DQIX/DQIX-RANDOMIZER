@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Remplit les emplacements d'espece LIBRES de chaque zone.
 
-CONSTAT QUI MOTIVE CE SCRIPT (voir docs/FORMAT.md §20). Le jeu ne peut faire
+CONSTAT QUI MOTIVE CE SCRIPT (voir docs/RESEARCH.md §20). Le jeu ne peut faire
 apparaitre que les especes dont il a precharge le modele au chargement de la
 carte, et cette liste vient de la table de la zone. Tirer en dehors fait echouer
 l'apparition : le monstre n'apparait pas et le jeu reessaie en boucle (3 629

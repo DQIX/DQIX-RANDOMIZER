@@ -9,7 +9,7 @@ le harnais ne sait pas traverser les menus de demarrage.
 La sortie est un fichier Lua que les sondes chargent par `dofile` et rejouent
 avec `memory.write_u32_le`. Elle ne convient qu'au CODE : l'agrandissement des
 tas du contexte de terrain, lui, est lu une seule fois a la creation du contexte
-et ne peut pas se tester ainsi (docs/FORMAT.md 56).
+et ne peut pas se tester ainsi (docs/RESEARCH.md 56).
 
 Usage: python scripts/ram_patch.py <origine.nds> <modifiee.nds> <sortie.lua>
 """

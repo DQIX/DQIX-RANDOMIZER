@@ -1,0 +1,14 @@
+# Fins de ligne normalisees. Sans ce fichier, un checkout sur une machine a
+# core.autocrlf=true rend tout le depot « modifie » aux yeux d'un diff naif : le
+# projet a deja perdu du temps a comparer des scripts qui ne differaient que par
+# leurs CRLF.
+* text=auto eol=lf
+
+*.nds     binary
+*.xdelta  binary
+*.State   binary
+*.pdf     binary
+*.docx    binary
+*.gp2     binary
+*.nat     binary
+*.bin     binary

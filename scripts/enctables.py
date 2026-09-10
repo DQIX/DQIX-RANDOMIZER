@@ -2,7 +2,7 @@
 """Tables de rencontres de Dragon Quest IX : lecture et reecriture des
 identifiants de monstre.
 
-QUATRE FICHIERS, tous au format de table taggee (voir docs/FORMAT.md §3) :
+QUATRE FICHIERS, tous au format de table taggee (voir docs/RESEARCH.md §3) :
 
     data/prm/encmons.bin       209 enreg.   especes par carte
     data/prm/encfld.bin       1827 enreg.   rencontres sur le terrain

@@ -8,7 +8,7 @@ precedent (`0x021A316C`) puis recharge les modeles depuis la liste de
 prechargement. Il est reentrant et sans fuite -- le jeu l'appelle depuis sept
 endroits. Et sur un tas de type FRAME HEAP -- ce qu'est le tas des modeles,
 signature `FRMH` mesuree -- la regeneration totale est la seule liberation
-possible : `Free` y rembobine tout ou ne fait rien (docs/FORMAT.md 47). Il n'y a
+possible : `Free` y rembobine tout ou ne fait rien (docs/RESEARCH.md 47). Il n'y a
 donc pas d'eviction fine a esperer, et ce montage est exactement le bon outil.
 
 CE QU'IL NE FAIT PAS : reconstruire les conteneurs. Ils sont batis par une
@@ -21,7 +21,7 @@ CE QUI LA REND SURE : les acteurs deja vivants gardent un pointeur sur leur obje
 de modele, et le tas est rembobine. Si leur espece ne figure pas dans la nouvelle
 liste, ils pointent sur de la memoire rendue -- que le moteur 3D relit a chaque
 image. Le balayage des acteurs vivants n'est donc pas une precaution, c'est la
-condition. Predicat valide sur temoin (docs/FORMAT.md 50) :
+condition. Predicat valide sur temoin (docs/RESEARCH.md 50) :
 
     variante = [carte+0x02] & 3
     base     = 0x70 + 12 * variante

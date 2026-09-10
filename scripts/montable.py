@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Lecture et ecriture de la table des monstres de DQ9 (data/prm/mon_btldata.nat).
 
-Format (voir docs/FORMAT.md pour les preuves) :
+Format (voir docs/RESEARCH.md pour les preuves) :
     u32 nb = 438, puis 438 enregistrements de 132 octets.
 
 Usage:

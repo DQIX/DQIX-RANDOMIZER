@@ -75,20 +75,25 @@ On Windows, you do not need to install xdelta3 system-wide.
 You can simply put `xdelta3.exe` in the same directory as:
 
 * your Dragon Quest IX ROM
-* `DQIX-Randomizer-v1.1.xdelta`
+* `DQIX-Randomizer-v1.0.xdelta`
 
 Then open PowerShell in that directory and run `.\xdelta3.exe`.
 
 ### 3. Apply the patch
 
-Download the patch:
+Download the patch from the
+**[latest release](https://github.com/DQIX/DQIX-RANDOMIZER/releases/latest)**:
 
-`patch/DQIX-Randomizer-v1.1.xdelta`
+`DQIX-Randomizer-v1.0.xdelta`
+
+A copy is also kept in this repository at `patch/DQIX-Randomizer-v1.0.xdelta`, but
+the release page is the place to get it: that is where every version stays
+available, with its checksums.
 
 #### Linux / macOS
 
 ```bash
-xdelta3 -d -s "Dragon Quest IX - Sentinels of the Starry Skies (Europe) (En,Fr,De,Es,It).nds" "DQIX-Randomizer-v1.1.xdelta" "DQIX Randomizer.nds"
+xdelta3 -d -s "Dragon Quest IX - Sentinels of the Starry Skies (Europe) (En,Fr,De,Es,It).nds" "DQIX-Randomizer-v1.0.xdelta" "DQIX Randomizer.nds"
 ```
 
 #### Windows PowerShell
@@ -96,7 +101,7 @@ xdelta3 -d -s "Dragon Quest IX - Sentinels of the Starry Skies (Europe) (En,Fr,D
 If `xdelta3.exe`, the ROM and the patch are all in the same directory:
 
 ```powershell
-.\xdelta3.exe -d -f -s ".\Dragon Quest IX - Sentinels of the Starry Skies (Europe) (En,Fr,De,Es,It).nds" ".\DQIX-Randomizer-v1.1.xdelta" ".\DQIX Randomizer.nds"
+.\xdelta3.exe -d -f -s ".\Dragon Quest IX - Sentinels of the Starry Skies (Europe) (En,Fr,De,Es,It).nds" ".\DQIX-Randomizer-v1.0.xdelta" ".\DQIX Randomizer.nds"
 ```
 
 The ROM filename can be different. Replace the filename in the command with the actual name of your ROM.
@@ -180,7 +185,7 @@ python randomizer.py --help
 | `xdelta3: not found`              | xdelta3 is not installed or is not in your `PATH`. On Windows, if `xdelta3.exe` is in the current directory, use `.\xdelta3.exe`.          |
 | `No such file or directory`       | A file or directory specified in the command cannot be found. Check the current directory and all filenames.                               |
 | The command appears to hang       | Make sure you are using a compatible xdelta3 binary and that the ROM and patch are accessible. The patch should normally complete quickly. |
-| The output ROM has the wrong size | Make sure you are using the correct European ROM and the correct `DQIX-Randomizer-v1.1.xdelta` patch.                                      |
+| The output ROM has the wrong size | Make sure you are using the correct European ROM and the correct `DQIX-Randomizer-v1.0.xdelta` patch.                                      |
 
 If the ROM does not match the fingerprints listed above, do not continue. The patch is designed specifically for that ROM revision.
 

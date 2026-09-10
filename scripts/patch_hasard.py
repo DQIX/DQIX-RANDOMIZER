@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """v14 : tirage des especes AU CHARGEMENT DE LA ZONE, et non a la construction.
 
-LE VERROU (docs/FORMAT.md 24). Une espece ne peut apparaitre que si son modele
+LE VERROU (docs/RESEARCH.md 24). Une espece ne peut apparaitre que si son modele
 est precharge, et la liste de prechargement ne compte que 12 emplacements dans la
 structure de carte, avec 2 octets de marge avant la structure suivante. Aucune
 modification de donnees ne franchit ce plafond : v13 s'arrete a 8 especes figees
@@ -57,8 +57,7 @@ from monstres_nommes import MONSTRES
 # porte au-dessus du plus gros modele du jeu (42 408 octets) pour n'ecarter plus
 # personne.
 PLAFOND_MODELE = 48 * 1024
-ROM_ATTENDUE = ("Dragon Quest IX - Sentinels of the Starry Skies "
-                "(Europe) (En,Fr,De,Es,It).nds")
+from rom_vanilla import chemin_vanilla
 import ndspy.code
 import ndspy.codeCompression as cc
 import ndspy.rom
@@ -100,7 +99,7 @@ TAILLE_LIBRE = 280
 #
 # Le vrai plafond n'est pas le nombre de modeles mais leur POIDS : le tas des
 # modeles fait 187 440 octets mesures, et un modele de terrain coute de 5 508 a
-# 61 368 octets (docs/FORMAT.md 47). Filtrer par taille maximale ecartait 158
+# 61 368 octets (docs/RESEARCH.md 47). Filtrer par taille maximale ecartait 158
 # especes sur 260 ; un budget cumule les rend toutes atteignables, au prix de
 # zones qui portent parfois dix especes au lieu de douze.
 #
@@ -419,7 +418,7 @@ def tailles_par_code():
     import monnames
     import tailles_modeles
     par_code = tailles_modeles.mesurer()
-    noms = monnames.charger(ROM_ATTENDUE, "fr")
+    noms = monnames.charger(chemin_vanilla(), "fr")
     out = {}
     for i in range(BORNE):
         try:
@@ -446,13 +445,11 @@ def especes_tirables():
     meme code de decision -- on relit le bitmap plutot que de le refaire.
     """
     from agrandir_zones import construire_pool
-    terrain, hors = construire_pool(
-        "Dragon Quest IX - Sentinels of the Starry Skies "
-        "(Europe) (En,Fr,De,Es,It).nds")
+    terrain, hors = construire_pool(chemin_vanilla())
     tailles = tailles_par_code()
     try:
         import monnames
-        noms = monnames.charger(ROM_ATTENDUE, "fr")
+        noms = monnames.charger(chemin_vanilla(), "fr")
     except Exception:
         noms = None
     table, _ = construire_bitmap(terrain, tailles, hors=hors, noms=noms)
@@ -521,7 +518,7 @@ def greffe_b(adr):
     d'INTENTIONS. Quand le budget du tas ou le portier du conteneur ecartait une
     espece, elle y restait, le tireur la rendait quand meme, et l'apparition
     creait un acteur sans modele : le monstre invisible que le joueur trouvait
-    « par chance en marchant dessus » (docs/FORMAT.md 36).
+    « par chance en marchant dessus » (docs/RESEARCH.md 36).
 
     On lit donc les emplacements 7 a 18 de la table des modeles, ceux que
     `FindLoadedModel` (0x021A2738) parcourt lui-meme, avec l'espece en
@@ -616,18 +613,14 @@ def patcher(rom, bavard=True, taille_max=0):
         raise SystemExit(f"la zone {ZONE_LIBRE:#010x} n'est pas vide")
 
     # --- la table des classes de taille, et la greffe A2 ---
-    terrain, boss = construire_pool(
-        "Dragon Quest IX - Sentinels of the Starry Skies "
-        "(Europe) (En,Fr,De,Es,It).nds")
+    terrain, boss = construire_pool(chemin_vanilla())
     tailles = tailles_par_code()
     if not tailles:
         raise SystemExit("aucun modele mesure : `enemy.gp2` est-il extrait "
                          "dans work/extracted ?")
     try:
         import monnames
-        noms = monnames.charger(
-            "Dragon Quest IX - Sentinels of the Starry Skies "
-            "(Europe) (En,Fr,De,Es,It).nds", "fr")
+        noms = monnames.charger(chemin_vanilla(), "fr")
     except Exception:
         noms = None
     table, compte = construire_bitmap(terrain, tailles, hors=boss, noms=noms,

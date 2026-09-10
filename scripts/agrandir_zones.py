@@ -2,12 +2,12 @@
 """Agrandit les groupes de rencontre : plus d'especes par zone.
 
 POURQUOI. Le jeu ne peut faire apparaitre que les especes dont il a precharge le
-modele au chargement de la carte (docs/FORMAT.md §20), et cette liste est le
+modele au chargement de la carte (docs/RESEARCH.md §20), et cette liste est le
 GROUPE actif de la zone. Randomiser les identifiants ne change donc que
 l'identite des 3 a 4 especes d'un groupe, pas leur nombre. Le seul levier reel
 est d'ajouter des entrees aux groupes.
 
-STRUCTURE, etablie par analyse (docs/FORMAT.md §21) :
+STRUCTURE, etablie par analyse (docs/RESEARCH.md §21) :
 
     tag 0x69 (5 champs)   en-tete de ZONE, champ 0 = identifiant de carte
       tag 0x68 (1 champ)  debut d'un GROUPE
