@@ -10,6 +10,9 @@ Bosses are excluded from randomization. Monster stats, items, spells, and equipm
 
 The randomizer does **not** rebalance the game's difficulty. Some randomized encounters may be significantly stronger or weaker than the original encounter.
 
+**Demo video** : https://www.youtube.com/watch?v=1gUc4pJak4o
+**How to install video** : https://www.youtube.com/watch?v=Qsf332pc45g
+
 ## Installation
 
 ### 1. Check your ROM
