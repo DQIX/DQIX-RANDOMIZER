@@ -188,6 +188,14 @@ If the ROM does not match the fingerprints listed above, do not continue. The pa
 * The randomizer has only been tested from a fresh game start.
 * Some randomized encounters can be considerably stronger or weaker than the original encounters because the game is not rebalanced.
 
+## Sources
+
+This project was made possible thanks to the following resources:
+
+- [ArchipelagoDQIX](https://github.com/kid2407/ArchipelagoDQIX/tree/main) by kid2407
+- [dqix-decomp](https://github.com/ZevyaDev/dqix-decomp/tree/naming-pass) by ZevyaDev
+- *Guide to RNG systems in DQIX for game manipulation* by hurblub
+
 ## Disclaimer
 
 This project does not distribute any copyrighted game ROM or other copyrighted game assets.
