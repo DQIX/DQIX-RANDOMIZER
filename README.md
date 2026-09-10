@@ -64,7 +64,7 @@ You need `xdelta3` to apply the patch.
 | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Linux    | Install `xdelta3` using your distribution's package manager                                                                                                    |
 | macOS    | Install `xdelta3` using Homebrew                                                                                                                               |
-| Windows  | Download the `xdelta3.exe` Windows binary from [the releases page](https://github.com/jmacd/xdelta-gpl/releases), or install it with Scoop/WinGet if available |
+| Windows  | Download the `xdelta3.exe` Windows binary from [the releases page](https://github.com/jmacd/xdelta-gpl/releases) or [the releases page]([https://github.com/jmacd/xdelta-gpl/releases)](https://github.com/jmacd/xdelta/releases) , or install it with Scoop/WinGet if available |
 
 On Windows, you do not need to install xdelta3 system-wide.
 
