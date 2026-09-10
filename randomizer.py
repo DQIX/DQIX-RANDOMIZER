@@ -152,6 +152,29 @@ def mode_chaos(rng, table, ordre, avec_res, args):
 MODES = {"shuffle": mode_shuffle, "scale": mode_scale, "chaos": mode_chaos}
 
 
+def trouver_xdelta3():
+    """Ou est xdelta3 ?
+
+    Cherche, dans l'ordre : la variable XDELTA3, le PATH, puis `tools/xdelta/`
+    relativement au repertoire courant ET a la racine du projet. Le binaire
+    Windows officiel est portable : il n'a pas vocation a etre installe, donc le
+    chercher uniquement dans le PATH obligeait a bricoler le PATH a chaque fois.
+    """
+    env = os.environ.get("XDELTA3", "")
+    if env and os.path.isfile(env):
+        return env
+    trouve = shutil.which("xdelta3") or shutil.which("xdelta")
+    if trouve:
+        return trouve
+    racine = os.path.dirname(os.path.abspath(__file__))
+    for base in (".", racine):
+        for nom in ("xdelta3.exe", "xdelta3"):
+            c = os.path.join(base, "tools", "xdelta", nom)
+            if os.path.isfile(c):
+                return c
+    return None
+
+
 def produire_patch(source, cible):
     """Cree un patch xdelta3 de `source` vers `cible`.
 
@@ -161,9 +184,13 @@ def produire_patch(source, cible):
 
     Application : xdelta3 -d -s <rom_origine> <patch> <rom_randomisee>
     """
-    outil = shutil.which("xdelta3") or shutil.which("xdelta")
+    outil = trouver_xdelta3()
     if not outil:
-        print("  xdelta3 introuvable : installer avec `scoop install xdelta`")
+        print("  xdelta3 introuvable. Trois routes, au choix :\n"
+              "    - binaire portable depuis https://github.com/jmacd/xdelta/releases\n"
+              "      a deballer dans tools/xdelta/ (c'est la que ce script le cherche)\n"
+              "    - ou dans le PATH, sous le nom xdelta3 ou xdelta\n"
+              "    - ou designe par la variable d'environnement XDELTA3")
         return None
     patch = os.path.splitext(cible)[0] + ".xdelta"
     cmd = [outil, "-e", "-9", "-f", "-s", source, cible, patch]
