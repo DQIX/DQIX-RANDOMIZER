@@ -766,8 +766,21 @@ def construire(plafond=PLAFOND, site_declencheur=0, originaux=None):
         # ON CHERCHE DONC UNE VICTIME, au lieu de tourner. Un emplacement est
         # liberable s'il est vide, ou si aucun des douze acteurs de la carte ne
         # porte l'espece de son modele. Si les douze sont vivants, ON NE CHARGE
-        # PAS : `emprunt` rendra une apparence empruntee, ce qui est le
-        # comportement de P3 -- degrade, jamais faux.
+        # PAS : `emprunt` rendra une apparence empruntee.
+        #
+        # ATTENTION -- CE N'EST PAS LA CAUSE DES APPARENCES FAUSSES (mesure du
+        # 15 septembre, ZER-5). On l'a longtemps cru. Les deux emprunts attrapes
+        # au banc ont eu lieu avec TROIS modeles charges sur douze emplacements :
+        # tres loin de la saturation, et le declencheur avait donc toute la place
+        # de charger. La vraie cause est que `PRECHARGEUR` est ASYNCHRONE : le
+        # modele demande n'est pas encore dans la table quand `emprunt` le
+        # redemande dans la foulee, et il se rabat sur celui d'un voisin.
+        #
+        # Le remede serait de decaler d'un cran -- demander le modele de l'espece
+        # tiree, mais faire apparaitre cette fois-ci une espece deja chargee, si
+        # bien qu'on ne montre jamais un modele qu'on n'a pas. Non fait : mesure
+        # a 1,3 % d'apparences fausses, le joueur a juge le risque du changement
+        # superieur au gain (15 septembre).
         #
         # LES DOUZE, PAS HUIT (ZER-5). Les deux passes ne balayaient que 8 des 12
         # emplacements (`mov r7, #8` et le masque `and r5, #7`) : le code refusait
