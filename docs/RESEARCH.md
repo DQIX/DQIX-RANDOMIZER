@@ -5152,3 +5152,104 @@ adressages du blob se font desormais en deux instructions, `d & 0xFF00` puis
 rester sur deux lignes consecutives : la seconde retrouve le `d` de la premiere
 en RETRANCHANT quatre a la sienne -- l'avoir ajoute decalait la cible de huit
 octets. L'assembleur nomme desormais la ligne fautive quand keystone refuse.
+
+## 78. La fiche de terrain : ou elle est, qui la rend, et ce qu'elle contient
+
+Section ecrite le 15 septembre, apres la 1.1. Elle **corrige** la lecture de la
+section 77, qui attribuait a la fiche un champ d'acteur qui n'en depend pas.
+
+### 78.1 La taille n'est PAS dans la structure de l'acteur
+
+Les champs `+0x5C`, `+0x5E` et `+0x60` d'un acteur valent **266 pour tout le
+monde**, y compris pour une espece dont le jeu batit lui-meme la fiche au
+montage. Mesure decisive : l'espece 12 portait une fiche a 4915 (valeur du jeu,
+pas de nous) et un acteur a 266. Conclure de ces 266 que « la fiche manque »
+etait donc faux ; c'est simplement un champ qui vaut 266 partout.
+
+La taille qui gouverne la boite de collision est celle de la **fiche de
+terrain**, en `+0x08`, en virgule fixe 12 bits.
+
+### 78.2 La fiche, 0x14 octets
+
+```
++0x00 u16  espece
++0x02 u16  champ 1 | champ 2 << 8     (reglages)
++0x04 u32  champ 3                    (comportement, copie telle quelle)
++0x08 u32  taille (virgule fixe 12) | attaque << 16
++0x0C u16  defense
++0x10 u32  fiche suivante
+```
+
+Les fiches d'une carte forment une liste chainee depuis `[carte+0x304]`. Le
+montage n'en batit que pour les especes que la carte a prechargees.
+
+### 78.3 Qui repond quand la fiche manque
+
+La recherche d'une espece dans cette liste passe par cinq sites de l'overlay 17 :
+`0x021A2164`, `0x021A2178`, `0x021A22F0`, `0x021A2988`, `0x021A299C`. Le blob les
+greffe sur un « portier » : si l'espece est dans la liste, il rend son noeud ;
+sinon il en fabrique un dans un pool circulaire qui lui appartient.
+
+**Deux consequences mesurees :**
+
+1. Ce pool doit couvrir les acteurs simultanes. Douze acteurs peuvent coexister ;
+   a huit noeuds, une apparition reecrivait la fiche d'un monstre encore vivant.
+2. Ecrire la fiche **au chargement du modele** arrive trop tard : le jeu a deja
+   demande la sienne au portier et se sert de ce qu'il a recu. Mesure : fiche
+   presente et juste dans la liste de la carte, monstre a 266 quand meme.
+
+### 78.4 Les valeurs viennent de `fld_mondata.bin`, embarque
+
+`data/prm/fld_mondata.bin` : 15 840 octets, 438 enregistrements, le premier a
+l'offset 40, pas fixe de 36 octets, identifiant u32 en `+8` (1 a 900). La taille
+y est un **flottant IEEE** (champ 4) converti en virgule fixe 12 :
+
+```
+mantisse = (bits & 0x7FFFFF) | 0x800000
+fixe     = mantisse >> (138 - exposant_brut)
+```
+
+Verification : recalculee pour les huit especes dont le jeu batit lui-meme la
+fiche au montage, et comparee a ce qu'il ecrit en memoire -- **huit sur huit
+identiques**, virgule fixe comprise.
+
+**On ne peut pas lire ce fichier en memoire au vol.** Le pointeur que le
+constructeur de fiches (`0x0206EE90`) recoit -- celui qu'un talon pose a son
+entree capture -- commence par `GPC2` : c'est l'archive compressee, que la
+fonction decompresse elle-meme. Les six premiers mots lus en jeu :
+`32435047 0005A259 08C00000 ...`. La table doit donc voyager avec le code,
+calculee a la construction.
+
+### 78.5 La table embarquee
+
+384 puis 336 octets d'index (identifiant -> numero d'entree) suivis d'une entree
+de **douze** octets par espece tirable :
+
+```
++0x00 u16  champ 1 | champ 2 << 8
++0x02 u16  defense
++0x04 u32  champ 3
++0x08 u32  taille (virgule fixe 12) | attaque << 16
+```
+
+Deux pieges, tous deux rencontres :
+
+- **Le pas est de douze octets.** `r2 + r2*2 + r2*8` en fait onze : chaque entree
+  etait lue a cheval sur la precedente. Meduse recevait 15 362 au lieu de 2 867 --
+  cinq fois trop grosse -- et le champ de comportement recevait des octets du
+  voisin, ce qui **plantait le jeu en fuyant un combat**. L'ecriture juste est
+  `r2*4 + r2*8`.
+- **`0xFF` ne peut pas servir de marque « espece absente »** quand il y a 256
+  especes : le numero d'entree 255 vaut justement `0xFF`, et la 256e espece
+  (identifiant 334) etait prise pour absente. Le test se fait sur le **bitmap des
+  especes tirables**, celui que la greffe de tirage utilise deja -- meme
+  information, aucune ambiguite, zero octet de plus.
+
+### 78.6 Le plafond du blob, et sa formule
+
+Le lecteur de fichiers place le contenu a l'interieur du tampon que l'amorce
+alloue et rend un pointeur decale d'environ 1 532 octets : la place utile vaut
+`TAILLE_TAMPON - 1532`. Au-dela, le blob **n'est pas charge du tout** -- pas
+d'installation, pas d'apparitions, introuvable en memoire -- et non pas « charge
+tronque ». Mesures : avec 8 Kio de tampon, 5 932 octets passent, 6 044 non. La
+1.1 fait 5 920 octets.
