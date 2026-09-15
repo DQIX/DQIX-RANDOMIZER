@@ -10,23 +10,6 @@ Bosses are excluded from randomization. Monster stats, items, spells, and equipm
 
 The randomizer does **not** rebalance the game's difficulty. Some randomized encounters may be significantly stronger or weaker than the original encounter.
 
-## What's new in 1.1
-
-* **Every monster keeps its own size and behaviour.** A randomized monster used to
-  inherit the collision box and the field behaviour of another one, which is why a
-  slime could chase you with the reach of a golem. Field records are now written
-  from the game's own data, and 17 species measured in game all carried the exact
-  size the game files give them.
-* **No more crash when fleeing a battle.** Same cause: the record was read one
-  entry out of step, so the behaviour field held bytes taken from a neighbour.
-* **All 256 field monsters can appear, each with equal odds.** One internal
-  identifier is kept per monster name, so names that had several variants no
-  longer get several chances. Measured over 950 appearances in game: 254 distinct
-  monsters seen, no boss, nothing outside the bestiary.
-* **Monsters that appear are drawn from the whole bestiary again**, one at a time,
-  loaded then released -- so a single area is no longer limited to a handful of
-  species.
-
 **Demo video** : https://www.youtube.com/watch?v=1gUc4pJak4o
 
 **How to install video** : https://www.youtube.com/watch?v=Qsf332pc45g
