@@ -145,6 +145,20 @@ class TableMonstres:
         return self.monstres[i]
 
 
+def ids_par_index(chemin_rom):
+    """Rend la liste index -> identifiant.
+
+    DEUX NUMEROTATIONS, A NE JAMAIS CONFONDRE. L'INDEX est le rang de
+    l'enregistrement (0-437) : les noms (`monnames`), la liste blanche
+    `MONSTRES` et l'espece d'un acteur sur la carte le suivent. L'IDENTIFIANT est
+    le champ +0x00 (1-900) : les tables de rencontres, `eventbattle.bin` et le
+    tirage de la greffe A2 le suivent. id = index + 1 jusqu'a l'index 63, puis
+    l'ecart grandit. Confondus, ils ont laisse 16 boss tirables en v1.1 (ZER-16).
+    """
+    table, _ = TableMonstres.depuis_rom(chemin_rom)
+    return [m.id for m in table]
+
+
 def _main():
     chemin, cmd = sys.argv[1], (sys.argv[2] if len(sys.argv) > 2 else "dump")
     langue = os.environ.get("DQ9_LANGUE", "en")

@@ -456,6 +456,36 @@ def especes_tirables():
     return [i for i in range(BORNE) if table[i >> 3] & (1 << (i & 7))]
 
 
+def un_rang_par_nom():
+    """Rend l'ensemble des RANGS a retenir : UN SEUL PAR NOM, celui du terrain.
+
+    POURQUOI. 26 noms du bestiaire portent plusieurs identifiants -- le gluant en
+    a cinq -- et ce sont des VERSIONS differentes du meme monstre, meme modele
+    mais statistiques differentes : gluant 8 PV / 2 XP en terrain, 76 PV / 72 XP
+    en version de grotte. Le tirage se faisant par identifiant, ces noms
+    sortaient 5 fois plus souvent que les autres (mesure sur 305 apparitions,
+    ZER-6), et un meme gluant pouvait etre faible ou costaud sans rien qui le
+    distingue a l'ecran.
+
+    LE CHOIX : l'identifiant que le jeu emploie lui-meme comme SYMBOLE DE
+    TERRAIN (`encfld`), le plus petit s'il y en a plusieurs. Les versions
+    costaudes restent ou le jeu les place, grottes et combats scriptes : on n'y
+    touche pas. Un seul nom n'a aucune version de terrain, la boite de Pandore,
+    et il n'a de toute facon qu'un identifiant.
+    """
+    from agrandir_zones import construire_pool
+    from liste_bestiaire import construire
+    from montable import ids_par_index
+    v = chemin_vanilla()
+    rang_de = {b: r for r, b in enumerate(ids_par_index(v))}
+    terrain = set(construire_pool(v)[0])
+    garde = set()
+    for g in construire(v):
+        choix = [b for b in g["identifiants"] if b in terrain] or list(g["identifiants"])
+        garde.add(rang_de[min(choix)])
+    return garde
+
+
 def construire_bitmap(terrain, tailles, hors=(), noms=None, plafond=PLAFOND_MODELE):
     """Rend les 48 octets du bitmap, un bit par espece, identifiants 0 a 383.
 
@@ -481,13 +511,22 @@ def construire_bitmap(terrain, tailles, hors=(), noms=None, plafond=PLAFOND_MODE
     """
     t = bytearray(BORNE // 8)
     compte = [0, 0]
+    # LE BIT EST UN IDENTIFIANT, LA LISTE BLANCHE UN INDEX. A2 passe le bit tire
+    # a `AddSpecies`, qui attend l'identifiant des tables de rencontres ; noms,
+    # tailles et `MONSTRES` sont indexes par rang d'enregistrement. Poser le bit
+    # a l'index laissait 16 boss tirables et 14 monstres introuvables (ZER-16).
+    from montable import ids_par_index
+    ids = ids_par_index(chemin_vanilla())
+    # UN SEUL IDENTIFIANT PAR NOM : voir un_rang_par_nom. 288 bits devenaient 288
+    # chances inegales entre 256 monstres.
+    garde = un_rang_par_nom()
     # ON PART DU BESTIAIRE, PAS DE CE QUI RODE EN VANILLA. Balayer
     # `terrain | hors` laissait dehors les especes qui n'apparaissent ni comme
     # symbole ni dans un combat scripte -- `luna-tique` par exemple, qui a
     # pourtant un modele de 17 596 octets. La liste blanche des 256 est la seule
     # source qui vaille : tout ce qui y figure doit pouvoir sortir.
     for i in sorted(MONSTRES):
-        if i >= BORNE:
+        if i >= BORNE or i not in garde:
             continue
         if noms is not None:
             # `monnames.charger` rend une LISTE indexee par identifiant, pas un
@@ -501,7 +540,10 @@ def construire_bitmap(terrain, tailles, hors=(), noms=None, plafond=PLAFOND_MODE
                 continue                # sans nom : une variante interne
         n = tailles.get(i, 0)
         if n and n <= plafond:
-            t[i >> 3] |= 1 << (i & 7)
+            b = ids[i]
+            if b >= BORNE:
+                raise SystemExit(f"index {i} : identifiant {b} hors du bitmap ({BORNE})")
+            t[b >> 3] |= 1 << (b & 7)
             compte[1] += 1
         else:
             compte[0] += 1

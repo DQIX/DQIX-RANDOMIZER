@@ -450,11 +450,14 @@ def main():
         # accepte. Dix-sept boss rodaient en vanilla comme symboles d'antre --
         # Equinocte et le general Mac Assin ont ete vus en plaine -- et la
         # permutation les redistribuait sur tout le terrain.
+        # LES POOLS SONT EN IDENTIFIANTS, LA LISTE BLANCHE EN INDEX : on passe par
+        # la table pour comparer (ZER-16 ; voir montable.ids_par_index).
         from monstres_nommes import MONSTRES as _MONSTRES
+        _index = {table[i].id: i for i in range(len(table))}
         _avant = len(pool_terrain)
-        _boss = set(pool_terrain) - _MONSTRES
+        _boss = {i for i in pool_terrain if _index.get(i) not in _MONSTRES}
         pool_boss = sorted(set(pool_boss) | _boss)
-        pool_terrain = [i for i in pool_terrain if i in _MONSTRES]
+        pool_terrain = [i for i in pool_terrain if i not in _boss]
         if _boss:
             print(f"  boss retires du pool de terrain : {len(_boss)}")
 

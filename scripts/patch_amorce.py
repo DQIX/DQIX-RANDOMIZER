@@ -84,7 +84,13 @@ IC_INVALIDE = 0x020C833C          # (adresse, taille)
 PRECHARGEUR = 0x021A28A8          # ce que le site qu'on remplace appelait
 
 NOM_BLOB = "dq9rand.bin"          # le fichier qu'on ajoute a la ROM
-TAILLE_BLOB = 4096                # la plage de code a synchroniser
+NOM_TABLE = "dq9fich.bin"         # la table des fiches de terrain (ZER-8)
+#   Elle ne tient pas dans le blob : le lecteur de fichiers place le contenu
+#   a l'interieur du tampon de l'amorce et rend un pointeur decale, ce qui ne
+#   laisse qu'environ 2,5 Kio utiles. Un second fichier, charge au montage
+#   dans sa propre allocation, evite d'agrandir ce tampon -- donc de prendre
+#   sa memoire au tas des modeles, et a ZER-5.
+TAILLE_BLOB = 8192                # code ET table des fiches, a synchroniser
 # LE TAMPON N'EST PAS LA DESTINATION, c'est le plan de travail du systeme de
 # fichiers -- et la VALEUR DE RETOUR pointe sur le contenu lu. L'appelant du jeu
 # le montre : `bl 0x20750A8` puis `movs r4, r0`, et c'est r4 qui porte les
@@ -98,7 +104,15 @@ TAILLE_BLOB = 4096                # la plage de code a synchroniser
 # chargement a la demande etait amputee de moitie par ce seul tampon. Le blob
 # fait 900 octets et le systeme de fichiers travaille par secteurs : 4 Kio
 # suffisent, et rendent 12 Kio au chargement a la demande.
-TAILLE_TAMPON = 0x1000            # 4 Kio de plan de travail pour le FS
+TAILLE_TAMPON = 0x2000            # 8 Kio de plan de travail pour le FS
+#   4 Kio NE SUFFISENT PLUS. Le lecteur place le contenu du fichier A
+#   L'INTERIEUR du tampon et rend un pointeur decale : seuls ~2 564 octets y
+#   tenaient. Le blob les a atteints le 13 septembre (2 616 o) et sa fin --
+#   le pool de litteraux, donc toutes les adresses du jeu qu'il rappelle --
+#   arrivait tronquee : ecran noir, puis plus aucun monstre, sans rien dans
+#   le code du blob pour l'expliquer. Verifie en comparant le blob en RAM au
+#   fichier : identique jusqu'a +0xA04, divergent ensuite. La v1.1 livree
+#   faisait 2 564 octets, soit exactement la limite.
 
 # `0x113C` n'est pas un immediat ARM encodable, d'ou les deux additions.
 CTX_TAS_MODELES_HAUT = 0x1100
@@ -229,6 +243,10 @@ AMORCE = GREFFE_B + 8             # derriere le tireur, dans sa propre fonction
 DEMONTAGE = 0x021A31AC            # bl EST_VALIDE, en tete du demontage
 EST_VALIDE = 0x020328C4           # ce que ce site appelait
 TALON_DEMONTAGE = ZONE_LIBRE + 0xC0   # derriere le bitmap et la greffe A2
+CAPTURE = patch_blob.CAPTURE          # +0xEC : {conteneur, tas, donnees, taille}
+TALON_CAPTURE = ZONE_LIBRE + 0xFC     # +0xFC : les 24 octets qui les notent
+ENTREE_BATIR = patch_blob.SITE_BATIR  # l'entree du constructeur de noeuds
+ENTREE_ORIGINE = 0xE92D4038           # `push {r3, r4, r5, lr}`, verifiee
 BLOB_BASE = patch_blob.BLOB_BASE
 # LES SEIZE PREMIERS OCTETS DE `GREFFE_C` RESTENT A SRC. Le talon de source y
 # recopie son compte (`SRC_MIROIR`, patch_blob) pour que `talon_borne`, qui vit
@@ -280,7 +298,7 @@ def talon_demontage(adr):
     ], adr, litteraux=(BLOB_BASE,))
 
 
-def ajouter_fichier(rom, contenu):
+def ajouter_fichier(rom, contenu, nom=NOM_BLOB):
     """Ajoute un fichier a NitroFS et rend son chemin.
 
     L'IDENTIFIANT D'UN FICHIER EST IMPLICITE : il decoule de l'ordre des noms
@@ -305,8 +323,8 @@ def ajouter_fichier(rom, contenu):
     if not tout:
         raise SystemExit("arborescence NitroFS vide")
     _, chemin, dossier = max(tout, key=lambda t: t[0])
-    dossier.files.append(NOM_BLOB)
-    complet = (chemin + "/" + NOM_BLOB) if chemin else NOM_BLOB
+    dossier.files.append(nom)
+    complet = (chemin + "/" + nom) if chemin else nom
     vu = rom.filenames.idOf(complet)
     if vu is None:
         raise SystemExit(f"{complet} : le nom n'a pas pris")
@@ -318,6 +336,35 @@ def ajouter_fichier(rom, contenu):
     if bytes(rom.files[vu]) != bytes(contenu):
         raise SystemExit("l'insertion n'a pas mis le contenu au bon identifiant")
     return complet
+
+
+def talon_capture(adr):
+    """Note les quatre arguments du constructeur de noeuds, puis lui rend la main.
+
+    POURQUOI DANS L'ARM9, ET PAS DANS LE BLOB. Les especes qu'un monstre tire ne
+    figurent pas dans la liste de la carte : sans fiche, le jeu leur donne une
+    taille et un comportement par defaut -- boites de collision trop grandes,
+    comportements faux (ZER-8). Pour batir la fiche d'une espece au chargement de
+    son modele, le blob a besoin des quatre arguments que le montage passe au
+    constructeur. Les noter DANS le blob ne marche pas : il est recharge a une
+    adresse neuve a chaque carte, donc la valeur notee au montage l'etait dans
+    l'instance precedente. Et y sauter a demeure depuis l'ARM9 pointe, la carte
+    suivante, sur une memoire rendue -- ecran noir, constate le 13 septembre.
+
+    Ce talon vit donc dans la zone fixe, comme le bitmap : jamais deplace, jamais
+    recharge. On greffe l'ENTREE de la fonction par un `b` et non un `bl`, pour
+    ne pas ecraser l'adresse de retour de l'appelant ; on execute l'instruction
+    d'origine de l'entree, puis on enchaine sur la suite de la fonction, qui rend
+    directement a l'appelant.
+    """
+    return assembler([
+        "push {r4}",
+        "sub r4, pc, #%d" % (adr + 4 + 8 - CAPTURE),
+        "stmia r4, {r0, r1, r2, r3}",
+        "pop {r4}",
+        "push {r3, r4, r5, lr}",            # l'instruction d'origine de l'entree
+        "b #%d" % (patch_blob.BATIR_NOEUDS + 4),
+    ], adr)
 
 
 def patcher(rom, bavard=True, plafond=None, etapes=4):
@@ -346,11 +393,14 @@ def patcher(rom, bavard=True, plafond=None, etapes=4):
             originaux[site] = struct.unpack_from("<I", brut, site - base_ovl)[0]
         else:
             originaux[site] = struct.unpack_from("<I", arm9, site - BASE_ARM9)[0]
-    # LA LISTE DES ESPECES TIRABLES, la meme que le bitmap : c'est elle que le
-    # blob fera batir en noeuds de comportement au montage.
-    from patch_hasard import especes_tirables
-    blob, etiq = patch_blob.construire(plafond, originaux=originaux,
-                                       especes=especes_tirables())
+    # PLUS DE LISTE D'ESPECES DANS LE BLOB : les fiches de terrain se batissent
+    # desormais au chargement d'un modele, une espece a la fois. Ses 512 octets
+    # etaient morts, et coutaient cher : au-dela d'environ 2,5 Kio la fin du blob
+    # se fait ecraser en memoire (13 septembre).
+    # UN SEUL FICHIER. Ajouter un second nom a NitroFS decale les identifiants et
+    # le jeu ne retrouvait plus le blob (mesure : plus rien en memoire). La table
+    # voyage donc avec lui.
+    blob, etiq = patch_blob.construire(plafond, originaux=originaux)
     if len(blob) > TAILLE_BLOB:
         raise SystemExit(f"blob de {len(blob)} o : l'amorce n'en alloue que "
                          f"{TAILLE_BLOB}")
@@ -386,6 +436,20 @@ def patcher(rom, bavard=True, plafond=None, etapes=4):
     arm9[o + len(t):o + len(t) + len(code)] = code
 
     # --- le talon de demontage, dans le bourrage que la zone garde encore ---
+    # --- le talon de capture, et la greffe de l'entree du constructeur ---
+    tc = talon_capture(TALON_CAPTURE)
+    o = TALON_CAPTURE - BASE_ARM9
+    if any(arm9[o:o + len(tc)]) or any(arm9[CAPTURE - BASE_ARM9:CAPTURE - BASE_ARM9 + 16]):
+        raise SystemExit(f"{TALON_CAPTURE:#010x} ou {CAPTURE:#010x} n'est pas libre")
+    arm9[o:o + len(tc)] = tc
+    o = ENTREE_BATIR - BASE_ARM9
+    lu = struct.unpack_from("<I", arm9, o)[0]
+    if lu != ENTREE_ORIGINE:
+        raise SystemExit(f"a {ENTREE_BATIR:#010x} : attendu {ENTREE_ORIGINE:#010x}, "
+                         f"lu {lu:#010x}")
+    ecart = (TALON_CAPTURE - (ENTREE_BATIR + 8)) >> 2
+    struct.pack_into("<I", arm9, o, 0xEA000000 | (ecart & 0xFFFFFF))
+
     td = talon_demontage(TALON_DEMONTAGE)
     o = TALON_DEMONTAGE - BASE_ARM9
     if any(arm9[o:o + len(td)]):
@@ -429,6 +493,8 @@ def patcher(rom, bavard=True, plafond=None, etapes=4):
         print(f"  amorce   : {len(code)} o a {AMORCE:#010x} "
               f"(fonction du tireur : {len(t) + len(code)} sur {TAILLE_TIREUR})")
         print(f"  chaine   : {chemin_txt!r} a {CHEMIN_ADR:#010x}")
+        print(f"  capture  : {len(tc)} o a {TALON_CAPTURE:#010x}, entree "
+              f"{ENTREE_BATIR:#010x} greffee (fiches de terrain)")
         print(f"  demontage: {len(td)} o a {TALON_DEMONTAGE:#010x}, accroche a "
               f"{DEMONTAGE:#010x}")
         print(f"  tireur   : {len(t)} o a {GREFFE_B:#010x}, tire dans le bitmap")

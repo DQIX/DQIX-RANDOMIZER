@@ -1,6 +1,6 @@
 # Dragon Quest IX Randomizer
 
-Version 1.0
+Version 1.1
 
 This project randomizes the field encounters in **Dragon Quest IX: Sentinels of the Starry Skies**.
 
@@ -9,6 +9,23 @@ Each field monster is replaced with another monster chosen from the game's 256 f
 Bosses are excluded from randomization. Monster stats, items, spells, and equipment are unchanged. Scripted story battles are also unchanged.
 
 The randomizer does **not** rebalance the game's difficulty. Some randomized encounters may be significantly stronger or weaker than the original encounter.
+
+## What's new in 1.1
+
+* **Every monster keeps its own size and behaviour.** A randomized monster used to
+  inherit the collision box and the field behaviour of another one, which is why a
+  slime could chase you with the reach of a golem. Field records are now written
+  from the game's own data, and 17 species measured in game all carried the exact
+  size the game files give them.
+* **No more crash when fleeing a battle.** Same cause: the record was read one
+  entry out of step, so the behaviour field held bytes taken from a neighbour.
+* **All 256 field monsters can appear, each with equal odds.** One internal
+  identifier is kept per monster name, so names that had several variants no
+  longer get several chances. Measured over 950 appearances in game: 254 distinct
+  monsters seen, no boss, nothing outside the bestiary.
+* **Monsters that appear are drawn from the whole bestiary again**, one at a time,
+  loaded then released -- so a single area is no longer limited to a handful of
+  species.
 
 **Demo video** : https://www.youtube.com/watch?v=1gUc4pJak4o
 
@@ -75,7 +92,7 @@ On Windows, you do not need to install xdelta3 system-wide.
 You can simply put `xdelta3.exe` in the same directory as:
 
 * your Dragon Quest IX ROM
-* `DQIX-Randomizer-v1.0.xdelta`
+* `DQIX-Randomizer-v1.1.xdelta`
 
 Then open PowerShell in that directory and run `.\xdelta3.exe`.
 
@@ -84,16 +101,16 @@ Then open PowerShell in that directory and run `.\xdelta3.exe`.
 Download the patch from the
 **[latest release](https://github.com/DQIX/DQIX-RANDOMIZER/releases/latest)**:
 
-`DQIX-Randomizer-v1.0.xdelta`
+`DQIX-Randomizer-v1.1.xdelta`
 
-A copy is also kept in this repository at `patch/DQIX-Randomizer-v1.0.xdelta`, but
+A copy is also kept in this repository at `patch/DQIX-Randomizer-v1.1.xdelta`, but
 the release page is the place to get it: that is where every version stays
 available, with its checksums.
 
 #### Linux / macOS
 
 ```bash
-xdelta3 -d -s "Dragon Quest IX - Sentinels of the Starry Skies (Europe) (En,Fr,De,Es,It).nds" "DQIX-Randomizer-v1.0.xdelta" "DQIX Randomizer.nds"
+xdelta3 -d -s "Dragon Quest IX - Sentinels of the Starry Skies (Europe) (En,Fr,De,Es,It).nds" "DQIX-Randomizer-v1.1.xdelta" "DQIX Randomizer.nds"
 ```
 
 #### Windows PowerShell
@@ -101,7 +118,7 @@ xdelta3 -d -s "Dragon Quest IX - Sentinels of the Starry Skies (Europe) (En,Fr,D
 If `xdelta3.exe`, the ROM and the patch are all in the same directory:
 
 ```powershell
-.\xdelta3.exe -d -f -s ".\Dragon Quest IX - Sentinels of the Starry Skies (Europe) (En,Fr,De,Es,It).nds" ".\DQIX-Randomizer-v1.0.xdelta" ".\DQIX Randomizer.nds"
+.\xdelta3.exe -d -f -s ".\Dragon Quest IX - Sentinels of the Starry Skies (Europe) (En,Fr,De,Es,It).nds" ".\DQIX-Randomizer-v1.1.xdelta" ".\DQIX Randomizer.nds"
 ```
 
 The ROM filename can be different. Replace the filename in the command with the actual name of your ROM.
@@ -185,14 +202,14 @@ python randomizer.py --help
 | `xdelta3: not found`              | xdelta3 is not installed or is not in your `PATH`. On Windows, if `xdelta3.exe` is in the current directory, use `.\xdelta3.exe`.          |
 | `No such file or directory`       | A file or directory specified in the command cannot be found. Check the current directory and all filenames.                               |
 | The command appears to hang       | Make sure you are using a compatible xdelta3 binary and that the ROM and patch are accessible. The patch should normally complete quickly. |
-| The output ROM has the wrong size | Make sure you are using the correct European ROM and the correct `DQIX-Randomizer-v1.0.xdelta` patch.                                      |
+| The output ROM has the wrong size | Make sure you are using the correct European ROM and the correct `DQIX-Randomizer-v1.1.xdelta` patch.                                      |
 
 If the ROM does not match the fingerprints listed above, do not continue. The patch is designed specifically for that ROM revision.
 
 ## Known issues
 
 * **European multilingual release only.** The patch targets the European `(En,Fr,De,Es,It)` release. Other regions have different addresses; the patch refuses to apply to them.
-* If more than 6–7 monsters are visible on screen at once, the game may borrow models from other monsters.
+* If several monsters are visible on screen at once, the game may still borrow a model from another monster: measured at about 1 appearance in 80.
 * Large monster models are more likely to cause visual/model issues.
 * The randomizer has only been tested from a fresh game start.
 * Some randomized encounters can be considerably stronger or weaker than the original encounters because the game is not rebalanced.

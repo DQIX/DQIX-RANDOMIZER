@@ -63,7 +63,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from patch_hasard import assembler, GREFFE_C
+from patch_hasard import assembler, GREFFE_C, ZONE_LIBRE
 
 # --- les fonctions du jeu que le blob rappelle, toutes par litteral ---
 VIDE_EMPLACEMENTS = 0x021A27E8    # ClearAllMonsterModelSlots
@@ -86,6 +86,7 @@ SITE_MODELE = 0x021A21F8          # bl FindLoadedModel, dans l'apparition
 SITE_MONTAGE = 0x021A30FC         # bl PRECHARGEUR, dans le montage
 TROUVE_MODELE = 0x021A2738        # FindLoadedModel(?, espece) -> fiche ou 0
 CHARGE_SOURCE = 0x0206EFE8        # (contexte, tas) -> batit la table des 438
+CARTE = 0x02027CC0                 # rend la structure de la carte courante
 RAND = 0x02032380                 # rand_below(max)
 TABLE_BASE = 0x020F33D8 + 8       # la table du gestionnaire, entree 0
 TABLE_EMPL = TABLE_BASE + 4 * 7   # les emplacements de modele, entree 7
@@ -120,13 +121,97 @@ BATIR_NOEUDS = 0x0206EE90         # (conteneur, tas, donnees, taille, especes, n
 #   et pousse dans le conteneur 2 un noeud de 0x14 octets pour CHAQUE espece du
 #   tableau passe. C'est la fonction que le montage appelle avec la liste de
 #   prechargement de la carte ; rien n'empeche de l'appeler avec une espece.
-SITE_BATIR = 0x021B5400           # son appel, dans le montage de la carte
-#   On s'y greffe pour capturer les donnees et leur taille : le fichier est deja
-#   charge en memoire par le jeu, inutile de le relire.
-CARTE_DEPUIS_C2 = 0x304           # le conteneur 2 est a carte+0x304
-CARTE_TAS = 0x10                  # le tas ou le jeu alloue les noeuds
-#   C'est par la que passe le bloc du modele -- 16 a 20 Ko -- et c'est le seul
-#   endroit ou son adresse existe. La fiche n'en porte que la FIN (cf. 76.3).
+BORNE_BITMAP = 384                # le bitmap couvre les identifiants 0 a 383
+GLOBAL_BATIR = 0x02108D04         # les quatre mots que le constructeur ecrit
+#   Il y range ses arguments -- conteneur, tas, tableau d'especes, compte --
+#   et le montage les relit APRES nous. Sans sauvegarde, notre appel y laissait
+#   un pointeur sur notre pile, disparu depuis : le jeu ne prechargeait plus
+#   rien et aucun monstre n'apparaissait (13 septembre).
+OFF_POOL = 24                     # le bloc de fiches, alloue au montage
+OFF_RESTE = 28                    # combien il en reste de libres
+OFF_TABLE = 32                    # la table des fiches, chargee au montage
+LIT_FICHIER = 0x020750A8          # (chemin, tampon, &taille) -> le contenu
+TAILLE_TAMPON_TABLE = 5120        # la table (3 456 o) et le decalage du lecteur
+JALON = ZONE_LIBRE + 0x118        # un mot de diagnostic, hors zone verifiee
+POOL_N = 64                       # 64 fiches de 0x14 octets : 1 280 o
+ESPECES_N = 12                    # la copie de la liste de la carte
+FICHE_PAS = 12                    # une entree de table : reglages, defense,
+#                                   champ 3, taille et attaque
+FICHE_N = 256                     # une entree par espece TIRABLE
+INDEX_N = 336                     # identifiant -> numero d'entree (le bitmap des
+#                                   especes tirables dit lesquels ont un sens)
+#   Table compacte plutot qu'indexee par identifiant : le blob est lu dans un
+#   tampon dont le systeme de fichiers occupe le debut, ce qui en reduit la
+#   place utile. Compacter garde toutes les valeurs sans agrandir le tampon,
+#   qui prendrait sa memoire au tas des modeles -- donc a ZER-5.
+
+
+def table_fiches():
+    """Rend les {FICHE_N} entrees de 12 octets, une par identifiant.
+
+    POURQUOI EMBARQUER LA TABLE. Le pointeur que le jeu passe a son constructeur
+    de fiches ne designe pas `fld_mondata.bin` : la memoire commence par `GPC2`,
+    c'est une archive que la fonction decompresse elle-meme. On ne peut donc ni
+    la lire ni appeler le constructeur (quatre placements essayes, chacun tuait
+    les apparitions). On calcule donc les valeurs ici, une fois pour toutes.
+
+    VALEURS VERIFIEES : recalculees pour les huit especes dont le jeu batit
+    lui-meme la fiche au montage, et comparees a ce qu'il ecrit en memoire --
+    huit sur huit identiques, taille en virgule fixe comprise.
+
+    Disposition d'une entree :
+        +0x00 u16  champ 1 | champ 2 << 8
+        +0x02 u16  defense
+        +0x04 u32  champ 3
+        +0x08 u32  taille en virgule fixe 12 bits | attaque << 16
+    Une entree tout a zero signale une espece absente du fichier.
+    """
+    import ndspy.rom
+    from prmtable import PrmTable
+    from rom_vanilla import chemin_vanilla
+    rom = ndspy.rom.NintendoDSRom.fromFile(chemin_vanilla())
+    brut = bytes(rom.files[rom.filenames.idOf("data/prm/fld_mondata.bin")])
+    from patch_hasard import especes_tirables
+    tirables = [e for e in especes_tirables() if e < INDEX_N]
+    if len(tirables) > FICHE_N:
+        raise SystemExit(f"{len(tirables)} especes tirables pour {FICHE_N} entrees")
+    numero = {e: k for k, e in enumerate(tirables)}
+    index = bytearray([0xFF] * INDEX_N)
+    for e, k in numero.items():
+        index[e] = k
+    table = bytearray(FICHE_PAS * FICHE_N)
+    for r in PrmTable(brut).records:
+        if len(r.fields) != 7:
+            continue
+        esp = r.fields[0]
+        if esp not in numero:
+            continue
+        b = r.fields[4]                     # la taille, en flottant
+        if (b << 1) & 0xFFFFFFFF:
+            taille = ((b & 0x7FFFFF) | 0x800000) >> (138 - ((b >> 23) & 0xFF))
+        else:
+            taille = 0
+        struct.pack_into("<HHII", table, FICHE_PAS * numero[esp],
+                         (r.fields[1] & 0xFF) | ((r.fields[2] & 0xFF) << 8),
+                         r.fields[6] & 0xFFFF, r.fields[3],
+                         (taille & 0xFFFF) | ((r.fields[5] & 0xFFFF) << 16))
+    return bytes(index) + bytes(table)
+
+
+ENR_DEBUT = 40                    # premier enregistrement de fld_mondata.bin
+ENR_PAS = 36                      # un enregistrement : 8 o d'en-tete, 7 champs
+ENR_N = 437
+CAPTURE = ZONE_LIBRE + 0xEC    # quadruplet {conteneur, tas, donnees, taille}
+#   Capture posee par `patch_amorce`, A DEMEURE DANS L'ARM9 et non dans le
+#   blob : le blob est recharge a une adresse neuve a chaque carte, si bien
+#   qu'une valeur ecrite au montage l'etait dans l'instance PRECEDENTE, et
+#   qu'un saut permanent vers lui pointait, la carte suivante, sur une
+#   memoire rendue -- ecran noir constate le 13 septembre.
+SITE_BATIR = 0x0206EE90           # l'entree du constructeur : voir patch_amorce
+DEBUT_AMORCE = 0x02073FE0         # le tireur et l'amorce, dans l'ARM9
+PLAGE_AMORCE = 0x90
+DEBUT_SITES3 = 0x0206EE80         # le quatorzieme : l'entree du constructeur
+PLAGE_SITES3 = 0x40
 DEBUT_SITES2 = 0x02075600         # le treizieme site vit dans l'ARM9, loin
 PLAGE_SITES2 = 0x100              # des douze autres : deuxieme plage de cache
 EXTRACTEUR = 0x0206EF50           # `ldrsh r0, [r0, #8]` : la cle d'un enreg.
@@ -139,7 +224,7 @@ PLAGE_SITES = 0x1000              # jusqu'a 0x021A2ACC, avec de la marge
 SITES_PATCHES = (SITE_VIDE, SITE_TABLEAU, SITE_VRAM, SITE_DEPART, SITE_ESPECE,
                  SITE_BOUCLE, SITE_MODELE, SITE_PORTIER1_SPAWN,
                  SITE_PORTIER1_PRECH, SITE_PORTIER2_SPAWN, SITE_PORTIER2_RELU,
-                 SITE_PORTIER2_PRECH, SITE_MODELE_ALLOC, SITE_BATIR)
+                 SITE_PORTIER2_PRECH, SITE_MODELE_ALLOC)
 
 EMPLACEMENTS = 12
 PLAFOND = 5
@@ -150,11 +235,14 @@ BASE = 8                          # l'en-tete : installateur, puis desinstalleur
 # rien connaitre de l'allocation. L'installateur l'ecrit, le desinstalleur le
 # remet a zero.
 BLOB_BASE = GREFFE_C + 0x20
-MOTS_N = 6                        # DEMANDE, DEPART, BORNE, DONNEES, TAILLE, ESPECE
+MOTS_N = 9                        # DEMANDE, DEPART, BORNE, DONNEES, TAILLE,
+#                                   ESPECE, POOL, RESTE, TABLE
 OFF_DONNEES = 12                  # l'adresse de fld_mondata.bin, capturee
 OFF_TAILLE = 16                   # sa taille
 OFF_ESPECE = 20                   # le tableau d'une seule entree qu'on lui passe
-MODELES_N = 8                     # un mot par emplacement de la rotation
+MODELES_N = EMPLACEMENTS          # un mot par emplacement, DOUZE depuis que
+#   l'eviction les balaie tous (ZER-5) : a huit, les quatre derniers ecrivaient
+#   au-dela du tableau, dans les donnees qui suivent.
 DECALAGE_MODELES = 4 * MOTS_N     # `modeles` suit `mots` immediatement
 # ON N'ADRESSE PAS `modeles` PAR `sub rX, pc, #{@@modeles}`. Le deplacement doit
 # etre un immediat ARM encodable -- 8 bits tournes d'un rang pair -- et il ne
@@ -172,7 +260,7 @@ SRC_N = 4                         # {compte, bloc, chaines, reserve} : 16 octets
 # Le talon de source recopie donc son compte dans le premier mot de `GREFFE_C`,
 # l'ancien emplacement de SRC, qui reste libre et fixe.
 SRC_MIROIR = GREFFE_C
-NOEUDS = 8                        # un noeud par monstre synthetique simultane
+NOEUDS = 16                        # un noeud par monstre synthetique simultane
 NOEUD_MOTS = 8                    # un noeud de conteneur 2 : 0x20 octets
 NOEUD_N = NOEUDS * NOEUD_MOTS + 1 # les huit noeuds, puis le tour de rotation
 # UN SEUL NOEUD NE SUFFISAIT PAS, et le relevé le montre sans appel : deux
@@ -202,8 +290,7 @@ NOEUD_N = NOEUDS * NOEUD_MOTS + 1 # les huit noeuds, puis le tour de rotation
 # faisait le talon quand il vivait dans l'ARM9.
 
 
-def construire(plafond=PLAFOND, site_declencheur=0, originaux=None,
-               especes=()):
+def construire(plafond=PLAFOND, site_declencheur=0, originaux=None):
     """Rend (octets du blob, deplacement de l'installateur).
 
     `site_declencheur` est l'adresse du `mov r0, r0` d'`emprunt` a transformer en
@@ -215,11 +302,6 @@ def construire(plafond=PLAFOND, site_declencheur=0, originaux=None,
     """
     if originaux is None:
         raise SystemExit("construire() exige les mots d'origine des douze sites")
-    if not especes:
-        raise SystemExit("construire() exige la liste des especes tirables")
-    if len(especes) > 1000:
-        raise SystemExit(f"{len(especes)} especes : le tableau et les noeuds "
-                         f"deviendraient plus gros que le blob")
     pool, index = [], {}
 
     def lit(v):
@@ -238,14 +320,30 @@ def construire(plafond=PLAFOND, site_declencheur=0, originaux=None,
     # --- executees, et reecrites apres l'assemblage
     lignes = ["mots:"] + ["mov r0, r0"] * MOTS_N
     lignes += ["modeles:"] + ["mov r0, r0"] * MODELES_N
-    # La liste des especes tirables, en demi-mots : c'est le tableau que
+    # PLUS DE LISTE D'ESPECES ICI. Elle servait a la greffe de montage, qui ne
+    # s'executait jamais (l'overlay du jeu efface sa pose a chaque carte) et qui
+    # a ete remplacee par la creation de fiche au chargement d'un modele. Ses
+    # 512 octets etaient donc morts -- et couteux : au-dela d'environ 2,5 Kio, la
+    # fin du blob se fait ecraser en memoire, ce qui coute toutes les adresses du
+    # pool et tue le sous-systeme des monstres (ecran noir, 13 septembre).
+    # Ancien commentaire, conserve pour memoire : le tableau que
     # `BATIR_NOEUDS` parcourt pour decider quels enregistrements de
     # `fld_mondata.bin` deviennent des noeuds.
-    lignes += ["especes:"] + ["mov r0, r0"] * ((len(especes) + 1) // 2)
+    # DQ9_BOURRAGE : diagnostic. Grossit le blob pour mesurer la place reelle
+    # que laisse le lecteur de fichiers dans le tampon de l'amorce.
+    _b = int(os.environ.get("DQ9_BOURRAGE") or 0)
+    if _b:
+        lignes += ["bourrage:"] + ["mov r0, r0"] * _b
+    # LA TABLE DES FICHES, une entree par espece tirable. Elle pese 3,4 Kio
+    # et ne tient donc pas sous le plafond du banc (2,5 Kio, tampon de 4 Kio
+    # herite du savestate), mais tient au demarrage a froid, ou l'amorce
+    # alloue 8 Kio.
+    lignes += ["table_fiches:"] + ["mov r0, r0"] * ((INDEX_N + FICHE_PAS * FICHE_N) // 4)
     lignes += ["talon_off:", "mov r0, r0"]      # le deplacement du talon de source
     lignes += ["src:"] + ["mov r0, r0"] * SRC_N
     lignes += ["noeud:"] + ["mov r0, r0"] * NOEUD_N
     lignes += ["table:"] + ["mov r0, r0"] * (MOTS_PAR_ENTREE * TABLE_ENTREES)
+
 
     # --- l'installateur : reecrit les sites, synchronise, rend le talon ---
     lignes += [
@@ -284,11 +382,37 @@ def construire(plafond=PLAFOND, site_declencheur=0, originaux=None,
         "ldr r0, [pc, #%s]" % lit(DEBUT_SITES2),
         "mov r1, #%d" % PLAGE_SITES2,
     ] + appel(IC_INVALIDE) + [
+        "ldr r0, [pc, #%s]" % lit(DEBUT_SITES3),
+        "mov r1, #%d" % PLAGE_SITES3,
+    ] + appel(DC_FLUSH) + [
+        "ldr r0, [pc, #%s]" % lit(DEBUT_SITES3),
+        "mov r1, #%d" % PLAGE_SITES3,
+    ] + appel(IC_INVALIDE) + [
+        # ET L'AMORCE ELLE-MEME. Sans cela, une reecriture de son code -- un patch
+        # RAM de banc, par exemple -- reste invisible au processeur, qui continue
+        # a servir l'ancienne instruction depuis son cache (la taille du tampon
+        # de lecture restait a 4 Kio, 14 septembre).
+        "ldr r0, [pc, #%s]" % lit(DEBUT_AMORCE),
+        "mov r1, #%d" % PLAGE_AMORCE,
+    ] + appel(DC_FLUSH) + [
+        "ldr r0, [pc, #%s]" % lit(DEBUT_AMORCE),
+        "mov r1, #%d" % PLAGE_AMORCE,
+    ] + appel(IC_INVALIDE) + [
         # Rendre l'adresse du talon de source DANS r1, et non dans r0 : l'amorce
         # restitue son contexte par un `pop {r0, ...}` et saute par `bx r1`, ce
         # qui lui epargne le `mov r1, r0` -- quatre octets qu'elle n'a pas.
         # Le talon est APRES nous, donc son deplacement ne s'exprime pas par un
         # `sub pc` : on le lit dans un mot de donnees, ecrit apres l'assemblage.
+        # LES FICHES DE TERRAIN DE TOUTES LES ESPECES TIRABLES (ZER-8).
+        # C'est ici, et pas ailleurs : le montage vient de batir les huit fiches
+        # de la carte, le jeu est dans sa phase d'allocation, et le constructeur
+        # consomme un kilo-octet de pile -- l'appeler a l'apparition faisait
+        # deborder (plus aucun monstre, 13 septembre).
+        # PLUS DE BLOC ALLOUE. Il servait a `fiche_emprunt`, qui ecrivait la
+        # fiche au chargement du modele : trop tard, le jeu l'avait deja
+        # demandee. C'est `portier2` qui la rend, dans le pool de noeuds du
+        # blob -- rien a allouer, et 1 280 octets de moins pris au tas des
+        # modeles a chaque montage.
         # NOTER LA BASE, a l'adresse fixe que le talon de demontage interroge.
         "ldr r0, [pc, #%s]" % lit(BLOB_BASE),
         "str r4, [r0]",
@@ -340,6 +464,22 @@ def construire(plafond=PLAFOND, site_declencheur=0, originaux=None,
     ] + appel(DC_FLUSH) + [
         "ldr r0, [pc, #%s]" % lit(DEBUT_SITES2),
         "mov r1, #%d" % PLAGE_SITES2,
+    ] + appel(IC_INVALIDE) + [
+        "ldr r0, [pc, #%s]" % lit(DEBUT_SITES3),
+        "mov r1, #%d" % PLAGE_SITES3,
+    ] + appel(DC_FLUSH) + [
+        "ldr r0, [pc, #%s]" % lit(DEBUT_SITES3),
+        "mov r1, #%d" % PLAGE_SITES3,
+    ] + appel(IC_INVALIDE) + [
+        # ET L'AMORCE ELLE-MEME. Sans cela, une reecriture de son code -- un patch
+        # RAM de banc, par exemple -- reste invisible au processeur, qui continue
+        # a servir l'ancienne instruction depuis son cache (la taille du tampon
+        # de lecture restait a 4 Kio, 14 septembre).
+        "ldr r0, [pc, #%s]" % lit(DEBUT_AMORCE),
+        "mov r1, #%d" % PLAGE_AMORCE,
+    ] + appel(DC_FLUSH) + [
+        "ldr r0, [pc, #%s]" % lit(DEBUT_AMORCE),
+        "mov r1, #%d" % PLAGE_AMORCE,
     ] + appel(IC_INVALIDE) + [
         "pop {r4, r5, pc}",
     ]
@@ -454,52 +594,6 @@ def construire(plafond=PLAFOND, site_declencheur=0, originaux=None,
         "bxne lr",
     ] + saut(GET_ESPECE)
 
-    # --- greffe donnees : capturer fld_mondata.bin au montage ---
-    #
-    # Le jeu le charge deja pour batir le conteneur 2 de la carte. On note son
-    # adresse et sa taille au passage, puis on enchaine sur la fonction
-    # d'origine par un branchement RELATIF : `lr` n'est pas touche, donc elle
-    # rend directement a l'appelant et le montage ne voit rien.
-    lignes += [
-        "greffe_donnees:",
-        # LE BON MOMENT, ET IL N'Y EN A QU'UN. Le montage vient de VIDER le
-        # conteneur 2 (`0x0206EE70`) et s'apprete a le remplir avec les especes
-        # de la carte. On s'intercale entre les deux : nos noeuds sont batis
-        # avant les siens, donc ils survivent au vidage, et l'appel d'origine
-        # ajoute les siens par-dessus.
-        #
-        # `r0` a `r3` portent deja tout ce qu'il faut -- conteneur, tas, donnees,
-        # taille -- et les deux arguments de pile de l'appelant restent intacts
-        # sous `sp`. On empile huit mots, ce qui garde la pile alignee sur huit
-        # octets, on fait notre appel, on restitue, et on enchaine par un
-        # branchement RELATIF : l'appelant ne voit rien passer.
-        "push {r0, r1, r2, r3, r4, r5, r6, lr}",
-        "sub r6, pc, #{@@H:mots}",
-        "sub r6, r6, #{@@L:mots}",
-        "str r2, [r6, #%d]" % OFF_DONNEES,
-        "str r3, [r6, #%d]" % OFF_TAILLE,
-        # RIEN SUR UNE CARTE SANS MONSTRES. Le miroir du compte est deja pose --
-        # `talon_source` tourne au montage, bien avant ce site -- et il vaut zero
-        # en ville : les noeuds y prendraient cinq kilo-octets pour personne.
-        "ldr r4, [pc, #%s]" % lit(SRC_MIROIR),
-        "ldr r4, [r4]",
-        "cmp r4, #0",
-        "beq #{@sans_noeuds}",
-        "sub r4, pc, #{@@H:especes}",
-        "sub r4, r4, #{@@L:especes}",
-        "ldr r5, [pc, #%s]" % lit(len(especes)),
-        "push {r4, r5}",                    # sp[0] = tableau, sp[1] = compte
-    ] + appel(BATIR_NOEUDS) + [
-        "add sp, sp, #8",
-        "sans_noeuds:",
-        "pop {r0, r1, r2, r3, r4, r5, r6, lr}",
-        # PAR LE POOL, PAS PAR UN BRANCHEMENT ABSOLU. Le blob est assemble pour
-        # la base 8 et execute vers 0x0235xxxx : un `b #adresse` y encode un
-        # deplacement calcule sur la mauvaise origine et part n'importe ou. Tout
-        # saut hors du blob passe donc par `saut()`, qui lit l'adresse dans le
-        # pool de litteraux.
-    ] + saut(BATIR_NOEUDS)
-
     # --- greffe modele : noter l'adresse du bloc que le chargement alloue ---
     #
     # LA FICHE NE PORTE PAS LA BASE DU BLOC, seulement sa fin (76.3). Sur le
@@ -591,6 +685,55 @@ def construire(plafond=PLAFOND, site_declencheur=0, originaux=None,
         "bne #{@copie2}",
         "noeud_pret:",
         "strh r4, [r6]",                    # l'espece demandee, elle, est juste
+        # ET SES VRAIES VALEURS (ZER-8, hitbox).
+        #
+        # Copier un noeud voisin donnait a tout le monde la meme boite de
+        # collision -- 266 partout, mesure du 14 septembre -- et le mauvais
+        # comportement. C'est ICI qu'il faut les ecrire, pas au chargement du
+        # modele : le jeu demande la fiche AVANT, et se sert de ce qu'on lui
+        # rend. La table est celle que le blob embarque, calculee depuis
+        # `fld_mondata.bin` a la construction.
+        # DIAGNOSTIC : l'espece demandee et la taille retenue, dans deux mots
+        # libres du blob. r5 ne sert plus (il portait l'ancienne tete) et le
+        # `pop` le restituera.
+        "sub r5, pc, #{@@H:mots}",
+        "sub r5, r5, #{@@L:mots}",
+        "str r4, [r5, #%d]" % OFF_ESPECE,
+        "mov r2, #0",
+        "str r2, [r5, #%d]" % OFF_TAILLE,
+        "ldr ip, [pc, #%s]" % lit(ZONE_LIBRE),
+        "mov r2, r4, lsr #5",
+        "ldr r2, [ip, r2, lsl #2]",
+        "and ip, r4, #31",
+        "mov r2, r2, lsr ip",
+        "tst r2, #1",
+        "beq #{@noeud_brut}",               # espece non tirable : pas a nous
+        "cmp r4, #%d" % INDEX_N,
+        "bcs #{@noeud_brut}",
+        "sub r1, pc, #{@@H:table_fiches}",
+        "sub r1, r1, #{@@L:table_fiches}",
+        "ldrb r2, [r1, r4]",                # son numero d'entree
+        "add r1, r1, #%d" % INDEX_N,
+        # DOUZE octets par entree : 4 + 8. Les trois additions d'avant
+        # (r2 + r2*2 + r2*8) faisaient ONZE, et l'entree lue tombait au milieu
+        # de la precedente -- d'ou des tailles absurdes, la hitbox trop grande
+        # que le joueur signalait.
+        "add r1, r1, r2, lsl #2",
+        "add r1, r1, r2, lsl #3",
+        "ldr r2, [r1, #4]",
+        "ldr r3, [r1, #8]",
+        "orrs r2, r2, r3",
+        "beq #{@noeud_brut}",               # espece absente du fichier
+        "ldrh r2, [r1]",                    # reglages
+        "strh r2, [r6, #2]",
+        "ldr r2, [r1, #4]",                 # champ 3
+        "str r2, [r6, #4]",
+        "ldr r2, [r1, #8]",                 # taille en virgule fixe | attaque
+        "str r2, [r6, #8]",
+        "str r2, [r5, #%d]" % OFF_TAILLE,   # DIAGNOSTIC : ce qu'on a ecrit
+        "ldrh r2, [r1, #2]",                # defense
+        "strh r2, [r6, #12]",
+        "noeud_brut:",
         "mov r1, #0",
         "str r1, [r6, #%d]" % SUIVANT,      # jamais chaine dans la liste
         "mov r0, r6",
@@ -598,6 +741,8 @@ def construire(plafond=PLAFOND, site_declencheur=0, originaux=None,
     ]
 
     # --- le declencheur, en une seule piece ---
+    # DQ9_SANS_FICHE=1 : diagnostic. Construit le blob SANS la creation de
+    # fiche a la demande, pour isoler ce que fait le seul talon de capture.
     lignes += [
         "declencheur:",
         "push {r4, r5, r6, r7, lr}",
@@ -620,9 +765,15 @@ def construire(plafond=PLAFOND, site_declencheur=0, originaux=None,
         #
         # ON CHERCHE DONC UNE VICTIME, au lieu de tourner. Un emplacement est
         # liberable s'il est vide, ou si aucun des douze acteurs de la carte ne
-        # porte l'espece de son modele. Si les huit sont vivants, ON NE CHARGE
+        # porte l'espece de son modele. Si les douze sont vivants, ON NE CHARGE
         # PAS : `emprunt` rendra une apparence empruntee, ce qui est le
         # comportement de P3 -- degrade, jamais faux.
+        #
+        # LES DOUZE, PAS HUIT (ZER-5). Les deux passes ne balayaient que 8 des 12
+        # emplacements (`mov r7, #8` et le masque `and r5, #7`) : le code refusait
+        # donc de charger alors que jusqu'a quatre emplacements restaient
+        # liberables. 12 n'etant pas une puissance de deux, le masque devient un
+        # `cmp` suivi d'un `movge` -- deux instructions au lieu d'une.
         # DEUX PASSES, ET L'ORDRE EST TOUT. La premiere ne retient qu'un
         # emplacement OCCUPE dont aucun acteur ne porte l'espece : c'est le seul
         # choix qui rende de la memoire. La seconde se rabat sur un emplacement
@@ -633,10 +784,11 @@ def construire(plafond=PLAFOND, site_declencheur=0, originaux=None,
         # arrive avec six modeles pour huit emplacements. Le joueur voyait le
         # plafond rester a quatre alors que l'eviction fonctionnait : elle
         # s'appliquait juste au mauvais emplacement.
-        "mov r7, #%d" % 8,
+        "mov r7, #%d" % EMPLACEMENTS,
         "suivant:",
         "add r5, r5, #1",
-        "and r5, r5, #7",
+        "cmp r5, #%d" % EMPLACEMENTS,
+        "movge r5, #0",
         "ldr r0, [pc, #%s]" % lit(TABLE_EMPL),
         "ldr r1, [r0, r5, lsl #2]",         # la fiche de cet emplacement
         "cmp r1, #0",
@@ -649,10 +801,11 @@ def construire(plafond=PLAFOND, site_declencheur=0, originaux=None,
         "subs r7, r7, #1",
         "bne #{@suivant}",
         # seconde passe : faute de victime, un emplacement vide
-        "mov r7, #%d" % 8,
+        "mov r7, #%d" % EMPLACEMENTS,
         "suivant2:",
         "add r5, r5, #1",
-        "and r5, r5, #7",
+        "cmp r5, #%d" % EMPLACEMENTS,
+        "movge r5, #0",
         "ldr r0, [pc, #%s]" % lit(TABLE_EMPL),
         "ldr r1, [r0, r5, lsl #2]",
         "cmp r1, #0",
@@ -681,6 +834,7 @@ def construire(plafond=PLAFOND, site_declencheur=0, originaux=None,
         "charge:",
         "mov r0, r6",
     ] + appel(PRECHARGEUR) + [
+    ] + [
         "abandon:",
         "mov r2, #0",
         "str r2, [r4]",                     # DEMANDE = 0
@@ -716,19 +870,51 @@ def construire(plafond=PLAFOND, site_declencheur=0, originaux=None,
     ]
 
     # --- l'emprunt : le vrai modele, sinon le chargement, sinon un emprunt ---
+    # --- LA FICHE DE TERRAIN D'UNE ESPECE, ECRITE PAR NOUS (ZER-8) ---
+    #
+    # Sans fiche, le jeu donne au monstre une taille et un comportement par
+    # defaut : toutes les boites de collision identiques (266 partout, mesure),
+    # comportements faux. Le montage n'en batit que pour les huit especes de sa
+    # carte ; les notres sont tirees ensuite.
+    #
+    # ON N'APPELLE PAS LE CONSTRUCTEUR DU JEU. Quatre placements essayes, quatre
+    # fois le premier appel a tue le sous-systeme des monstres, meme en rendant
+    # les huit mots de sa globale. On ecrit donc la fiche a la main, dans un bloc
+    # reserve au montage (seul moment sur pour allouer).
+    #
+    # FORMAT, releve sur les huit fiches que le jeu batit et recoupe avec
+    # `fld_mondata.bin` :
+    #   +0x00 u16  espece
+    #   +0x02 u16  champ 1 | champ 2 << 8
+    #   +0x04 u32  champ 3, copie telle quelle
+    #   +0x08 u32  taille en virgule fixe 12 bits, attaque en haut
+    #   +0x0C u16  defense
+    #   +0x10 u32  fiche suivante
+    # PLUS DE FICHE ECRITE ICI. Le chargement d'un modele arrive TROP TARD : le
+    # jeu a deja demande la fiche de l'espece, et c'est `portier2` qui la lui
+    # rend -- c'est donc la que les vraies valeurs s'ecrivent (mesure du
+    # 14 septembre : fiche presente et juste, monstre a 266 quand meme). Ne
+    # restent ici que les trois instructions d'entree.
+    fiche_emprunt = [
+        "push {r4, r5, r6, lr}",
+        "mov r5, r1",                       # l'espece
+        "mov r6, r0",                       # le premier argument du site
+    ]
+
     lignes += [
         "emprunt:",
-        "push {r4, r5, lr}",
-        "mov r5, r1",                       # l'espece
+    ] + fiche_emprunt + [
+        "mov r0, r6",
+        "mov r1, r5",
     ] + appel(TROUVE_MODELE) + [
         "cmp r0, #0",
-        "popne {r4, r5, pc}",               # le vrai modele est deja la
+        "popne {r4, r5, r6, pc}",               # le vrai modele est deja la
         "mov r0, r5",
         "bl #{@declencheur}",               # CHARGER le modele de l'espece
         "mov r1, r5",
     ] + appel(TROUVE_MODELE) + [
         "cmp r0, #0",
-        "popne {r4, r5, pc}",               # charge : l'apparence est JUSTE
+        "popne {r4, r5, r6, pc}",               # charge : l'apparence est JUSTE
         "ldr r4, [pc, #%s]" % lit(TABLE_EMPL),
         "mov r5, #0",
         "compte:",
@@ -738,10 +924,10 @@ def construire(plafond=PLAFOND, site_declencheur=0, originaux=None,
         "cmpne r5, #%d" % EMPLACEMENTS,
         "bne #{@compte}",
         "movs r0, r5",
-        "popeq {r4, r5, pc}",               # aucun modele : r0 vaut 0
+        "popeq {r4, r5, r6, pc}",               # aucun modele : r0 vaut 0
     ] + appel(RAND) + [
         "ldr r0, [r4, r0, lsl #2]",
-        "pop {r4, r5, pc}",
+        "pop {r4, r5, r6, pc}",
     ]
 
     etiq = {}
@@ -752,14 +938,13 @@ def construire(plafond=PLAFOND, site_declencheur=0, originaux=None,
     def ecrire(offset, valeur):
         struct.pack_into("<I", octets, offset - BASE, valeur & 0xFFFFFFFF)
 
+    t = table_fiches()
+    for k in range(0, len(t), 4):
+        ecrire(etiq["table_fiches"] + k, struct.unpack_from("<I", t, k)[0])
     for k in range(MOTS_N):
         ecrire(etiq["mots"] + 4 * k, 0)
     for k in range(MODELES_N):
         ecrire(etiq["modeles"] + 4 * k, 0)
-    for k in range(0, len(especes), 2):
-        bas = especes[k]
-        haut = especes[k + 1] if k + 1 < len(especes) else 0
-        ecrire(etiq["especes"] + 2 * k, bas | (haut << 16))
     for k in range(SRC_N):
         ecrire(etiq["src"] + 4 * k, 0)
     for k in range(NOEUD_N):
@@ -780,7 +965,6 @@ def construire(plafond=PLAFOND, site_declencheur=0, originaux=None,
         (SITE_PORTIER2_RELU, etiq["portier2"]),
         (SITE_PORTIER2_PRECH, etiq["portier2"]),
         (SITE_MODELE_ALLOC, etiq["greffe_modele"]),
-        (SITE_BATIR, etiq["greffe_donnees"]),
     ]
     if len(paires) >= TABLE_ENTREES:
         raise SystemExit(f"table : {len(paires)} entrees pour {TABLE_ENTREES - 1}")
