@@ -269,7 +269,7 @@ def main():
                     help="lot fixe pour toute la duree d'une zone. C'EST LE "
                          "REGLAGE SUR : la rotation vide la liste de "
                          "prechargement en pleine partie, ce qui gele le jeu au "
-                         "hasard (voir docs/RESEARCH.md 60).")
+                         "hasard (voir docs/research/RESEARCH.md 60).")
     ap.add_argument("--periode", type=int, default=0,
                     help="images entre deux rotations (0 = 1 024, environ 17 s). "
                          "Doit etre un immediat ARM encodable : 512, 1 024, "
@@ -310,7 +310,7 @@ def main():
                          "l'allocateur du jeu GARANTIT libre, relu depuis un "
                          "fichier ajoute a la ROM. Remplace --portier et "
                          "--chargeur, dont les emplacements dans l'ARM9 se sont "
-                         "reveles non fiables (voir docs/RESEARCH.md 72). Implique "
+                         "reveles non fiables (voir docs/research/RESEARCH.md 72). Implique "
                          "--place. Voir scripts/patch_amorce.py.")
     ap.add_argument("--chargeur", action="store_true",
                     help="P4 : CHARGEMENT A LA DEMANDE. Le modele de l'espece "
@@ -376,6 +376,22 @@ def main():
                     help="randomiser AUSSI les statistiques des monstres. "
                          "Desactive par defaut : le randomizer ne touche qu'aux "
                          "rencontres.")
+    ap.add_argument("--objets", dest="objets", action="store_true",
+                    default=True,
+                    help="randomiser le CONTENU DES CONTENEURS : coffres "
+                         "bleus, pots, tonneaux, placards (tables de tirage de "
+                         "treasure.nsarc) et coffres rouges (scripts de zone). "
+                         "Les objets importants ne sont jamais tires, et le "
+                         "coffre de la Magic key garde son contenu. Les "
+                         "grottos ne sont pas touches. ACTIF PAR DEFAUT depuis "
+                         "la 1.2 ; --sans-objets pour ne randomiser que les "
+                         "monstres, comme la 1.1.")
+    ap.add_argument("--sans-objets", dest="objets", action="store_false",
+                    help="ne pas toucher au contenu des conteneurs")
+    ap.add_argument("--sans-drops", dest="drops", action="store_false",
+                    default=True,
+                    help="avec --objets, laisser les drops des monstres "
+                         "(mon_btldata.nat) tels qu'en vanilla")
     ap.add_argument("--inclure-speciaux", action="store_true",
                     help="toucher aussi les entrees de test et le mannequin d'entrainement")
     ap.add_argument("-o", "--sortie", help="chemin de la ROM produite")
@@ -581,7 +597,7 @@ def main():
         rencontres.ecrire_dans_rom()
     if a.agrandir and a.rencontres:
         # Reconstruction COHERENTE des deux fichiers. Voir scripts/resync_zones.py
-        # et docs/RESEARCH.md §24 : le conteneur RAM n'accepte que 6 entrees par
+        # et docs/research/RESEARCH.md §24 : le conteneur RAM n'accepte que 6 entrees par
         # groupe, une espece doit figurer dans encmons.bin pour pouvoir
         # apparaitre, et le jeu maintient l'invariant
         # union(especes des groupes) <= liste encmons.
@@ -594,6 +610,22 @@ def main():
         choix = sorted(i for i in ids_v if i <= 347)
         n_rempl = remplir(rom, rng, ids_v, choix)
         print(f"emplacements libres remplis : {n_rempl}")
+    if a.objets:
+        # PUREMENT DE LA DONNEE : on reecrit des u32 deja presents dans
+        # data/scenario/treasure.nsarc, sans changer une seule taille de
+        # fichier. Aucun patch de code, donc aucune interaction avec les
+        # greffes de monstres ci-dessous.
+        from patch_loot import patcher as patcher_loot
+        from patch_loot import verifier as verifier_loot
+        print("objets des conteneurs (coffres, pots, tonneaux, placards) :")
+        with open(journal, "a", encoding="utf-8") as jf:
+            c_loot = patcher_loot(rom, rng, langue=a.langue, journal=jf,
+                                  drops=a.drops)
+        verifier_loot(rom)
+        print(f"  {c_loot['outcomes']} outcomes de table reecrits, "
+              f"{c_loot['coffres']} coffres rouges, "
+              f"{c_loot['coffres_gardes']} garde(s) pour cause d'objet "
+              f"important, {c_loot['drops']} drops de monstres")
     if a.hasard:
         from patch_hasard import patcher
         print("tirage au chargement de zone (patch de code) :")
@@ -619,10 +651,10 @@ def main():
             # La greffe B a grandi pour porter son repli : elle occupe desormais
             # toute la fonction du tireur, y compris les 64 octets ou logeait le
             # morceau A de la rotation. Les deux ne peuvent plus coexister -- et
-            # la rotation est de toute facon condamnee (docs/RESEARCH.md 63).
+            # la rotation est de toute facon condamnee (docs/research/RESEARCH.md 63).
             raise SystemExit(
                 "--rotation n'est plus compatible avec la greffe B a repli : "
-                "voir docs/RESEARCH.md 63 et 64. Utiliser --sans-rotation.")
+                "voir docs/research/RESEARCH.md 63 et 64. Utiliser --sans-rotation.")
         if False:
             from patch_conteneurs import patcher as patcher_conteneurs
             print("conteneurs elargis :")

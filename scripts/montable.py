@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Lecture et ecriture de la table des monstres de DQ9 (data/prm/mon_btldata.nat).
 
-Format (voir docs/RESEARCH.md pour les preuves) :
+Format (voir docs/research/RESEARCH.md pour les preuves) :
     u32 nb = 438, puis 438 enregistrements de 132 octets.
 
 Usage:
@@ -22,9 +22,17 @@ ENTETE = 4
 # champs u16 identifies, en offset dans l'enregistrement
 CHAMPS = {
     "id_brut":  0x00,   # 0x8000 | id
-    "modele":   0x02,
-    "nom_str":  0x04,
-    "desc_str": 0x06,
+    # classes de taux de drop : octet bas = commun (+0x02), octet haut = rare
+    # (+0x03). 0 toujours, 1 1/8, 2 1/16, 3 1/32, 4 1/64, 5 1/128, 6 1/256,
+    # 7 jamais (table du code de combat, RESEARCH.md 81). Longtemps pris pour
+    # un code de modele.
+    "classes_drop": 0x02,
+    # objets laches : identifiants du catalogue d'objets (voir objets.py).
+    # Longtemps pris pour des identifiants de chaine ; 428 valeurs non nulles
+    # sur 438 sont des objets valides, et le gluant rend herbe medicinale /
+    # glugoutte, ses drops connus. RESEARCH.md 80.
+    "drop_commun": 0x04,
+    "drop_rare":   0x06,
     "exp":      0x08,
     "or":       0x0C,
     "hp":       0x5C,

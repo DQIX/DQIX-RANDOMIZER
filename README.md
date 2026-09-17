@@ -1,12 +1,15 @@
 # Dragon Quest IX Randomizer
 
-Version 1.1
+Version 1.2
 
-This project randomizes the field encounters in **Dragon Quest IX: Sentinels of the Starry Skies**.
+This project randomizes **Dragon Quest IX: Sentinels of the Starry Skies**:
 
-Each field monster is replaced with another monster chosen from the game's 256 field monsters. The overworld symbol and model are also changed to match the randomized monster.
+* **Field monsters.** Each field monster is replaced with another monster chosen from the game's 256 field monsters. The overworld symbol and model match the randomized monster. Bosses and scripted story battles are unchanged.
+* **Loot** (new in 1.2). Blue chests, pots, barrels, cupboards, red chests and monster drops can give any of the game's 1,090 regular items, weapons and armour included. Rarer items come from rarer places: five-star legendary equipment only from the highest-rank chests, the rarest drops and red chests. Every one of the 1,090 items can be obtained. Key items are never moved, and the Magic Key and Ultimate Key stay where they are.
 
-Bosses are excluded from randomization. Monster stats, items, spells, and equipment are unchanged. Scripted story battles are also unchanged.
+Monster stats, spells, shops, quest rewards and treasure-map grottos are unchanged.
+
+**How it works, explained for players:** [monsters](docs/guide/MONSTERS.md) · [loot, ranks and rarity](docs/guide/LOOT.md) · [where every chest is](docs/guide/loot/containers_by_rank.md)
 
 The randomizer does **not** rebalance the game's difficulty. Some randomized encounters may be significantly stronger or weaker than the original encounter.
 
@@ -75,7 +78,7 @@ On Windows, you do not need to install xdelta3 system-wide.
 You can simply put `xdelta3.exe` in the same directory as:
 
 * your Dragon Quest IX ROM
-* `DQIX-Randomizer-v1.1.xdelta`
+* `DQIX-Randomizer-v1.2.xdelta`
 
 Then open PowerShell in that directory and run `.\xdelta3.exe`.
 
@@ -84,16 +87,16 @@ Then open PowerShell in that directory and run `.\xdelta3.exe`.
 Download the patch from the
 **[latest release](https://github.com/DQIX/DQIX-RANDOMIZER/releases/latest)**:
 
-`DQIX-Randomizer-v1.1.xdelta`
+`DQIX-Randomizer-v1.2.xdelta`
 
-A copy is also kept in this repository at `patch/DQIX-Randomizer-v1.1.xdelta`, but
+A copy is also kept in this repository at `patch/DQIX-Randomizer-v1.2.xdelta`, but
 the release page is the place to get it: that is where every version stays
 available, with its checksums.
 
 #### Linux / macOS
 
 ```bash
-xdelta3 -d -s "Dragon Quest IX - Sentinels of the Starry Skies (Europe) (En,Fr,De,Es,It).nds" "DQIX-Randomizer-v1.1.xdelta" "DQIX Randomizer.nds"
+xdelta3 -d -s "Dragon Quest IX - Sentinels of the Starry Skies (Europe) (En,Fr,De,Es,It).nds" "DQIX-Randomizer-v1.2.xdelta" "DQIX Randomizer.nds"
 ```
 
 #### Windows PowerShell
@@ -101,7 +104,7 @@ xdelta3 -d -s "Dragon Quest IX - Sentinels of the Starry Skies (Europe) (En,Fr,D
 If `xdelta3.exe`, the ROM and the patch are all in the same directory:
 
 ```powershell
-.\xdelta3.exe -d -f -s ".\Dragon Quest IX - Sentinels of the Starry Skies (Europe) (En,Fr,De,Es,It).nds" ".\DQIX-Randomizer-v1.1.xdelta" ".\DQIX Randomizer.nds"
+.\xdelta3.exe -d -f -s ".\Dragon Quest IX - Sentinels of the Starry Skies (Europe) (En,Fr,De,Es,It).nds" ".\DQIX-Randomizer-v1.2.xdelta" ".\DQIX Randomizer.nds"
 ```
 
 The ROM filename can be different. Replace the filename in the command with the actual name of your ROM.
@@ -118,7 +121,7 @@ The expected output size is:
 
 The expected MD5 hash of the patched ROM is:
 
-`13a9bf614263eaabbec58d80b0b45282`
+`8df5d3ff03b2575c47e3962f6a579717`
 
 On Windows, you can verify it with:
 
@@ -168,8 +171,10 @@ pip install ndspy keystone-engine capstone
 Then run:
 
 ```bash
-python randomizer.py
+python randomizer.py "<your European ROM>.nds" --seed 1 --sans-rotation --place --blob --plafond 1 --garde 163840 -o "DQIX Randomizer.nds"
 ```
+
+This rebuilds the released ROM byte for byte (MD5 `8df5d3ff03b2575c47e3962f6a579717`). Change `--seed` for a different randomization. Loot randomization is on by default; add `--sans-objets` to randomize the monsters only, as in version 1.1.
 
 See the available command-line options with:
 
@@ -185,7 +190,7 @@ python randomizer.py --help
 | `xdelta3: not found`              | xdelta3 is not installed or is not in your `PATH`. On Windows, if `xdelta3.exe` is in the current directory, use `.\xdelta3.exe`.          |
 | `No such file or directory`       | A file or directory specified in the command cannot be found. Check the current directory and all filenames.                               |
 | The command appears to hang       | Make sure you are using a compatible xdelta3 binary and that the ROM and patch are accessible. The patch should normally complete quickly. |
-| The output ROM has the wrong size | Make sure you are using the correct European ROM and the correct `DQIX-Randomizer-v1.1.xdelta` patch.                                      |
+| The output ROM has the wrong size | Make sure you are using the correct European ROM and the correct `DQIX-Randomizer-v1.2.xdelta` patch.                                      |
 
 If the ROM does not match the fingerprints listed above, do not continue. The patch is designed specifically for that ROM revision.
 
@@ -195,7 +200,13 @@ If the ROM does not match the fingerprints listed above, do not continue. The pa
 * If several monsters are visible on screen at once, the game may still borrow a model from another monster: measured at about 1 appearance in 80.
 * Large monster models are more likely to cause visual/model issues.
 * The randomizer has only been tested from a fresh game start.
+* Blue chests, pots, barrels and cupboards get their content when you enter a room, like in the original game. In a room with no monsters around, leaving and coming back quickly can give the same content again: the game's random number generator only moves when something happens (monsters, walking NPCs, battles).
+* Emulator savestates only work with the exact ROM they were made on. A savestate from an older patched ROM can show item messages without the item name.
 * Some randomized encounters can be considerably stronger or weaker than the original encounters because the game is not rebalanced.
+
+## Release files
+
+Each release also attaches spreadsheets for its patch (`;` separated, open in Excel): `items.csv` (every item, its rarity and how many places give it), `item_sources.csv` (every place each item comes from), `containers.csv` and `vanilla_containers.csv` (every container of the game, randomized and original).
 
 ## Sources
 

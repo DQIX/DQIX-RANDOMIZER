@@ -62,9 +62,13 @@ def lire_bloc(d, pos, fin=None):
 
 
 class GP2:
-    def __init__(self, chemin):
-        with open(chemin, "rb") as f:
-            self.d = f.read()
+    def __init__(self, chemin, donnees=None):
+        """`donnees` permet de lire une archive deja en memoire (tiree de la
+        ROM) ; `chemin` ne sert alors que d'etiquette dans les messages."""
+        if donnees is None:
+            with open(chemin, "rb") as f:
+                donnees = f.read()
+        self.d = donnees
         self.chemin = chemin
         d = self.d
         (magic, packed, self.header_len, self.fileinfo_len, self.first_file,

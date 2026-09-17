@@ -5253,3 +5253,377 @@ alloue et rend un pointeur decale d'environ 1 532 octets : la place utile vaut
 d'installation, pas d'apparitions, introuvable en memoire -- et non pas « charge
 tronque ». Mesures : avec 8 Kio de tampon, 5 932 octets passent, 6 044 non. La
 1.1 fait 5 920 octets.
+
+
+---
+
+## 79. Le loot : conteneurs, tables de tirage, et le catalogue d'objets
+
+Tout le butin du monde classique — coffres rouges, coffres bleus, pots, tonneaux,
+placards — tient dans **un seul fichier**, `data/scenario/treasure.nsarc`
+(51 480 octets, 268 membres). Le decompilateur de la communauté
+(`DQIX/dqix-decomp`, `src/World/LootableContainer.cpp`) en donne le code ; les
+formats ci-dessous ont tous été relus sur les octets réels de la ROM EU.
+
+### 79.1 Les 268 membres
+
+265 scripts de zone (`C01.bin`, `D06M03.bin`, `R05M01a.bin`…) et **trois tables
+de tirage** :
+
+| membre | pour qui | outcomes | rangs |
+|---|---|---|---|
+| `randTBox.bin` | coffres bleus | 68 | 1 à 5 |
+| `randTTT.bin` | pots, tonneaux, placards | 98 | 1 à 20 |
+| `randTD.bin` | **grottos** | 162 | 1 à 10 |
+
+`randTTT` : *tsubo, taru, tansu* — pot, tonneau, commode. `randTD` n'est pas
+chargée par `LootableContainer::LoadZoneContainers`, qui ne lit que les deux
+premières ; la chaîne `randTD` n'apparaît que dans l'ARM9, et ses dix rangs sont
+exactement ceux de `ActiveGrottoClass::RandomizeChestRank`. C'est donc bien la
+table des grottos, et elle est hors périmètre.
+
+### 79.2 Le format : un script Nitro générique
+
+Chaque membre est un script de la classe `Script` du jeu, la même que celle qui
+sert ailleurs (`itemsort_en.bin` en est un aussi).
+
+```
+en-tete, 16 octets   i32 nombre d'instructions
+                     u32 offset de la section de donnees
+                     i32 longueur de la section de donnees
+                     u32 nombre de chaines
+instruction          u16 opcode
+                     u8  nombre de parametres
+                     2 bits de type par parametre (0 chaine, 1 entier,
+                       2 flottant), puis bourrage 0xff jusqu'au mot suivant
+                     puis 4 octets par parametre
+fin                  opcode 0xffff
+```
+
+Opcodes rencontrés : `0x64` et `0x65` (horodatage de construction — tous les
+membres portent `2009/04/13 13:31`, et ce sont des souches vides dans le jeu),
+`0x66` (`LootManager_Unknown_66`), `0x67` (`LootManager_CreateContainer`),
+`0x69` (`LootDistribution_DeclareOutcome`), `0x6a`
+(`LootDistribution_AllocateOutcomes`).
+
+### 79.3 L'outcome (opcode `0x69`), un u32 empaqueté
+
+```
+bits 0-6    pourcentage
+bits 7-22   itemID, ou montant d'or, ou type d'embuscade
+bits 23-25  lootType : 0 rien, 1 or, 2 objet, 3 embuscade
+bits 26-30  rang
+```
+
+Vérification : la première entrée de `randTBox` vaut `0x052af819`, soit rang 1,
+type objet, id 22000, 25 % — et 22000 est l'herbe médicinale, l'objet le plus
+banal du jeu, au pourcentage le plus élevé du rang le plus bas.
+
+### 79.4 Ce que les tables contiennent VRAIMENT
+
+Mesuré, et cela tranche deux questions que la communauté ne réglait que par
+témoignage :
+
+- **`randTBox`** : chaque rang somme à **exactement 100 %**. Embuscade
+  uniquement au **rang 4 (10 %, type 38)** et au **rang 5 (10 %, type 39)**.
+- **`randTTT`** : les sommes vont de **20 à 50 %** par rang. Le complément est du
+  vide — `Sample()` rend `NULL` quand le tirage 0-99 dépasse le cumul, et
+  l'appelant écrit alors `lootType = 0`. **Aucun outcome `lootType = 3` :** les
+  pots, tonneaux et placards n'embusquent jamais hors grotto, c'est écrit dans la
+  donnée et non une impression de joueur.
+- **`randTD`** : embuscade aux rangs 3 à 10, types 38, 39 et **40**.
+
+Les types d'embuscade 38, 39, 40 sont à comparer aux identifiants internes 37
+(canniboîte), 38 (imitapeur), 39 (boîte de Pandore) : **le décalage est de +1**,
+constant sur les trois. Soit la valeur est `identifiant + 1`, soit elle désigne un
+groupe de combat. Non tranché — c'est ZER-21, et les opcodes `Loot_Opcode_64` et
+`0x65` du decomp sont des souches vides, donc la réponse n'est pas dans le code
+décompilé.
+
+### 79.5 Le conteneur (opcode `0x67`)
+
+```
+param 0   packedID : uniqueID sur les 16 bits de poids fort,
+                     itemIDOrRank sur les 16 bits de poids faible
+param 1   flags    : bits 0-1 inconnu, bits 2-3 lootType, bits 4-6 containerType
+suite     la position : 4 valeurs pour containerType 0 et 4,
+                        1 pour containerType 3, 3 sinon
+```
+
+`containerType` : 0 coffre rouge, 1 pot, 2 tonneau, 3 placard, 4 coffre bleu.
+
+**Inventaire des 265 zones : 847 conteneurs.**
+
+| conteneur | lootType vanilla | nombre |
+|---|---|---|
+| coffre rouge | objet | 145 |
+| coffre rouge | or | 16 |
+| coffre rouge | rien | 6 |
+| pot | rien (rang) | 279 |
+| tonneau | rien (rang) | 185 |
+| placard | rien (rang) | 151 |
+| coffre bleu | rien (rang) | 65 |
+
+Pour tout ce qui n'est pas un coffre rouge, le champ `itemIDOrRank` porte un
+**rang**, pas un objet : `LoadZoneContainers` tire dans la table et écrase
+`lootType` et `itemIDOrRank` à chaque chargement de zone. Le coffre rouge, lui,
+garde ce que son script dit — c'est pour cela qu'il faut patcher les scripts.
+
+### 79.6 Un seul coffre rouge porte un objet important
+
+Balayage des 847 conteneurs contre la liste des 88 objets importants : **la Magic
+key (22043), dans `C02M07.bin`, uniqueID 58**. C'est tout.
+
+L'**Ultimate key (22044) n'est dans aucun conteneur du jeu** — pas dans un coffre
+rouge, pas dans une table. Elle vient donc d'un événement de script, pas du
+système de butin. La croyance répandue qu'elle est dans un coffre rouge de la
+Goretress est fausse pour ce que le fichier contient.
+
+Deux couples (uniqueID, objet) apparaissent dans deux zones à la fois, `C04M04` et
+`C04M05` : la même pièce à deux moments du scénario. Un randomizer doit leur
+donner le même objet, sinon le contenu d'un coffre change avec l'avancement de
+l'histoire.
+
+### 79.7 La contrainte dure du moteur
+
+`LootDistribution::GetOutcomesByRank` remplit un tableau de **32 entrées** et
+s'arrête là. Un rang qui porterait plus de 32 outcomes verrait les suivants
+ignorés. La vanilla plafonne à 16, donc il reste de la place — mais pas
+au-delà de 32.
+
+### 79.8 Le catalogue d'objets, et les 88 objets importants
+
+`data/prm/item_fn_div.nat` liste les neuf archives du catalogue. Chaque
+`itemdt_<c>.gp2` contient cinq `.nat`, un par langue, de même structure :
+
+```
++0x00   u16   nombre d'enregistrements sur les 12 bits de poids faible
++0x10         les enregistrements, 32 octets chacun
+                +0x04  u32  drapeaux ; quartet de poids faible : 8 = utilisable
+                            depuis le menu, 9 = non
+                +0x14  u16  IDENTIFIANT DE L'OBJET
+        puis un pool de chaines
+```
+
+Trouvé par balayage exhaustif : pour chaque (taille d'en-tête, taille
+d'enregistrement, position), on a cherché la colonne de u16 dont les valeurs sont
+toutes distinctes et toutes dans 11000-23000. **Une seule combinaison sort**, la
+même pour les neuf fichiers.
+
+| fichier | catégorie | nombre | plage d'identifiants |
+|---|---|---|---|
+| `itemdt_w` | armes | 268 | 19050-20918 |
+| `itemdt_s` | boucliers | 45 | 21000-21397 |
+| `itemdt_b` | torse | 183 | 13000-13794 |
+| `itemdt_u` | jambes | 85 | 16093-16390 |
+| `itemdt_h` | tête | 132 | 12170-12917 |
+| `itemdt_a` | bras | 78 | 15000-15299 |
+| `itemdt_l` | pieds | 101 | 17091-17421 |
+| `itemdt_d` | accessoires | 52 | 18000-18055 |
+| `itemdt_t` | courants **et** importants | 234 | 22000-22290 |
+| | **total** | **1178** | |
+
+1178 est aussi, exactement, le nombre d'enregistrements de `itemname.gp2`
+(`itemname_<lg>.nat` : en-tête de 4 octets, enregistrements de 16, offsets de nom
+singulier et pluriel dans un pool placé après). Deux comptes indépendants qui
+tombent juste.
+
+**Les objets importants.** Le jeu ne porte pas de drapeau « important » universel :
+le quartet de poids faible de `+0x04` vaut 9 pour **tout** l'équipement. Mais à
+l'intérieur de `itemdt_t`, qui mélange les objets courants et les objets
+importants, il sépare **exactement 88** enregistrements (quartet 9) de 146
+(quartet 8). Et ces 88 sont exactement ceux que le save editor de la communauté
+(`DQIX/editor`, `src/game/data.js`) classe `ITEM_TYPE_IMPORTANT` — deux sources
+indépendantes, zéro désaccord, sur les 234 entrées. La lecture est donc : *dans
+`itemdt_t`, non utilisable depuis le menu = objet important*.
+
+Les 88 contiennent bien les six témoins de progression : Thief's key (22042),
+Magic key (22043), Ultimate key (22044), Little key (22131), Quarantomb key
+(22162), Fygg (22169). `scripts/objets.py` vérifie ce compte et ces témoins à
+chaque construction et refuse de produire une ROM si l'un manque.
+
+**Pool autorisé : 1178 − 88 = 1090 objets.**
+
+### 79.9 Réécrire sans rien déplacer
+
+Toutes les réécritures portent sur un `u32` déjà présent — un outcome, ou le
+`packedID` d'un conteneur. Aucune taille de fichier ne change, donc la
+disposition de la ROM est préservée et les savestates restent valides. Contrôle
+sur une construction réelle : entre une ROM 1.1 et la même avec `--objets`,
+**628 octets diffèrent, tous dans `treasure.nsarc`**, et rien d'autre.
+
+
+---
+
+## 80. Les noms des objets, les drops des monstres, et l'essai en jeu de la 1.2
+
+### 80.1 Identifiant → nom, dans la ROM
+
+`itemname_<lg>.nat` (dans `itemname.gp2`) : en-tête de 4 octets, 1178
+enregistrements de 16 octets `{u32 nom, u32 pluriel, u32 ?, u32 ?}`, les offsets
+étant relatifs à un pool de chaînes qui suit (après un bourrage de zéros).
+
+**Le lien avec l'identifiant est l'ordre** : les neuf catégories `itemdt_*` mises
+bout à bout dans l'ordre `h b a u l d w s t` (tête, torse, bras, jambes, pieds,
+accessoires, armes, boucliers, objets), chacune dans l'ordre de ses
+enregistrements. Mesure : sous cette règle, 1178 noms anglais sur 1178 concordent
+avec le save editor de la communauté, aux balises près (`<1>` apostrophe, `<:u>`
+ü, `<6>`/`<9>` guillemets) et à trois coquilles **de l'éditeur** (« startotoga »,
+« sensible sandles », « xenion claws »). Aucune colonne de `itemdt` ni de
+`itemsort` ne porte d'index de nom : c'est bien l'ordre qui fait le lien.
+
+Confirmé en jeu : les objets 15033 et 20507 s'affichent « silver bracelets » et
+« holy lance » (captures du 17 septembre, 80.4).
+
+### 80.2 Les drops des monstres : `mon_btldata.nat` +0x04 et +0x06
+
+Les deux u16 que `montable.py` appelait `nom_str` et `desc_str` sont **l'objet
+commun et l'objet rare** que lâche le monstre. Preuves :
+
+- balayage des colonnes de u16 contre le catalogue : `+0x04` a 428 valeurs non
+  nulles sur 438, **toutes** des identifiants d'objet valides ; `+0x06` en a 387,
+  toutes valides. Sur 65 536 valeurs possibles, dont 1178 valides, c'est
+  impossible par hasard ;
+- gluant : herbe médicinale / glugoutte ; archimère : aile de chimère / anneau de
+  prière — les drops connus.
+
+815 emplacements non vides au total, dont **576 sur les monstres rencontrables**
+(liste blanche des 256). Les taux de drop ne sont pas dans ces deux champs ; ils
+n'ont pas été cherchés, on ne les touche pas.
+
+### 80.3 Les objets de quête lâchés par les monstres ne sont PAS des drops
+
+Aucun des 88 objets importants n'apparaît en `+0x04` ou `+0x06`. La plume
+d'archimère (22187), qu'on ne ramasse que quête active, est référencée comme
+constante dans `data/scenario/quest_btl_1.stb` (magie `SB2`, deux occurrences à
+`0x83F0` et `0x8420`) : c'est le **script de quête** qui la donne après le combat.
+Randomiser les deux colonnes de drop ne touche donc pas à ce mécanisme. Le
+format `SB2` n'est pas décodé.
+
+### 80.4 Essai en jeu de la 1.2, sur les savestates du joueur
+
+Sonde `scripts/lua/ouvre_conteneur.lua` : charge l'état, relève la liste des
+conteneurs de la zone (gestionnaire EUR `0x02108E90`, lu dans le littéral de
+`0x0207BA6C`), appuie sur A, capture le message, relève à nouveau.
+
+| savestate | conteneur | contenu relevé en RAM | message à l'écran |
+|---|---|---|---|
+| `coffre_bleu_v12` | coffre bleu uid 573, rang 2 | 15033 | « acquires a pair of silver bracelets » |
+| `coffre_rouge_v12` | coffre rouge `C01M16` uid 13 | 20507 | « acquires a holy lance » |
+| `pot_v12` | le pot fouillé | vide | aucun message |
+
+Les trois concordent avec le journal de construction. Les positions relevées en
+RAM sont celles des scripts de zone (`13,75 ; 0,1 ; -37,03` pour le coffre 13),
+ce qui valide aussi la lecture de la position dans l'opcode `0x67`. À l'ouverture,
+le jeu remet `lootType` à 0 dans la liste en RAM.
+
+### 80.5 Couverture : combien d'objets peuvent sortir
+
+Mesuré par `scripts/catalogue_objets.py` (colonne `obtenable` : sort d'une table,
+d'un coffre rouge ou d'un monstre rencontrable) :
+
+| ROM | objets du pool obtenables |
+|---|---|
+| vanilla | 284 sur 1090 |
+| 1.2, tirage avec remise | 594 |
+| 1.2, pioche sans remise (actuelle) | **859** |
+
+Le plafond avec la structure vanilla est de **861** emplacements atteignables
+(141 outcomes, 144 coffres rouges, 576 drops de monstres rencontrables). Faire
+sortir les 1090 exige plus d'emplacements : des outcomes supplémentaires dans les
+tables, jusqu'à 32 par rang (§79.7), ce qui fait grossir `treasure.nsarc`.
+
+
+### 80.6 Agrandir les tables de tirage, et les deux plafonds du moteur
+
+Pour que les 1090 objets du pool puissent sortir, `randTBox.bin` et `randTTT.bin`
+sont **reconstruites** avec plus de lignes par rang (`patch_loot.repartir`) :
+l'or et les embuscades sont recopiés, la part « objet » de chaque rang est
+découpée en lignes de pourcentages entiers. La somme de chaque rang, donc la part
+de vide, ne bouge pas d'un point (assertion à la construction).
+
+Deux plafonds, lus dans le decomp **et vérifiés dans le code EUR** :
+
+- `Sample()` range les outcomes d'un rang dans un tableau de **32** ;
+- `LoadZoneContainers` (EUR `0x0207BD44`) charge chaque table dans un tampon de
+  pile : `mov r2, #0x400 ; bl 0x02032500` (`CreateTypeA`). L'en-tête du
+  `HMRFAllocator` fait **48 octets** : `add r2, r4, #0x30` dans `CreateInRegion`
+  (EUR `0x020AF860`). Restent 976 octets, soit **244 outcomes**. Au-delà,
+  `AllocateOutcomes` échoue et la table est vide — pas de plantage, plus de
+  butin. On s'arrête à **242**.
+
+Résultat sur la graine 1 : `randTBox` 68 → 160 lignes (5 rangs × 32),
+`randTTT` 98 → 242, `treasure.nsarc` 51 480 → 53 368 octets. **1090 objets du
+pool sur 1090 obtenables.** La disposition de la ROM change : les savestates
+précédentes ne sont plus valides. Démarrage à froid vérifié.
+
+La reconstruction est exacte : reconstruire les trois tables vanilla et l'archive
+sans rien changer rend les octets d'origine, à l'identique.
+
+### 80.7 Noms des zones
+
+`data/map/maplist9.bin` (script Nitro, opcode `0x67`) : param 0 = identifiant de
+carte, param 4 = code de fichier. `data/map/mapname.gp2` → `mapname_<lg>.bin` :
+opcode `0x67`, identifiant → nom affiché. `C01M16` → 116 → « Stornway Castle -
+B1 », le nom de la minicarte sur le savestate du joueur. Les 265 zones de
+`treasure.nsarc` sont toutes résolues (`scripts/zones.py`). Le coffre de la
+Magic key (`C02M07`) est bien à « Mirage Mahal - L3 ».
+
+
+---
+
+## 81. Le tirage des drops de monstres, et les classes de taux
+
+Trouvé en posant des points d'arrêt en lecture sur les drops du golem pendant un
+combat (`scripts/lua/lecteurs_drop.lua`), puis en cherchant les appels au tirage
+`0x02032380` voisins d'un accès à `+4` et `+6` dans la RAM de combat.
+
+**La fonction de tirage** est dans le code de combat chargé en RAM (EUR, autour de
+`0x021F4930`). Pour chaque monstre vaincu, elle lit l'enregistrement
+`mon_btldata` (`bl 0x02070FE0`) :
+
+```
+ldrb r0, [fp, #3]          classe du drop RARE
+ldr  r1, =0x021FD888       table classe -> denominateur
+ldr  r1, [r1, r0, lsl #2]
+... bl 0x02032380          rand_below(denominateur)
+cmp r0, #0 ; bne commun    0 -> le rare tombe : ldrh r1, [fp, #6]
+ldrb r0, [fp, #2]          sinon, classe du drop COMMUN, meme tirage
+... ldrh r1, [fp, #4]
+```
+
+Deux voies modifient le dénominateur : un `r7 > 0` le passe par une fonction de
+pourcentage (`0x0200CF44`, probablement un bonus), et un bit de l'acteur
+(`[r8]` bits 14 et 15) le force à 1, soit un drop garanti.
+
+**La table** (`0x021FD888`, int32) : classe 0 = 1 (toujours), 1 = 8, 2 = 16,
+3 = 32, 4 = 64, 5 = 128, 6 = 256, 7 = 0 (jamais).
+
+**Dans `mon_btldata.nat`** : `+0x02` classe du commun, `+0x03` classe du rare.
+`montable.py` appelait ce u16 `modele` : renommé `classes_drop`. Exemples
+vanilla : gluant 1/8 et 1/16, gluant de métal 1/64 et 1/256, golem 1/16 et 1/128.
+Les 256 espèces de terrain n'ont aucun emplacement en classe 7 ; les « jamais »
+sont tous sur des boss ou des entrées hors terrain.
+
+**Vérifié en jeu** avec `scripts/rom_drops_garantis.py` (ROM de test, jamais
+publiée) sur le savestate du golem : commun forcé à 0 et rare à 7 → « The golem
+drops a treasure chest! It contains a sadistick! », l'objet commun randomisé ;
+rare forcé à 0 → « It contains an iron helmet! », l'objet rare randomisé. Le
+randomizer de drops fonctionne, et la lecture des classes est juste.
+
+Le prix de vente d'un objet est le u16 `+0x16` de son enregistrement `itemdt`
+(herbe médicinale 4, épée cautérisante 1 500, massue étoilée 36 000). Le jeu n'a
+pas de champ « rareté en étoiles » dans ce catalogue.
+
+### 81.1 La rareté en étoiles
+
+L'écran d'objet affiche une « Rarity » de 0 à 5 étoiles. Elle est dans
+l'enregistrement `itemdt` : **octet `+0x05`, bits 1 à 3**. Trouvé avec trois
+captures du joueur sur la v12 (herbe antidote 0★, hache du bourreau 2★,
+« Gladiator's Guide » 3★) : une seule position du record vaut ces trois
+nombres, et ses valeurs restent dans 0-5 sur les 1178 objets. Les **22 objets à
+5★** sont exactement les équipements légendaires (épée hypernova, massue
+étoilée, armure légendaire, arc de séraphin...).
+
+Pool de 1090 par étoiles : 0★ 64, 1★ 405, 2★ 204, 3★ 285, 4★ 110, 5★ 22.
+Fonction : `objets.raretes()`.

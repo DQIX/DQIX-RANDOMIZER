@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """v14 : tirage des especes AU CHARGEMENT DE LA ZONE, et non a la construction.
 
-LE VERROU (docs/RESEARCH.md 24). Une espece ne peut apparaitre que si son modele
+LE VERROU (docs/research/RESEARCH.md 24). Une espece ne peut apparaitre que si son modele
 est precharge, et la liste de prechargement ne compte que 12 emplacements dans la
 structure de carte, avec 2 octets de marge avant la structure suivante. Aucune
 modification de donnees ne franchit ce plafond : v13 s'arrete a 8 especes figees
@@ -99,7 +99,7 @@ TAILLE_LIBRE = 280
 #
 # Le vrai plafond n'est pas le nombre de modeles mais leur POIDS : le tas des
 # modeles fait 187 440 octets mesures, et un modele de terrain coute de 5 508 a
-# 61 368 octets (docs/RESEARCH.md 47). Filtrer par taille maximale ecartait 158
+# 61 368 octets (docs/research/RESEARCH.md 47). Filtrer par taille maximale ecartait 158
 # especes sur 260 ; un budget cumule les rend toutes atteignables, au prix de
 # zones qui portent parfois dix especes au lieu de douze.
 #
@@ -560,7 +560,7 @@ def greffe_b(adr):
     d'INTENTIONS. Quand le budget du tas ou le portier du conteneur ecartait une
     espece, elle y restait, le tireur la rendait quand meme, et l'apparition
     creait un acteur sans modele : le monstre invisible que le joueur trouvait
-    « par chance en marchant dessus » (docs/RESEARCH.md 36).
+    « par chance en marchant dessus » (docs/research/RESEARCH.md 36).
 
     On lit donc les emplacements 7 a 18 de la table des modeles, ceux que
     `FindLoadedModel` (0x021A2738) parcourt lui-meme, avec l'espece en

@@ -3,7 +3,7 @@
 
 CE QUE CE SCRIPT REMPLACE, ET POURQUOI. Les scripts precedents agrandissaient
 `encfld.bin` puis `encmons.bin` independamment. C'etait faux pour trois raisons,
-etablies par desassemblage (voir `work/re/RAPPORT.md` et docs/RESEARCH.md §24) :
+etablies par desassemblage (voir `work/re/RAPPORT.md` et docs/research/RESEARCH.md §24) :
 
 1. Le conteneur RAM d'`encfld.bin` n'a que **6 emplacements par groupe** : un
    slot de 32 octets alloue par `AddGroup` (`0x0209BD50`, `lsl r4, r0, #5` puis
