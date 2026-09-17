@@ -1,6 +1,6 @@
 # Dragon Quest IX Randomizer
 
-Version 1.2
+Version 1.2.1
 
 This project randomizes **Dragon Quest IX: Sentinels of the Starry Skies**:
 
@@ -78,7 +78,7 @@ On Windows, you do not need to install xdelta3 system-wide.
 You can simply put `xdelta3.exe` in the same directory as:
 
 * your Dragon Quest IX ROM
-* `DQIX-Randomizer-v1.2.xdelta`
+* `DQIX-Randomizer-v1.2.1.xdelta`
 
 Then open PowerShell in that directory and run `.\xdelta3.exe`.
 
@@ -87,16 +87,16 @@ Then open PowerShell in that directory and run `.\xdelta3.exe`.
 Download the patch from the
 **[latest release](https://github.com/DQIX/DQIX-RANDOMIZER/releases/latest)**:
 
-`DQIX-Randomizer-v1.2.xdelta`
+`DQIX-Randomizer-v1.2.1.xdelta`
 
-A copy is also kept in this repository at `patch/DQIX-Randomizer-v1.2.xdelta`, but
+A copy is also kept in this repository at `patch/DQIX-Randomizer-v1.2.1.xdelta`, but
 the release page is the place to get it: that is where every version stays
 available, with its checksums.
 
 #### Linux / macOS
 
 ```bash
-xdelta3 -d -s "Dragon Quest IX - Sentinels of the Starry Skies (Europe) (En,Fr,De,Es,It).nds" "DQIX-Randomizer-v1.2.xdelta" "DQIX Randomizer.nds"
+xdelta3 -d -s "Dragon Quest IX - Sentinels of the Starry Skies (Europe) (En,Fr,De,Es,It).nds" "DQIX-Randomizer-v1.2.1.xdelta" "DQIX Randomizer.nds"
 ```
 
 #### Windows PowerShell
@@ -104,7 +104,7 @@ xdelta3 -d -s "Dragon Quest IX - Sentinels of the Starry Skies (Europe) (En,Fr,D
 If `xdelta3.exe`, the ROM and the patch are all in the same directory:
 
 ```powershell
-.\xdelta3.exe -d -f -s ".\Dragon Quest IX - Sentinels of the Starry Skies (Europe) (En,Fr,De,Es,It).nds" ".\DQIX-Randomizer-v1.2.xdelta" ".\DQIX Randomizer.nds"
+.\xdelta3.exe -d -f -s ".\Dragon Quest IX - Sentinels of the Starry Skies (Europe) (En,Fr,De,Es,It).nds" ".\DQIX-Randomizer-v1.2.1.xdelta" ".\DQIX Randomizer.nds"
 ```
 
 The ROM filename can be different. Replace the filename in the command with the actual name of your ROM.
@@ -121,7 +121,7 @@ The expected output size is:
 
 The expected MD5 hash of the patched ROM is:
 
-`8df5d3ff03b2575c47e3962f6a579717`
+`b87db9013cb4ea7fc1cafee231713597`
 
 On Windows, you can verify it with:
 
@@ -174,7 +174,7 @@ Then run:
 python randomizer.py "<your European ROM>.nds" --seed 1 --sans-rotation --place --blob --plafond 1 --garde 163840 -o "DQIX Randomizer.nds"
 ```
 
-This rebuilds the released ROM byte for byte (MD5 `8df5d3ff03b2575c47e3962f6a579717`). Change `--seed` for a different randomization. Loot randomization is on by default; add `--sans-objets` to randomize the monsters only, as in version 1.1.
+This rebuilds the released ROM byte for byte (MD5 `b87db9013cb4ea7fc1cafee231713597`). Change `--seed` for a different randomization. Loot randomization is on by default; add `--sans-objets` to randomize the monsters only, as in version 1.1.
 
 See the available command-line options with:
 
@@ -190,7 +190,7 @@ python randomizer.py --help
 | `xdelta3: not found`              | xdelta3 is not installed or is not in your `PATH`. On Windows, if `xdelta3.exe` is in the current directory, use `.\xdelta3.exe`.          |
 | `No such file or directory`       | A file or directory specified in the command cannot be found. Check the current directory and all filenames.                               |
 | The command appears to hang       | Make sure you are using a compatible xdelta3 binary and that the ROM and patch are accessible. The patch should normally complete quickly. |
-| The output ROM has the wrong size | Make sure you are using the correct European ROM and the correct `DQIX-Randomizer-v1.2.xdelta` patch.                                      |
+| The output ROM has the wrong size | Make sure you are using the correct European ROM and the correct `DQIX-Randomizer-v1.2.1.xdelta` patch.                                      |
 
 If the ROM does not match the fingerprints listed above, do not continue. The patch is designed specifically for that ROM revision.
 
