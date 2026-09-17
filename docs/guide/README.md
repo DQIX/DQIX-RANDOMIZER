@@ -14,4 +14,4 @@ needed.
 How to install and play is in the [main README](../../README.md).
 
 The technical side (file formats, memory addresses, how each finding was
-measured) is in [`../research/RESEARCH.md`](../research/RESEARCH.md).
+measured) is in [`../research/`](../research/README.md).

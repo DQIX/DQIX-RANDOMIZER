@@ -31,7 +31,7 @@ an area. To let any of the 256 monsters appear, the randomizer:
 3. gives the monster the size, hitbox and behaviour of its own species.
 
 All of this is a patch of the game code, not only of its data. The technical
-details, with their evidence, are in [`../research/RESEARCH.md`](../research/RESEARCH.md).
+details, with their evidence, are in [`../research/`](../research/README.md).
 
 ## Known limits
 
