@@ -13,5 +13,6 @@ The research notes were split into several files. Section numbers did not change
 | §65–§71 | [07-gatekeeper-and-on-demand-loader.md](07-gatekeeper-and-on-demand-loader.md) |
 | §72–§78 | [08-relocatable-blob-and-eviction.md](08-relocatable-blob-and-eviction.md) |
 | §79–§81 | [09-loot.md](09-loot.md) |
+| §82 | [10-equipment-menu-fix.md](10-equipment-menu-fix.md) |
 
 Start with the [index](README.md).

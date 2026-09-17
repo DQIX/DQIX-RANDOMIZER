@@ -27,10 +27,12 @@ way it does.
 | [07-gatekeeper-and-on-demand-loader.md](07-gatekeeper-and-on-demand-loader.md) | §65–§71 | P3 universal gatekeeper, VRAM watermark, the source table of 438 species, code space inventory, loading through the preloader |
 | [08-relocatable-blob-and-eviction.md](08-relocatable-blob-and-eviction.md) | §72–§78 | Code loaded from a ROM file (the architecture of 1.0/1.1), uninstall on battle entry, eviction, the 256-species pool, field records |
 | [09-loot.md](09-loot.md) | §79–§81 | 1.2: `treasure.nsarc`, draw tables, the item catalogue and key items, item names, monster drops and rate classes, star rarity |
+| [10-equipment-menu-fix.md](10-equipment-menu-fix.md) | §82 | Why live monsters lost their model when the equipment menu rebuilt the field context, and the blob's size ceiling |
 
 ## Where to start
 
 - **Monster randomizer as shipped**: §15–§17 (encounter data), then §72–§78.
 - **Loot randomizer as shipped**: §79–§81.
+- **Why a savestate stops being valid**: §38, §40, §61 and §82.
 - **Before writing any ARM9 patch**: §27 (`CompressedStaticEnd`), §38/§40/§61
   (savestates and file layout), §69 and §72 (code space), §74.1 (validate probes first).

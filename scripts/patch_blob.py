@@ -102,6 +102,10 @@ CARTE_VARIANTE = 0x020FDD46
 ACTEURS_BASE = 0x70               # index de la premiere entree d'acteur
 ACTEURS_N = 12
 SEUIL_TERRAIN = 0x2C000           # au-dela, la carte porte des monstres
+# Combien de modeles le prechargeur peut charger d'un coup, acteurs vivants
+# compris (ZER-29). Un modele de terrain coute ~21 Ko et la reserve du tas est
+# de 160 Ko : six tiennent, sept non.
+MODELES_MAX = 6
 SITE_PORTIER1_SPAWN = 0x021A2164
 SITE_PORTIER1_PRECH = 0x021A2988
 SITE_PORTIER2_SPAWN = 0x021A2178
@@ -553,6 +557,18 @@ def construire(plafond=PLAFOND, site_declencheur=0, originaux=None):
     # de fiches et pour borner sa boucle. Les faire diverger ecrit des fiches hors
     # du tableau -- 880 octets debordes en ville, 1 232 en mode demande. Une seule
     # fonction pour les deux, donc l'ecart ne peut plus exister.
+    #
+    # ET ELLE AJOUTE LES ACTEURS VIVANTS (ZER-29). L'ecran d'equipement demonte
+    # le contexte de terrain et le remonte en sortant, SANS toucher aux monstres
+    # deja sur la carte. Le prechargeur repart alors sur `BORNE` especes tirees a
+    # neuf : les monstres vivants perdent leur modele, deviennent invisibles et
+    # ne declenchent plus de combat, jusqu'au rechargement de la zone. Mesure sur
+    # la savestate du joueur : modeles [10,41] avant le menu, [328] apres, pour
+    # des acteurs restes a 10, 41 et 163.
+    #
+    # On rend donc de la place pour eux dans la boucle ; `greffe_e` remet leurs
+    # especes en tete. Le jeu raccroche ensuite les modeles aux acteurs vivants
+    # tout seul (`0x021A2B1C`, appelee en sortie du prechargeur).
     lignes += [
         "greffe_borne:",
         "sub r1, pc, #{@@H:mots}",
@@ -560,7 +576,42 @@ def construire(plafond=PLAFOND, site_declencheur=0, originaux=None):
         "ldr r1, [r1, #8]",                 # BORNE
         "ldrh r0, [r0, #0x18]",             # le compte reel de la liste
         "cmp r0, r1",
-        "movgt r0, r1",
+        "movgt r0, r1",                     # n = min(compte, BORNE)
+        "push {r4, lr}",
+        "mov r4, r0",
+        "bl #{@compte_acteurs}",
+        "add r0, r0, r4",
+        "cmp r0, #%d" % MODELES_MAX,        # le tas ne tient pas plus
+        "movgt r0, #%d" % MODELES_MAX,
+        "pop {r4, pc}",
+    ]
+
+    # --- combien d'acteurs vivants la carte porte-t-elle ? ---
+    #
+    # N'ecrase que r0 a r3. Meme predicat que `utilisee` : une entree nulle ou
+    # une espece negative est une place libre.
+    lignes += [
+        "compte_acteurs:",
+        "ldr r1, [pc, #%s]" % lit(CARTE_VARIANTE),
+        "ldrh r1, [r1]",
+        "and r1, r1, #3",
+        "add r1, r1, r1, lsl #1",
+        "mov r1, r1, lsl #2",
+        "add r1, r1, #%d" % ACTEURS_BASE,
+        "ldr r2, [pc, #%s]" % lit(TABLE_BASE),
+        "add r1, r2, r1, lsl #2",
+        "mov r2, #%d" % ACTEURS_N,
+        "mov r0, #0",
+        "boucle_compte:",
+        "ldr r3, [r1], #4",
+        "cmp r3, #0",
+        "beq #{@compte_suivant}",
+        "ldrsh r3, [r3, #2]",
+        "cmp r3, #0",
+        "addge r0, r0, #1",
+        "compte_suivant:",
+        "subs r2, r2, #1",
+        "bne #{@boucle_compte}",
         "bx lr",
     ]
 
@@ -583,7 +634,16 @@ def construire(plafond=PLAFOND, site_declencheur=0, originaux=None):
         "bx lr",
     ]
 
-    # --- greffe E : rendre l'espece demandee ---
+    # --- greffe E : l'espece demandee, sinon les acteurs vivants, sinon la liste ---
+    #
+    # En mode demande, une seule espece nous interesse. En mode normal, les
+    # premiers tours servent aux especes des monstres DEJA SUR LA CARTE (ZER-29) :
+    # sans cela, un remontage en cours de partie -- sortie de l'ecran
+    # d'equipement -- les laisse sans modele, donc invisibles et hors combat.
+    #
+    # L'index restant apres les acteurs (`r4`) est celui qu'on passe a la liste :
+    # les tours suivants voient donc la liste depuis son debut, jamais au-dela de
+    # son compte.
     lignes += [
         "greffe_e:",
         "sub r2, pc, #{@@H:mots}",
@@ -592,6 +652,34 @@ def construire(plafond=PLAFOND, site_declencheur=0, originaux=None):
         "cmp r2, #0",
         "subne r0, r2, #1",
         "bxne lr",
+        "push {r4, lr}",
+        "mov r4, r1",                       # l'index demande par le prechargeur
+        "ldr r1, [pc, #%s]" % lit(CARTE_VARIANTE),
+        "ldrh r1, [r1]",
+        "and r1, r1, #3",
+        "add r1, r1, r1, lsl #1",
+        "mov r1, r1, lsl #2",
+        "add r1, r1, #%d" % ACTEURS_BASE,
+        "ldr r2, [pc, #%s]" % lit(TABLE_BASE),
+        "add r1, r2, r1, lsl #2",
+        "mov r2, #%d" % ACTEURS_N,
+        "boucle_e:",
+        "ldr r3, [r1], #4",
+        "cmp r3, #0",
+        "beq #{@espece_suivante}",
+        "ldrsh r3, [r3, #2]",
+        "cmp r3, #0",
+        "blt #{@espece_suivante}",
+        "cmp r4, #0",                       # le premier acteur non encore servi
+        "moveq r0, r3",
+        "popeq {r4, lr}",
+        "bxeq lr",
+        "sub r4, r4, #1",
+        "espece_suivante:",
+        "subs r2, r2, #1",
+        "bne #{@boucle_e}",
+        "mov r1, r4",                       # l'index, diminue des acteurs servis
+        "pop {r4, lr}",
     ] + saut(GET_ESPECE)
 
     # --- greffe modele : noter l'adresse du bloc que le chargement alloue ---

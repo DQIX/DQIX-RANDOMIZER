@@ -104,7 +104,12 @@ TAILLE_BLOB = 8192                # code ET table des fiches, a synchroniser
 # chargement a la demande etait amputee de moitie par ce seul tampon. Le blob
 # fait 900 octets et le systeme de fichiers travaille par secteurs : 4 Kio
 # suffisent, et rendent 12 Kio au chargement a la demande.
-TAILLE_TAMPON = 0x2000            # 8 Kio de plan de travail pour le FS
+TAILLE_TAMPON = 0x3000            # 12 Kio de plan de travail pour le FS
+#   DOUZE KIO DEPUIS ZER-29. Le lecteur place le contenu du fichier a
+#   l'interieur du tampon, donc la place utile vaut `TAILLE_TAMPON - 1532`.
+#   Le blob est passe de 5 920 a 6 124 octets en ajoutant le rechargement
+#   des acteurs vivants, et a 8 Kio il ne se chargeait plus DU TOUT :
+#   mesure `BLOB_BASE = 0` apres un remontage, aucun modele charge.
 #   4 Kio NE SUFFISENT PLUS. Le lecteur place le contenu du fichier A
 #   L'INTERIEUR du tampon et rend un pointeur decale : seuls ~2 564 octets y
 #   tenaient. Le blob les a atteints le 13 septembre (2 616 o) et sa fin --
