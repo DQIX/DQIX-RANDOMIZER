@@ -28,6 +28,7 @@ way it does.
 | [08-relocatable-blob-and-eviction.md](08-relocatable-blob-and-eviction.md) | §72–§78 | Code loaded from a ROM file (the architecture of 1.0/1.1), uninstall on battle entry, eviction, the 256-species pool, field records |
 | [09-loot.md](09-loot.md) | §79–§81 | 1.2: `treasure.nsarc`, draw tables, the item catalogue and key items, item names, monster drops and rate classes, star rarity |
 | [10-equipment-menu-fix.md](10-equipment-menu-fix.md) | §82 | Why live monsters lost their model when the equipment menu rebuilt the field context, and the blob's size ceiling |
+| [11-shops.md](11-shops.md) | §83 | `shopdata1.bin`: the 37 shops, their format, the full census of what they sell, and the open questions on places and prices |
 
 ## Where to start
 

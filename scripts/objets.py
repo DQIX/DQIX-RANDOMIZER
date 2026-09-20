@@ -169,11 +169,24 @@ def objets_importants(rom, langue="en"):
     return imp
 
 
+# LES DEUX OBJETS DE DEBUG DU JEU, hors de tout tirage : coffres, pots, drops,
+# boutiques. Ils se denoncent deux fois -- leur nom est le seul du catalogue
+# ecrit TOUT EN MAJUSCULES, et leur description commence par "DEBUG:". Le joueur
+# est tombe sur le second dans une epicerie le 18 septembre 2026.
+#
+#   22125  MIMIC STONE    / PIERRE D'IMITATION   DEBUG: USE TO SECURE VICTORY.
+#   22126  BLARNEY STONE  / PIERRE DE BONIMENT   DEBUG: USE FOR A WIPE-OUT.
+#
+# ATTENTION : les exclure change le tirage du loot. Les constructions faites
+# apres le 18 septembre ne redonnent donc plus le MD5 des versions 1.2 et 1.2.1.
+DEBUG = {22125, 22126}
+
+
 def pool(rom, langue="en"):
     """Les identifiants qu'on s'autorise a placer dans un conteneur."""
     cat = catalogue(rom, langue)
     imp = objets_importants(rom, langue)
-    return sorted(set(cat) - imp)
+    return sorted(set(cat) - imp - DEBUG)
 
 
 # L'ORDRE DES NOMS. `itemname_<lg>.nat` range ses 1178 noms en mettant bout a

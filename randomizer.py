@@ -388,6 +388,29 @@ def main():
                          "monstres, comme la 1.1.")
     ap.add_argument("--sans-objets", dest="objets", action="store_false",
                     help="ne pas toucher au contenu des conteneurs")
+    ap.add_argument("--boutiques", dest="boutiques", action="store_true",
+                    default=True,
+                    help="randomiser le STOCK DES BOUTIQUES "
+                         "(data/bin/menu/shopdata1.bin, 37 etals). Chaque "
+                         "emplacement garde sa famille : un armurier ne vend "
+                         "pas d'epee et une epicerie garde son compte "
+                         "d'accessoires. Aucun objet important. La boutique du "
+                         "chronocristal n'est pas touchee ; la boutique "
+                         "secrete de Pontaudy et les deux etals d'Ablithia "
+                         "d'apres-jeu ne vendent que du 4 etoiles et plus. "
+                         "ACTIF PAR DEFAUT depuis la 1.3 ; --sans-boutiques "
+                         "pour laisser les etals du jeu tels quels.")
+    ap.add_argument("--sans-boutiques", dest="boutiques", action="store_false",
+                    help="laisser les boutiques telles qu'en vanilla")
+    ap.add_argument("--sans-prix-objets", dest="prix_objets",
+                    action="store_false", default=True,
+                    help="avec --boutiques : ne PAS fabriquer de prix pour les "
+                         "241 objets qui n'en ont pas. Ils restent alors hors "
+                         "des etals (sans prix, ils y seraient gratuits). "
+                         "Fabriquer les prix fait grossir les neuf archives "
+                         "d'objets, donc la disposition de la ROM change et "
+                         "les savestates d'une autre construction ne valent "
+                         "plus.")
     ap.add_argument("--sans-drops", dest="drops", action="store_false",
                     default=True,
                     help="avec --objets, laisser les drops des monstres "
@@ -626,6 +649,33 @@ def main():
               f"{c_loot['coffres']} coffres rouges, "
               f"{c_loot['coffres_gardes']} garde(s) pour cause d'objet "
               f"important, {c_loot['drops']} drops de monstres")
+    if a.boutiques:
+        if a.prix_objets:
+            # A FAIRE AVANT LE TIRAGE DES ETALS : le pool des boutiques se
+            # deduit des prix, donc tarifer d'abord fait entrer ces objets
+            # dans le tirage. Seule etape de tout le randomizer qui change une
+            # taille de fichier.
+            from patch_prix import patcher as patcher_prix
+            from patch_prix import verifier as verifier_prix
+            print("prix des objets qui n'en avaient pas :")
+            with open(journal, "a", encoding="utf-8") as jf:
+                c_prix = patcher_prix(rom, langue=a.langue, journal=jf)
+            verifier_prix(rom)
+            print(f"  {c_prix['objets']} objets tarifes dans "
+                  f"{c_prix['archives']} archives, +{c_prix['octets']:,} octets")
+        # MEME NATURE QUE --objets : on reecrit des u32 deja presents dans
+        # data/bin/menu/shopdata1.bin, aucune taille de fichier ne bouge,
+        # aucun patch de code.
+        from patch_boutiques import patcher as patcher_boutiques
+        from patch_boutiques import verifier as verifier_boutiques
+        print("stock des boutiques :")
+        with open(journal, "a", encoding="utf-8") as jf:
+            c_bout = patcher_boutiques(rom, rng, langue=a.langue, journal=jf)
+        verifier_boutiques(rom)
+        print(f"  {c_bout['articles']} articles reecrits dans "
+              f"{c_bout['boutiques']} boutiques, "
+              f"{c_bout['intouchables']} intouchee(s), "
+              f"{c_bout['rares']} boutique(s) du rare")
     if a.hasard:
         from patch_hasard import patcher
         print("tirage au chargement de zone (patch de code) :")
