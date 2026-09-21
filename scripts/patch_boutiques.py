@@ -107,14 +107,14 @@ class Pioche(object):
         self.pool = list(pool)
         self.paquet = []
 
-    def tirer(self, interdits):
-        """Rend un objet du pool qui n'est pas dans `interdits`."""
-        for _ in range(4 * len(self.pool) + 8):
+    def tirer(self, interdits, accepte=None):
+        """Rend un objet du pool hors `interdits`, et que `accepte` valide."""
+        for _ in range(8 * len(self.pool) + 16):
             if not self.paquet:
                 self.paquet = list(self.pool)
                 self.rng.shuffle(self.paquet)
             o = self.paquet.pop()
-            if o not in interdits:
+            if o not in interdits and (accepte is None or accepte(o)):
                 return o
         raise AssertionError("pool trop petit : %d objets, %d interdits"
                              % (len(self.pool), len(interdits)))
@@ -171,23 +171,29 @@ def pools(rom, langue="en"):
     return ordinaire, rare
 
 
-def _verifier_pools(etals, cat, ordinaire, rare):
-    """Chaque boutique doit pouvoir etre remplie sans doublon. On le verifie
-    AVANT d'ecrire quoi que ce soit, plutot que d'echouer au milieu."""
+def _verifier_pools(etals, cat, ordinaire, rare, classe, achat):
+    """Chaque boutique doit pouvoir etre remplie sans doublon, avec ce que son
+    pourcentage lui permet d'afficher. On le verifie AVANT d'ecrire quoi que ce
+    soit, plutot que d'echouer au milieu."""
     for e in etals:
         if e["id"] in INTOUCHABLES:
             continue
         pool = rare if e["id"] in RARES else ordinaire
+        pct = PCT_RARE[e["id"]] if e["id"] in RARES else e["pct"]
         besoin = {}
         for ident in e["objets"]:
             if ident:
                 fam = B._cat_objet(cat[ident])
                 besoin[fam] = besoin.get(fam, 0) + 1
         for fam, n in sorted(besoin.items()):
-            if len(pool.get(fam, ())) < n:
+            dispo = [o for o in pool.get(fam, ())
+                     if classe.get(o, 0) != 2
+                     or achat.get(o, 0) * pct // 100 <= PLAFOND_CLASSE_2]
+            if len(dispo) < n:
                 raise AssertionError(
-                    "boutique %d : %d emplacements de famille %s, pool de %d"
-                    % (e["id"], n, fam, len(pool.get(fam, ()))))
+                    "boutique %d a %d %% : %d emplacements de famille %s, mais "
+                    "seulement %d objets affichables"
+                    % (e["id"], pct, n, fam, len(dispo)))
 
 
 def patcher(rom, rng, langue="en", journal=None):
@@ -205,7 +211,8 @@ def patcher(rom, rng, langue="en", journal=None):
     pioches = {f: Pioche(rng, p) for f, p in ordinaire.items()}
     pioches_rares = {f: Pioche(rng, p) for f, p in rare.items()}
 
-    _verifier_pools(etals, cat, ordinaire, rare)
+    classe = classe_prix(rom)
+    _verifier_pools(etals, cat, ordinaire, rare, classe, achat)
 
     buf = bytearray(d)
     comptes = dict(boutiques=0, articles=0, intouchables=0, rares=0, prix=0)
@@ -229,6 +236,19 @@ def patcher(rom, rng, langue="en", journal=None):
                 "   [boutique du rare, %d etoiles et +]" % ETOILES_RARE_MIN
                 if ce_rare else ""))
 
+        # CE QUE CETTE BOUTIQUE PEUT AFFICHER. La classe de prix 2 ne rend pas
+        # les gros montants, et le pourcentage de la boutique multiplie le prix
+        # avant affichage : un article a 60 000 passe a 100 %, mais donnerait
+        # "Invendable" dans un etal a 500 %. On ecarte donc au TIRAGE ce que
+        # l'etal ne saurait pas ecrire, plutot que de le decouvrir a la
+        # verification.
+        pct = PCT_RARE[e["id"]] if ce_rare else e["pct"]
+
+        def affichable(ident, pct=pct):
+            if classe.get(ident, 0) != 2:
+                return True
+            return achat.get(ident, 0) * pct // 100 <= PLAFOND_CLASSE_2
+
         deja, tires = set(), []
         for ident in e["objets"]:
             if not ident:
@@ -236,7 +256,7 @@ def patcher(rom, rng, langue="en", journal=None):
             fam = B._cat_objet(cat[ident]) if ident in cat else None
             if fam is None or fam not in tirage:
                 raise AssertionError("famille inconnue pour l'objet %d" % ident)
-            choisi = tirage[fam].tirer(deja)
+            choisi = tirage[fam].tirer(deja, affichable)
             deja.add(choisi)
             tires.append(choisi)
 
