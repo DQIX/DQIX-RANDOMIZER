@@ -29,11 +29,18 @@ way it does.
 | [09-loot.md](09-loot.md) | §79–§81 | 1.2: `treasure.nsarc`, draw tables, the item catalogue and key items, item names, monster drops and rate classes, star rarity |
 | [10-equipment-menu-fix.md](10-equipment-menu-fix.md) | §82 | Why live monsters lost their model when the equipment menu rebuilt the field context, and the blob's size ceiling |
 | [11-shops.md](11-shops.md) | §83 | `shopdata1.bin`: the 37 shops, their format, the full census of what they sell, and the open questions on places and prices |
+| [12-scripted-bosses.md](12-scripted-bosses.md) | §84 | The 98 scripted battles named in story order, which bosses can be fought again, Hexacorne the first boss, and the record parser at `0x02074070` where a per-encounter draw would go |
+| [13-one-species-on-screen.md](13-one-species-on-screen.md) | §85–§86 | Never the same species twice on screen: the drawer's two callers, the `tirage_unique` graft; the model loaded before the spawn, and the heap fragmentation that limits it |
+| [14-skill-trees.md](14-skill-trees.md) | §87–§88 | Skill trees: field 0 of `skilltable.bin` is the palier ID and carries the bonus type, the weapon icon comes from the tree, labels that name the weapon, learning messages and their five-bit number |
+| [15-vocations-and-drops.md](15-vocations-and-drops.md) | §89–§90 | Vocations are story flags, the abbey list and the recruit graft; the battle's own copy of the monster records, the rate classes it rewrites, and the per-battle drop graft behind overlay 23 |
 
 ## Where to start
 
-- **Monster randomizer as shipped**: §15–§17 (encounter data), then §72–§78.
+- **Monster randomizer as shipped**: §15–§17 (encounter data), then §72–§78, then §85–§86.
 - **Loot randomizer as shipped**: §79–§81.
+- **Scripted bosses**: §84.
+- **Skill trees (1.5)**: §87–§88.
+- **Vocations and per-battle drops (1.5)**: §89–§90.
 - **Why a savestate stops being valid**: §38, §40, §61 and §82.
 - **Before writing any ARM9 patch**: §27 (`CompressedStaticEnd`), §38/§40/§61
   (savestates and file layout), §69 and §72 (code space), §74.1 (validate probes first).

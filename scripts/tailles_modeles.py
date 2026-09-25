@@ -28,9 +28,13 @@ from gp2 import GP2
 from montable import TableMonstres
 from monnames import charger
 
-from rom_vanilla import chemin_vanilla
-ROM = chemin_vanilla()
-ARCHIVE = "work/extracted/data/pack_lv5/enemy.gp2"
+from source_rom import lire as lire_rom
+
+# L'ARCHIVE VIENT DE LA ROM, plus de `work/extracted`. Elle pesait 23 Mo
+# extraits a la main, que le joueur d'une application n'aura jamais ; le
+# lecteur NitroFS la sort de la ROM pour le meme resultat, temoin a l'appui
+# (`python scripts/source_rom.py`).
+ARCHIVE = "data/pack_lv5/enemy.gp2"
 
 
 def fichiers_narc(d):
@@ -87,8 +91,8 @@ def taille_cchr(d):
     return None, None
 
 
-def mesurer():
-    g = GP2(ARCHIVE)
+def mesurer(rom=None):
+    g = GP2(ARCHIVE, donnees=lire_rom(ARCHIVE, rom))
     brut = g.d
     par_code = {}
     # La table de noms suit l'ordre des entrees TRIEES PAR OFFSET MASQUE, pas
@@ -124,8 +128,10 @@ if __name__ == "__main__":
                          ("<= 24 Kio", 24576), ("<= 32 Kio", 32768)):
         print(f"  {label:<10s} : {sum(1 for x in t if x <= borne):3d} modeles")
 
-    table, _ = TableMonstres.depuis_rom(ROM)
-    noms = charger(ROM, "fr")
+    from rom_vanilla import chemin_vanilla
+    rom = chemin_vanilla()
+    table, _ = TableMonstres.depuis_rom(rom)
+    noms = charger(rom, "fr")
     lignes = []
     for i, m in enumerate(table):
         code = noms[i]["modele"]

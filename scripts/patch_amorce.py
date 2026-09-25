@@ -372,7 +372,7 @@ def talon_capture(adr):
     ], adr)
 
 
-def patcher(rom, bavard=True, plafond=None, etapes=4):
+def patcher(rom, bavard=True, plafond=None, etapes=4, boss=False, antres=None):
     """Pose l'amorce, la chaine, le tireur, et ajoute le fichier du blob.
 
     A appeler APRES patch_hasard (qui pose le bitmap et la greffe A2) et
@@ -405,7 +405,8 @@ def patcher(rom, bavard=True, plafond=None, etapes=4):
     # UN SEUL FICHIER. Ajouter un second nom a NitroFS decale les identifiants et
     # le jeu ne retrouvait plus le blob (mesure : plus rien en memoire). La table
     # voyage donc avec lui.
-    blob, etiq = patch_blob.construire(plafond, originaux=originaux)
+    blob, etiq = patch_blob.construire(plafond, originaux=originaux,
+                                       boss=boss, antres=antres)
     if len(blob) > TAILLE_BLOB:
         raise SystemExit(f"blob de {len(blob)} o : l'amorce n'en alloue que "
                          f"{TAILLE_BLOB}")
@@ -504,5 +505,5 @@ def patcher(rom, bavard=True, plafond=None, etapes=4):
               f"{DEMONTAGE:#010x}")
         print(f"  tireur   : {len(t)} o a {GREFFE_B:#010x}, tire dans le bitmap")
         print(f"  blob     : {len(blob)} o dans {chemin_txt}, {len(etiq)} etiquettes, "
-              f"12 sites reecrits a l'execution")
+              f"{len(patch_blob.SITES_PATCHES)} sites reecrits a l'execution")
     return len(blob)

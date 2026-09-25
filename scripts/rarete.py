@@ -23,7 +23,13 @@ LES REGLES, decidees par le joueur (17 septembre) :
     rangs 14-19           2-3 etoiles
     rang 20               3-5 etoiles (le rang maximum, seul a 5 etoiles)
 
-  coffres rouges          n'importe quel objet, 0 a 5 etoiles
+  coffres rouges          la rarete de l'objet vanilla, plus ou moins une
+                          etoile (22 septembre). Un coffre rouge est POSE dans
+                          une zone : celui de la Morteresse doit rester un
+                          coffre de fin de jeu, sinon on y trouve une veste
+                          d'entrainement -- constate en jeu. L'option
+                          `--coffres-rouges-libres` rend l'ancienne regle,
+                          n'importe quel objet de 0 a 5 etoiles.
 
 L'AFFECTATION. Chaque emplacement accepte un ensemble d'etoiles. On cherche
 d'abord a donner a CHAQUE objet du pool une place qui l'accepte : c'est un
@@ -40,6 +46,19 @@ DROP = {0: {0, 1}, 1: {0, 1}, 2: {0, 1}, 3: {2, 3}, 4: {2, 3}, 5: {4},
         6: {4, 5}, 7: set(TOUTES)}
 BLEU = {1: {0, 1, 2}, 2: {0, 1, 2}, 3: {2, 3}, 6: {2, 3}, 4: {3, 4},
         7: {3, 4}, 5: {3, 4, 5}, 8: {3, 4, 5}}
+
+
+def rouge(etoile):
+    """Les etoiles qu'un coffre rouge accepte, autour de celle du vanilla.
+
+    UNE BANDE, PAS UNE VALEUR. Exiger exactement la rarete vanilla ferait de
+    chaque coffre rouge une classe a lui seul et etranglerait la couverture :
+    le flot doit encore pouvoir donner une place a chacun des 1 088 objets.
+    Une etoile de marge de chaque cote laisse respirer l'affectation tout en
+    gardant la progression -- un coffre de fin de jeu reste un coffre de fin
+    de jeu.
+    """
+    return {e for e in range(6) if abs(e - etoile) <= 1}
 
 
 def pot(rang):

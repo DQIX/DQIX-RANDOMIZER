@@ -321,6 +321,10 @@ u16 `modele`: renamed `classes_drop`. Vanilla examples: slime 1/8 and 1/16, meta
 and 1/256, golem 1/16 and 1/128. The 256 field species have no slot in class 7; the "never"
 ones are all on bosses or non-field entries.
 
+> **CORRECTED by §90.1**: for field monsters the battle rewrites the rate
+> classes from the field entry, so forcing them in `mon_btldata.nat` has no
+> effect there. The check below may have hit a case the rewrite spares.
+
 **Checked in game** with `scripts/rom_drops_garantis.py` (test ROM, never published) on the
 golem savestate: common forced to 0 and rare to 7 → "The golem drops a treasure chest! It
 contains a sadistick!", the randomized common item; rare forced to 0 → "It contains an iron

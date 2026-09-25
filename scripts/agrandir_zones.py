@@ -45,6 +45,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import ndspy.rom
 from montable import TableMonstres
 from prmtable import PrmTable
+from source_rom import lire as lire_rom
 
 # (fichier, tag de l'entree, nb de champs de l'entree, plafond par groupe)
 # On n'agrandit QUE encfld.bin, et voici pourquoi.
@@ -93,7 +94,7 @@ def construire_rarete():
     minimum : un poids de 0 rendrait l'entree inatteignable.
     """
     import statistics
-    p = PrmTable(open("work/extracted/data/prm/encfld.bin", "rb").read())
+    p = PrmTable(lire_rom("data/prm/encfld.bin"))
     vus = {}
     for r in p.records:
         if r.tag == 0x67 and len(r.fields) == 2:
@@ -124,12 +125,12 @@ def construire_pool(rom_path):
     table, _ = TableMonstres.depuis_rom(rom_path)
     ids = {m.id for m in table}
 
-    tf = PrmTable(open("work/extracted/data/prm/encfld.bin", "rb").read())
+    tf = PrmTable(lire_rom("data/prm/encfld.bin", rom_path))
     terrain = {(r.fields[0] & 0xFFF) for r in tf.records
                if r.tag == 0x67 and len(r.fields) == 2
                and (r.fields[0] & 0xFFF) in ids}
 
-    te = PrmTable(open("work/extracted/data/event/eventbattle.bin", "rb").read())
+    te = PrmTable(lire_rom("data/event/eventbattle.bin", rom_path))
     scriptes = set()
     for r in te.records:
         if r.tag == 0x64 and len(r.fields) == 9:

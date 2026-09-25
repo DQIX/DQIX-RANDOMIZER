@@ -81,3 +81,19 @@ after this version no longer reproduces the checksum of 1.2 or 1.2.1.
 Balance. The draw is uniform over the whole catalogue, so an early-game stall can offer
 things far above what the player can afford. Bounding rarity or price by story progress is
 the obvious next step, and it has not been done.
+
+## Prices follow the story
+
+The 37 shops are stored in story order, and what the original game sells in
+each of them climbs steadily: 240 gold in the first village, 840, 1,750, up to
+31,500 at the end. The randomizer uses that curve as a ceiling -- a shop never
+offers anything pricier than what the original game sells there.
+
+Without it, the draw is uniform over the whole catalogue and the first shop of
+the game offers items worth 32,500 gold: measured, and reported twice by
+players. With it, that same shop tops out at 210.
+
+The three rare shops are exempt: they are meant to be out of reach.
+
+*ignore story prices* in the application turns this off and gives you the 1.3
+behaviour.

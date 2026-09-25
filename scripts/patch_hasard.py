@@ -436,7 +436,7 @@ def tailles_par_code():
     return out
 
 
-def especes_tirables():
+def especes_tirables(plafond=0, boss=False):
     """Rend la liste des identifiants que le tirage peut sortir.
 
     C'est exactement ce que `construire_bitmap` retient, mais sous forme de
@@ -452,7 +452,8 @@ def especes_tirables():
         noms = monnames.charger(chemin_vanilla(), "fr")
     except Exception:
         noms = None
-    table, _ = construire_bitmap(terrain, tailles, hors=hors, noms=noms)
+    table, _ = construire_bitmap(terrain, tailles, hors=hors, noms=noms,
+                                 plafond=plafond or PLAFOND_MODELE, boss=boss)
     return [i for i in range(BORNE) if table[i >> 3] & (1 << (i & 7))]
 
 
@@ -486,7 +487,8 @@ def un_rang_par_nom():
     return garde
 
 
-def construire_bitmap(terrain, tailles, hors=(), noms=None, plafond=PLAFOND_MODELE):
+def construire_bitmap(terrain, tailles, hors=(), noms=None, plafond=PLAFOND_MODELE,
+                      boss=False):
     """Rend les 48 octets du bitmap, un bit par espece, identifiants 0 a 383.
 
     Une espece est autorisee si elle a un nom, un modele de terrain qui tient
@@ -525,8 +527,19 @@ def construire_bitmap(terrain, tailles, hors=(), noms=None, plafond=PLAFOND_MODE
     # symbole ni dans un combat scripte -- `luna-tique` par exemple, qui a
     # pourtant un modele de 17 596 octets. La liste blanche des 256 est la seule
     # source qui vaille : tout ce qui y figure doit pouvoir sortir.
-    for i in sorted(MONSTRES):
-        if i >= BORNE or i not in garde:
+    # LES BOSS, SUR DEMANDE (`--boss-terrain`). Le bestiaire s'arrete a 256 et
+    # tout ce qui suit est un boss : les ajouter, c'est balayer les index hors
+    # liste blanche en plus d'elle. Ils ne passent pas par `un_rang_par_nom`,
+    # qui ne connait que les 256, mais par le meme filtre de modele -- et c'est
+    # lui qui tranche. MESURE (21 septembre) : 150 index hors bestiaire, 74 ont
+    # un modele de terrain, mais 54 portent un identifiant >= 384 que le bitmap
+    # ne sait pas representer. Il en reste 20, dont 11 sous le plafond de
+    # 32 Kio. Ce sont ceux que le jeu emploie deja comme symboles d'antre.
+    candidats = sorted(MONSTRES)
+    if boss:
+        candidats = sorted(set(candidats) | {i for i in tailles if i not in MONSTRES})
+    for i in candidats:
+        if i >= BORNE or (i not in garde and not (boss and i not in MONSTRES)):
             continue
         if noms is not None:
             # `monnames.charger` rend une LISTE indexee par identifiant, pas un
@@ -542,6 +555,14 @@ def construire_bitmap(terrain, tailles, hors=(), noms=None, plafond=PLAFOND_MODE
         if n and n <= plafond:
             b = ids[i]
             if b >= BORNE:
+                # UN BOSS PEUT PORTER UN IDENTIFIANT HORS DU BITMAP : 54 des 74
+                # boss a modele de terrain sont au-dela de 384, et le tireur ne
+                # sait pas les designer. On les ecarte, sans bruit. Pour un
+                # monstre du bestiaire, en revanche, c'est un defaut (ZER-16) :
+                # la liste blanche et la table doivent rester d'accord.
+                if boss and i not in MONSTRES:
+                    compte[0] += 1
+                    continue
                 raise SystemExit(f"index {i} : identifiant {b} hors du bitmap ({BORNE})")
             t[b >> 3] |= 1 << (b & 7)
             compte[1] += 1
@@ -637,7 +658,7 @@ def charger_tailles():
     return t
 
 
-def patcher(rom, bavard=True, taille_max=0):
+def patcher(rom, bavard=True, taille_max=0, boss=False):
     arm9 = bytearray(cc.decompress(bytes(rom.arm9)))
     md = capstone.Cs(capstone.CS_ARCH_ARM, capstone.CS_MODE_ARM)
 
@@ -655,7 +676,7 @@ def patcher(rom, bavard=True, taille_max=0):
         raise SystemExit(f"la zone {ZONE_LIBRE:#010x} n'est pas vide")
 
     # --- la table des classes de taille, et la greffe A2 ---
-    terrain, boss = construire_pool(chemin_vanilla())
+    terrain, pool_boss = construire_pool(chemin_vanilla())
     tailles = tailles_par_code()
     if not tailles:
         raise SystemExit("aucun modele mesure : `enemy.gp2` est-il extrait "
@@ -665,8 +686,9 @@ def patcher(rom, bavard=True, taille_max=0):
         noms = monnames.charger(chemin_vanilla(), "fr")
     except Exception:
         noms = None
-    table, compte = construire_bitmap(terrain, tailles, hors=boss, noms=noms,
-                                      plafond=taille_max or PLAFOND_MODELE)
+    table, compte = construire_bitmap(terrain, tailles, hors=pool_boss, noms=noms,
+                                      plafond=taille_max or PLAFOND_MODELE,
+                                      boss=boss)
     arm9[o:o + BORNE // 8] = table
 
     a2 = greffe_a2(GREFFE_A2)

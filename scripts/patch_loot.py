@@ -57,6 +57,39 @@ MON_ENTETE, MON_ENREG = 4, 132
 OFF_DROPS = ((0x04, "commun"), (0x06, "rare"))
 
 
+# LA PART RESERVEE AUX CONSOMMABLES (ZER-28).
+#
+# LE DEFAUT MESURE : le pool compte 944 equipements pour 144 consommables, donc
+# un tirage uniforme fait sortir de l'equipement neuf fois sur dix. Mesure sur
+# la ROM publiee : 90 % du poids de `randTTT`, 91 % de `randTBox`. Le joueur
+# l'a dit apres avoir joue la 1.2 : « il n'en sort que de l'equipement ».
+#
+# CE QU'ON FAIT : on reserve une part des LIGNES de chaque rang aux
+# consommables, plus genereuse en debut de progression qu'en fin. Les parts
+# d'or, d'embuscade et de vide ne bougent pas : les chances d'un conteneur sont
+# exactement celles du vanilla, seul le contenu change.
+#
+# CE QU'ON NE TOUCHE PAS : les coffres rouges et les drops. Un coffre rouge est
+# unique et se trouve une fois ; c'est le conteneur qu'on ouvre en boucle qui
+# lassait le joueur.
+PART_CONSOMMABLES_BLEUS = {1: 0.40, 2: 0.40, 3: 0.30, 6: 0.30,
+                           4: 0.25, 7: 0.25, 5: 0.20, 8: 0.20}
+
+
+def part_consommables(table, rang):
+    """Quelle fraction des lignes de ce rang revient aux consommables."""
+    import treasure as _T
+    if table == _T.TABLE_COFFRES_BLEUS:
+        return PART_CONSOMMABLES_BLEUS.get(rang, 0.30)
+    if rang <= 7:
+        return 0.40
+    if rang <= 13:
+        return 0.30
+    if rang <= 19:
+        return 0.25
+    return 0.20
+
+
 class Pioche(object):
     """Tirage SANS remise dans le pool, reconstitue quand il est vide.
 
@@ -175,12 +208,30 @@ def _lot_zones(membres):
 
 
 def patcher(rom, rng, langue="en", journal=None,
-            tables=True, coffres_rouges=True, drops=True, etendre=True):
+            tables=True, coffres_rouges=True, drops=True, etendre=True,
+            chaos=False, consommables=True, rang_rouges=True):
     """Reecrit le loot dans la ROM chargee. Rend un dictionnaire de comptes.
 
     Trois temps : on RECENSE tous les emplacements (lignes de tables, coffres
     rouges, drops) avec les etoiles qu'ils acceptent (rarete.py), on AFFECTE
     un objet a chacun en garantissant que tout le pool sort, puis on ECRIT.
+
+    `consommables` : reserver une part des lignes de chaque rang aux
+    consommables (voir `part_consommables`). Sans cette part, neuf lignes sur
+    dix sortent de l'equipement, parce que le pool en contient neuf fois plus
+    -- defaut signale par le joueur apres la 1.2 (ZER-28).
+
+    `chaos` : tout emplacement accepte les six niveaux de rarete. Le rang d'un
+    coffre, le rang d'un pot et la chance d'un drop ne veulent alors plus rien
+    dire -- l'equipement legendaire peut tomber du premier tonneau du jeu.
+    Demande du joueur du 21 septembre : c'est l'alternative a la version
+    ordonnee par rang, qui reste le defaut.
+
+    `rang_rouges` : un coffre rouge garde la rarete de son objet vanilla a une
+    etoile pres. Un coffre rouge est POSE dans une zone, donc son contenu doit
+    suivre l'avancement -- sans cette regle, la Morteresse donnait une veste
+    d'entrainement, constate en jeu le 22 septembre. Sans elle, l'ancien
+    comportement : n'importe quel objet, 0 a 5 etoiles.
 
     `journal` : un fichier ouvert en ecriture, ou None.
     """
@@ -240,9 +291,10 @@ def patcher(rom, rng, langue="en", journal=None,
             lignes_tables[table] = (lignes_tables[table][0], lignes)
             for k, o in enumerate(lignes):
                 if o["loot"] == T.TYPE_OBJET:
-                    ens = (rarete.BLEU.get(o["rang"], rarete.TOUTES)
-                           if table == T.TABLE_COFFRES_BLEUS
-                           else rarete.pot(o["rang"]))
+                    ens = rarete.TOUTES if chaos else (
+                        rarete.BLEU.get(o["rang"], rarete.TOUTES)
+                        if table == T.TABLE_COFFRES_BLEUS
+                        else rarete.pot(o["rang"]))
                     emplacements.append((("t", table, k), ens))
 
     # ---- recensement 3 : les coffres rouges ---------------------------------
@@ -265,7 +317,10 @@ def patcher(rom, rng, langue="en", journal=None,
                 if c["item"] in importants or c["unique"] in vus:
                     continue
                 vus.add(c["unique"])
-                emplacements.append((("r", c["unique"]), rarete.TOUTES))
+                emplacements.append(
+                    (("r", c["unique"]),
+                     rarete.TOUTES if chaos or not rang_rouges
+                     else rarete.rouge(etoiles.get(c["item"], 0))))
 
     # ---- recensement 4 : les drops ------------------------------------------
     # UNE ESPECE, UN BUTIN : plusieurs enregistrements portent le meme monstre
@@ -306,7 +361,8 @@ def patcher(rom, rng, langue="en", journal=None,
             terrain = [classe for k, classe in lot
                        if k in MONSTRES and classe != 7]
             if terrain:
-                emplacements.append((cle, rarete.DROP[min(terrain)]))
+                emplacements.append((cle, rarete.TOUTES if chaos
+                                     else rarete.DROP[min(terrain)]))
             else:
                 hors_terrain.append(cle)
 
@@ -314,7 +370,101 @@ def patcher(rom, rng, langue="en", journal=None,
     # Le pool entier est couvert sur les places atteignables ; les places hors
     # terrain (boss, entrees inutilisees, chance nulle) recoivent un objet
     # quelconque.
+    # ---- l'affectation, puis la part des consommables ----------------------
     affecte = rarete.affecter(rng, emplacements, etoiles, permis)
+
+    # LA PART DES CONSOMMABLES SE JOUE SUR LE POIDS, PAS SUR LE NOMBRE (ZER-28).
+    #
+    # POURQUOI PAS EN RESERVANT DES LIGNES : il y a 1 108 emplacements pour
+    # 1 088 objets, soit vingt de marge. La garantie « chaque objet reste
+    # trouvable » consomme tout le reste, et retirer cent cinquante lignes du
+    # flot le rend infaisable -- mesure faite, la premiere version tombait dans
+    # son repli a chaque fois.
+    #
+    # CE QUI MARCHE : permuter les objets DEJA AFFECTES a l'interieur d'un
+    # meme rang. Toutes les lignes d'un rang acceptent les memes raretes, donc
+    # la permutation est toujours licite ; la couverture, le nombre de lignes,
+    # les parts d'or, d'embuscade et de vide ne bougent pas d'un pouce. On
+    # donne simplement les LIGNES LES PLUS GROSSES aux consommables, jusqu'a
+    # atteindre la part visee. Un pot rend alors un consommable aussi souvent
+    # que le vanilla le faisait, sans qu'aucun objet disparaisse du jeu.
+    if consommables:
+        import boutiques as _B
+        catalogue = objets.catalogue(rom)
+
+        def est_conso(o):
+            return o in catalogue and _B._cat_objet(catalogue[o]) == "item"
+
+        # PREMIER TEMPS : FAIRE VENIR LES CONSOMMABLES DANS LES TABLES.
+        # Chaque objet n'apparait qu'une fois (la couverture le garantit), donc
+        # sur 144 consommables, les tables n'en captent qu'une soixantaine au
+        # hasard -- le reste part dans les drops et les coffres rouges. On
+        # echange donc, deux par deux : un consommable pose ailleurs contre un
+        # equipement pose dans une table. L'echange n'est fait que si CHAQUE
+        # emplacement accepte la rarete de l'objet qu'il recoit, donc rien ne
+        # sort des regles ; et comme c'est un echange, aucun objet ne
+        # disparait.
+        ens_par_cle = dict(emplacements)
+        cles_table = [c for c in affecte if c[0] == "t"]
+        ailleurs = [c for c in affecte if c[0] != "t"]
+        conso_ailleurs = [c for c in ailleurs if est_conso(affecte[c])]
+        equip_table = [c for c in cles_table if not est_conso(affecte[c])]
+        rng.shuffle(conso_ailleurs)
+        rng.shuffle(equip_table)
+        echanges = 0
+        for cle_a in conso_ailleurs:
+            o_conso = affecte[cle_a]
+            for i, cle_t in enumerate(equip_table):
+                o_equip = affecte[cle_t]
+                if (etoiles.get(o_conso, 0) in ens_par_cle.get(cle_t, rarete.TOUTES)
+                        and etoiles.get(o_equip, 0) in ens_par_cle.get(cle_a, rarete.TOUTES)):
+                    affecte[cle_a], affecte[cle_t] = o_equip, o_conso
+                    equip_table.pop(i)
+                    echanges += 1
+                    break
+        comptes["consommables_amenes"] = echanges
+        note("%d consommable(s) amenes des drops vers les tables" % echanges)
+
+        par_rang = collections.defaultdict(list)
+        for table, (_n, lignes) in lignes_tables.items():
+            for k, o in enumerate(lignes or []):
+                cle = ("t", table, k)
+                if o["loot"] == T.TYPE_OBJET and cle in affecte:
+                    par_rang[(table, o["rang"])].append((o["pct"], k, cle))
+        deplaces = 0
+        for (table, rang), lignes in sorted(par_rang.items()):
+            objets_du_rang = [affecte[c] for _p, _k, c in lignes]
+            conso = sorted(o for o in objets_du_rang if est_conso(o))
+            autres = sorted(o for o in objets_du_rang if not est_conso(o))
+            if not conso or not autres:
+                continue
+            poids_total = sum(p for p, _k, _c in lignes) or 1
+            vise = part_consommables(table, rang) * poids_total
+            # les lignes de la plus gourmande a la plus maigre
+            ordre = sorted(lignes, key=lambda x: (-x[0], x[1]))
+            pris, cumul = [], 0
+            for p, _k, cle in ordre:
+                if cumul >= vise or not conso:
+                    break
+                pris.append(cle)
+                cumul += p
+            nouveau = {}
+            restants = list(conso)
+            for cle in pris:
+                if restants:
+                    nouveau[cle] = restants.pop(0)
+            file_autres = autres + restants
+            for _p, _k, cle in ordre:
+                if cle not in nouveau:
+                    nouveau[cle] = file_autres.pop(0)
+            for cle, o in nouveau.items():
+                if affecte[cle] != o:
+                    deplaces += 1
+                affecte[cle] = o
+        comptes["consommables_deplaces"] = deplaces
+        note("%d ligne(s) de table permutees pour donner aux consommables "
+             "les plus grosses parts" % deplaces)
+
     for cle in hors_terrain:
         affecte[cle] = rng.choice(permis)
 

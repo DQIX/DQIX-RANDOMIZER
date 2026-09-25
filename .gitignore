@@ -26,3 +26,11 @@ CLAUDE.md
 .claude/
 .mcp.json
 scripts/linear.py
+
+# Application emballee : PyInstaller ecrit ici, ce sont des artefacts de build.
+dist/
+build/
+*.spec
+
+# Lanceurs d essai du banc : chemins de CE PC, purement locaux (24/09).
+jouer_*.cmd

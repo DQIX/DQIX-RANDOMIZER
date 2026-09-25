@@ -788,3 +788,63 @@ into defect 3.
 
 Both debts point to the same place: **the BSS bootstrap** (§69), which gives 395 KiB and
 would allow both eviction and the right test. It is now the project's critical path.
+
+## 85. Borrowed models, and a palette theory that did not survive (23-24 September)
+
+Two things the player reported on the same build. One is measured and fixed;
+the other is still open, and the tempting explanation turned out to be wrong.
+
+### Measured: monsters wearing another monster's model
+
+`hud.lua` compares an actor's `+0x08` pointer to the loaded model records — it
+deduces nothing. On the player's own field savestate, **2 of the 5 monsters
+present** wear someone else's appearance: `hippotigrulk` shows as
+`chef troll`, `cavalier de braise` as `AU-1000`. Against **1.3 %** measured on
+15 September, when the remedy was deferred as not worth the risk. At this rate
+the arbitration is different, and the remedy is now built (see below).
+
+### Not established: the palette VRAM as the cause of the wrong colours
+
+In his battle savestate the command box is pale blue with dark text where it is
+dark blue with white text everywhere else. The frame texture manager keeps two
+bump allocators, rolled back together by `SetFrmTexVramState` (`0x0207DFA0`):
+
+| global | what |
+|---|---|
+| `0x0210CF88` | palettes: `[0]` base, `[1]` **cursor**, `[2]` limit = `0x4000` |
+| `0x020F1F14` | textures: `[1]` cursor |
+
+Graft C deliberately skips that rollback in on-demand mode (§66), so the
+cursor only ever rises inside a scene — `vram_fuite.lua` over 5 400 frames:
+`0x1990` to `0x39B0`, **zero decreases**. And `0x39B0` is exactly what the
+broken-colour savestate reads: 90 % of the limit, against `0x1090` (26 %) in a
+healthy one.
+
+**That looked conclusive and it is not.** A town loaded from scratch, where no
+on-demand load has happened and where every colour is correct, reads `0x39B0`
+too. A high cursor is therefore normal and proves nothing. A guard was written
+on top of this theory and removed the same day: it would have killed variety
+for no reason. The wrong colours stay unexplained.
+
+### Built: never show a model we do not have
+
+The remedy written down on 15 September and left unbuilt — "ask for the drawn
+species' model, but this time spawn a species already loaded". Its home is one
+instruction:
+
+```
+021a21f8  bl   emprunt          ; returns the model record for species sb
+021a21fc  ldrh r1, [r6]         ; <- the graft goes here, sb still unused
+021a2220  mov  r1, sb           ; the palette lookup uses sb
+021a2268  strh sb, [r8, #2]     ; the actor's species is written from sb
+```
+
+`emprunt` now writes the species of the record it actually served into a blob
+word (`SERVI`, zero when it served the right one), and the graft at
+`0x021A21FC` substitutes it into `sb` before anything reads it. One site, and
+the palette, the actor's species, its hitbox and its shadow all follow
+together. `lr` is free there — the `bl` on the previous instruction has already
+clobbered it — and `r0` carries the record, so the graft leaves it alone.
+
+Checked in the built ROM: `0x021A21FC` holds `E1D610B0` (`ldrh r1, [r6]`) on
+disc and reads back as a `bl` into the blob once the game is running.

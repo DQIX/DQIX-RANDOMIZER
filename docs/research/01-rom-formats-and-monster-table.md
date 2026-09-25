@@ -121,6 +121,18 @@ order of stats 1-7 is still to be confirmed in game.
 175 header / 212 records of 2 u32 fields: `(sequential_index, id)`. The `id`s
 come in groups of 4: `(9,10,11,779) (12,16,17,780) (13,14,15,781)…`
 
+**Both spell menus read the ROM, not the save** (measured 24 September 2026,
+ZER-45, player's save loaded on the seed-15 Balanced ROM and on a vanilla copy,
+`pilote.lua`). In battle, the priest Athore (level 75) lists exactly the 17
+spells the randomized `spelltable.bin` gives vocation 2 up to level 75; Freyja
+(paladin 57) and Melchior (sage 56) match theirs too. The out-of-battle menu
+("Sorts et aptitudes") lists only the spells usable outside battle, taken from
+the same randomized list (Athore: Moreheal and Kazing), plus abilities that do not
+come from this table: the priest's Divination and Bénédiction (0 MP), identical on
+the vanilla ROM. On the vanilla ROM the same save shows the vanilla lists (two
+pages of heals for Athore and Melchior). Nothing learned under an older table
+survives in the save.
+
 ### `encmons.bin` — PARTIAL
 
 Short header, body at `0x10`, 209 records of mixed shapes (120 × 5 fields,

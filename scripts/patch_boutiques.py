@@ -120,6 +120,38 @@ class Pioche(object):
                              % (len(self.pool), len(interdits)))
 
 
+# LE PLAFOND DE PRIX D'UNE BOUTIQUE VIENT DU JEU, PAS DE MON GOUT.
+# Le vanilla range ses 37 etals par ordre d'histoire dans `shopdata1.bin`, et
+# ce qu'ils vendent de plus cher monte avec la progression : 240 po au premier
+# village, 840, 540, 1 750... jusqu'a 31 500 en fin de partie. On prend cette
+# courbe telle quelle : une boutique ne vendra jamais plus cher que ce que le
+# vanilla y vend deja. C'est la reponse a la demande du joueur -- une armurerie
+# de debut de partie doit rester utilisable (ZER-31).
+#
+# LE PLANCHER sert l'autre bout : sans lui, une boutique de fin de partie se
+# remplit d'herbes medicinales. On vise donc une fourchette, et on ne la
+# desserre que si le pool n'a pas de quoi la remplir.
+MARGE_PLAFOND = 1.0      # 1.0 = exactement le maximum du vanilla
+PLANCHER_RATIO = 8       # plancher = plafond / 8
+
+
+def plafonds_vanilla(rom, langue="en"):
+    """{id de boutique: prix affiche le plus cher que le vanilla y vend}.
+
+    Le prix affiche tient compte du pourcentage de l'etal : Pontaudy vend a
+    500 %, son plafond est donc cinq fois le prix de base de son article le
+    plus cher.
+    """
+    _d, etals = B.lire(rom)
+    achat = B.prix_achat(rom)
+    out = {}
+    for e in etals:
+        prix = [achat.get(o, 0) * e["pct"] // 100 for o in e["objets"] if o]
+        if prix:
+            out[e["id"]] = int(max(prix) * MARGE_PLAFOND)
+    return out
+
+
 def vendable(rom, langue="en"):
     """Les objets qu'une boutique peut vendre : autorises ET tarifes.
 
@@ -149,13 +181,62 @@ def _rang(ident, cat, achat):
             ident // 100, achat.get(ident, 0), ident)
 
 
-def pools(rom, langue="en"):
+class _Partout(dict):
+    """Un pool unique, rendu quelle que soit la famille demandee.
+
+    EN MODE CHAOS une armurerie peut vendre une epee, une epicerie une armure.
+    Le reste du code interroge le pool par famille (`pool[fam]`, `pool.get(fam)`,
+    `fam in pool`) : ce dictionnaire repond la meme liste a tout le monde, ce
+    qui evite de disperser des `if chaos` dans le tirage et la verification.
+    """
+
+    def __init__(self, contenu):
+        dict.__init__(self)
+        self.contenu = list(contenu)
+
+    def __getitem__(self, _famille):
+        return self.contenu
+
+    def get(self, _famille, _defaut=None):
+        return self.contenu
+
+    def __contains__(self, _famille):
+        return True
+
+    def items(self):
+        return [(None, self.contenu)]
+
+
+class _MemePioche(object):
+    """Meme idee que `_Partout`, mais ce qu'il rend est LA pioche partagee."""
+
+    def __init__(self, pioche):
+        self.pioche = pioche
+
+    def __getitem__(self, _famille):
+        return self.pioche
+
+    def get(self, _famille, _defaut=None):
+        return self.pioche
+
+    def __contains__(self, _famille):
+        return True
+
+
+def pools(rom, langue="en", chaos=False):
     """{famille: [identifiants]} et {famille: [identifiants 3 etoiles et +]}.
 
     Le pool part de `vendable()` puis se range par famille large (arme,
     bouclier, torse...).
+
+    `chaos` : une seule reserve pour tout le monde, rarete comprise. La
+    discipline du vanilla -- un armurier ne vend pas d'epee, les 3 etoiles et
+    plus sont reservees aux trois boutiques du rare -- tombe.
     """
     permis = vendable(rom, langue)
+    if chaos:
+        tout = _Partout(sorted(permis))
+        return tout, tout
     cat = objets.catalogue(rom)
     etoiles = objets.raretes(rom, langue)
     ordinaire, rare = {}, {}
@@ -171,19 +252,24 @@ def pools(rom, langue="en"):
     return ordinaire, rare
 
 
-def _verifier_pools(etals, cat, ordinaire, rare, classe, achat):
+def _verifier_pools(etals, cat, ordinaire, rare, classe, achat,
+                    rares_actives=True, chaos=False):
     """Chaque boutique doit pouvoir etre remplie sans doublon, avec ce que son
     pourcentage lui permet d'afficher. On le verifie AVANT d'ecrire quoi que ce
     soit, plutot que d'echouer au milieu."""
     for e in etals:
         if e["id"] in INTOUCHABLES:
             continue
-        pool = rare if e["id"] in RARES else ordinaire
-        pct = PCT_RARE[e["id"]] if e["id"] in RARES else e["pct"]
+        ce_rare = e["id"] in RARES and rares_actives
+        pool = rare if ce_rare else ordinaire
+        pct = PCT_RARE[e["id"]] if ce_rare else e["pct"]
         besoin = {}
         for ident in e["objets"]:
             if ident:
-                fam = B._cat_objet(cat[ident])
+                # EN CHAOS ON COMPTE L'ETAL ENTIER SUR UNE SEULE FAMILLE : les
+                # dix-huit emplacements puisent dans la meme reserve, donc
+                # c'est bien dix-huit objets affichables qu'il faut y trouver.
+                fam = None if chaos else B._cat_objet(cat[ident])
                 besoin[fam] = besoin.get(fam, 0) + 1
         for fam, n in sorted(besoin.items()):
             dispo = [o for o in pool.get(fam, ())
@@ -196,8 +282,31 @@ def _verifier_pools(etals, cat, ordinaire, rare, classe, achat):
                     % (e["id"], pct, n, fam, len(dispo)))
 
 
-def patcher(rom, rng, langue="en", journal=None):
-    """Reecrit le stock des boutiques. Rend un dictionnaire de comptes."""
+def patcher(rom, rng, langue="en", journal=None, chaos=False,
+            prix_fabriques=True, progression=True):
+    """Reecrit le stock des boutiques. Rend un dictionnaire de comptes.
+
+    `progression` : borner le prix de ce qu'une boutique vend par ce que le
+    vanilla y vend de plus cher (voir `plafonds_vanilla`). Sans cette borne, le
+    tirage est uniforme sur tout le catalogue et une armurerie de debut de
+    partie propose a 40 000 po ce que le joueur n'aura pas avant vingt heures
+    -- defaut signale deux fois par le joueur (ZER-31). Les trois boutiques du
+    rare y echappent : elles sont censees etre hors de portee.
+
+    `prix_fabriques` : dire si `patch_prix` est passe avant. Sinon les 241
+    objets sans prix restent hors du pool, et les trois boutiques du rare n'ont
+    plus de quoi remplir leurs emplacements -- une seule piece de tete
+    affichable pour trois places, mesure (ZER-33). Elles redeviennent alors des
+    boutiques ordinaires : mieux vaut un etal banal qu'un refus de construire.
+
+    `chaos` : n'importe quel objet vendable dans n'importe quel etal, sans
+    egard pour la famille ni pour la rarete. Les trois boutiques du rare
+    redeviennent des boutiques ordinaires et gardent leur pourcentage du
+    vanilla -- les monter a 500 % n'aurait plus de sens, puisqu'elles ne
+    vendent plus forcement du rare. Deux invariants tiennent quand meme :
+    aucun objet important n'est jamais vendu, et la boutique du chronocristal
+    reste intouchee.
+    """
     def note(ligne=""):
         if journal is not None:
             journal.write(ligne + "\n")
@@ -207,12 +316,24 @@ def patcher(rom, rng, langue="en", journal=None):
     achat = B.prix_achat(rom)
     noms = objets.noms(rom, langue)
     etoiles = objets.raretes(rom, langue)
-    ordinaire, rare = pools(rom, langue)
+    ordinaire, rare = pools(rom, langue, chaos)
     pioches = {f: Pioche(rng, p) for f, p in ordinaire.items()}
     pioches_rares = {f: Pioche(rng, p) for f, p in rare.items()}
+    if chaos:
+        # UNE SEULE PIOCHE POUR LES 559 EMPLACEMENTS. `_Partout` rend le meme
+        # pool a toutes les familles ; sans cette mise en commun, chaque
+        # famille aurait son paquet et un objet sortirait dans plusieurs etals
+        # bien avant que le catalogue soit epuise.
+        pioches = pioches_rares = _MemePioche(Pioche(rng, ordinaire[None]))
 
     classe = classe_prix(rom)
-    _verifier_pools(etals, cat, ordinaire, rare, classe, achat)
+    plafonds = plafonds_vanilla(rom, langue) if progression else {}
+    rares_actives = not chaos and prix_fabriques
+    if not rares_actives and not chaos:
+        note("(pas de prix fabriques : les trois boutiques du rare sont "
+             "traitees comme des boutiques ordinaires)")
+    _verifier_pools(etals, cat, ordinaire, rare, classe, achat,
+                    rares_actives=rares_actives)
 
     buf = bytearray(d)
     comptes = dict(boutiques=0, articles=0, intouchables=0, rares=0, prix=0)
@@ -225,7 +346,7 @@ def patcher(rom, rng, langue="en", journal=None):
                  % (e["id"], sum(1 for o in e["objets"] if o)))
             continue
 
-        ce_rare = e["id"] in RARES
+        ce_rare = e["id"] in RARES and rares_actives
         tirage = pioches_rares if ce_rare else pioches
         comptes["boutiques"] += 1
         if ce_rare:
@@ -249,14 +370,45 @@ def patcher(rom, rng, langue="en", journal=None):
                 return True
             return achat.get(ident, 0) * pct // 100 <= PLAFOND_CLASSE_2
 
+        # LA FOURCHETTE DE PRIX DE CET ETAL. Rien pour les boutiques du rare.
+        plafond = None if ce_rare else plafonds.get(e["id"])
+
+        def dans_la_fourchette(ident, avec_plancher, plafond=plafond, pct=pct):
+            if plafond is None:
+                return True
+            p = achat.get(ident, 0) * pct // 100
+            if p > plafond:
+                return False
+            return not avec_plancher or p >= plafond // PLANCHER_RATIO
+
         deja, tires = set(), []
         for ident in e["objets"]:
             if not ident:
                 continue
             fam = B._cat_objet(cat[ident]) if ident in cat else None
-            if fam is None or fam not in tirage:
+            if not chaos and (fam is None or fam not in tirage):
                 raise AssertionError("famille inconnue pour l'objet %d" % ident)
-            choisi = tirage[fam].tirer(deja, affichable)
+            # TROIS ESSAIS, DU PLUS EXIGEANT AU PLUS LACHE : la fourchette
+            # complete, puis sans le plancher, puis sans borne du tout. Le
+            # dernier recours n'arrive que si le pool d'une famille n'a rien
+            # d'assez bon marche -- mieux vaut un article trop cher qu'un
+            # refus de construire.
+            choisi = None
+            for etape in (0, 1, 2):
+                def accepte(o, etape=etape):
+                    if not affichable(o):
+                        return False
+                    if etape == 2:
+                        return True
+                    return dans_la_fourchette(o, etape == 0)
+                try:
+                    choisi = tirage[fam].tirer(deja, accepte)
+                    break
+                except AssertionError:
+                    comptes["relaches"] = comptes.get("relaches", 0) + 1
+            if choisi is None:
+                raise AssertionError("boutique %d : aucun article possible"
+                                     % e["id"])
             deja.add(choisi)
             tires.append(choisi)
 
@@ -309,8 +461,20 @@ def classe_prix(rom):
     return out
 
 
-def verifier(rom):
-    """Controle de coherence sur une ROM deja patchee. Leve si ca cloche."""
+def verifier(rom, chaos=False, prix_fabriques=True):
+    """Controle de coherence sur une ROM deja patchee. Leve si ca cloche.
+
+    `prix_fabriques` : voir `patcher`. Sans prix fabriques les trois boutiques
+    du rare sont des boutiques ordinaires, et les controles qui les concernent
+    ne s'appliquent pas.
+
+    `chaos` : trois controles tombent, parce que le mode les contredit par
+    construction -- la famille vendue par un etal, le seuil d'etoiles des
+    boutiques du rare et leur pourcentage a 500 %. TOUT LE RESTE TIENT, et
+    c'est le plus important : pas de doublon, pas d'emplacement deplace, pas
+    d'objet important en vente, pas de prix nul, et rien que la boutique ne
+    saurait afficher (le fameux "Invendable").
+    """
     _d, etals = B.lire(rom)
     permis = vendable(rom)
     importants = set(objets.objets_importants(rom))
@@ -320,6 +484,7 @@ def verifier(rom):
 
     _dv, vanilla = B.lire(_rom_vanilla())
     par_id = {e["id"]: e for e in vanilla}
+    rares_actives = not chaos and prix_fabriques
     classe = classe_prix(rom)
     achat = B.prix_achat(rom)
 
@@ -336,16 +501,20 @@ def verifier(rom):
                 raise AssertionError("boutique %d : intouchable, et touchee"
                                      % e["id"])
             continue
-        if e["id"] in RARES and e["pct"] != PCT_RARE[e["id"]]:
+        ce_rare = e["id"] in RARES and rares_actives
+        if ce_rare and e["pct"] != PCT_RARE[e["id"]]:
             raise AssertionError("boutique %d : %d %% au lieu de %d %%"
                                  % (e["id"], e["pct"], PCT_RARE[e["id"]]))
-        if e["id"] not in RARES and e["pct"] != ref["pct"]:
+        if not ce_rare and e["pct"] != ref["pct"]:
             raise AssertionError("boutique %d : le prix a bouge" % e["id"])
-        familles_avant = sorted(B._cat_objet(cat[o]) for o in ref["objets"] if o)
-        familles_apres = sorted(B._cat_objet(cat[o]) for o in e["objets"] if o)
-        if familles_avant != familles_apres:
-            raise AssertionError("boutique %d : les familles vendues ont change"
-                                 % e["id"])
+        if not chaos:
+            familles_avant = sorted(B._cat_objet(cat[o])
+                                    for o in ref["objets"] if o)
+            familles_apres = sorted(B._cat_objet(cat[o])
+                                    for o in e["objets"] if o)
+            if familles_avant != familles_apres:
+                raise AssertionError("boutique %d : les familles vendues ont "
+                                     "change" % e["id"])
         for article in e["objets"]:
             if not article:
                 continue
@@ -370,6 +539,8 @@ def verifier(rom):
             if achat.get(neuf, 0) <= 0:
                 raise AssertionError("boutique %d : objet %d a prix nul"
                                      % (e["id"], neuf))
+            if chaos or not prix_fabriques:
+                continue
             if e["id"] in RARES and etoiles.get(neuf, 0) < ETOILES_RARE_MIN:
                 raise AssertionError("boutique %d du rare : %d n'a que %d "
                                      "etoiles" % (e["id"], neuf,

@@ -1,7 +1,7 @@
 # How monsters are randomized
 
 This guide explains, in plain terms, what the randomizer does to the monsters of
-Dragon Quest IX (Europe, `YDQP`). It describes versions 1.1 and later.
+Dragon Quest IX (Europe, `YDQP`). It describes the current version.
 
 ## What you will see
 
@@ -12,7 +12,8 @@ Dragon Quest IX (Europe, `YDQP`). It describes versions 1.1 and later.
   species per area.
 - **The monster on the map looks like the monster you fight.** Its model, size
   and way of moving are its own.
-- **Bosses never appear as field monsters**, and **story battles are unchanged**.
+- **Bosses never appear as field monsters.** Story battles are unchanged unless
+  you tick *Story bosses*, which swaps each boss for another boss.
 - **Monsters keep their own stats, spells and drops.** A monster is the real
   monster, only moved somewhere else. What it drops is randomized separately, see
   [`LOOT.md`](LOOT.md).
@@ -26,7 +27,8 @@ On the field, the game only keeps **about ten monster models in memory at once**
 for the area you are in. The original game prepares that small set when you enter
 an area. To let any of the 256 monsters appear, the randomizer:
 
-1. picks the species at the moment a monster appears;
+1. picks the species at the moment a monster appears, and picks again if that
+   species is already on screen: you never meet two of the same at once;
 2. loads its model on demand, and unloads a model that is no longer on screen;
 3. gives the monster the size, hitbox and behaviour of its own species.
 
@@ -35,8 +37,11 @@ details, with their evidence, are in [`../research/`](../research/README.md).
 
 ## Known limits
 
-- When many monsters are on screen, a monster can occasionally **borrow the model
-  of another one** already loaded: measured at about 1 appearance in 80.
+- When many monsters are on screen and the model memory is full, a monster can
+  still **borrow the model of another one** already loaded, until one of them
+  leaves the screen.
+- Versions 1.2.1 to 1.4 could fill that memory with copies of the same monster:
+  few different monsters, wrong models, sometimes a freeze. This is fixed.
 - Very large models are more likely to show visual glitches.
 - Tested on emulator only (melonDS through BizHawk, and DeSmuME with the dynamic
   recompiler disabled), never on real hardware.

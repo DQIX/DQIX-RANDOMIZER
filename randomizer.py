@@ -66,6 +66,22 @@ from montable import STATS, TableMonstres
 #   900      : HP 32000 / ATT 9 / DEF 5 -> mannequin d'entrainement du tutoriel
 IDS_SPECIAUX = {800, 801, 900}
 
+# LE PREMIER BOSS. `hexacorne`, espece 300, combat scripte d'identifiant 2 --
+# le second enregistrement d'`eventbattle.bin`, juste apres le prologue. C'est
+# le seul boss du jeu qu'on affronte SANS EQUIPE, d'ou l'option qui le laisse
+# en place (`--boss-garder-premier`).
+HEXACORNE = 300
+
+# LE COMBAT DU PROLOGUE, jamais touche. L'enregistrement 0 d'`eventbattle`
+# (evenement 26) oppose deux gluants et un concombrageur au heros de niveau 1,
+# seul, sans equipement et sans equipe. Ces deux especes -- 290 et 292, des
+# doublons de tutoriel, pas les gluants ordinaires -- ne servent NULLE PART
+# ailleurs en combat scripte. N'importe quoi d'autre a leur place rend la
+# partie infaisable des la premiere minute : signale en jeu le 23 septembre.
+# Ce n'est pas un reglage d'equilibrage mais une condition pour que le jeu
+# soit jouable, donc pas d'option -- on les ecarte toujours.
+PROLOGUE = (290, 292)
+
 CHOIX_RES_ELEM = [0, 25, 50, 75, 100, 100, 125, 150, 200]
 CHOIX_RES_ETAT = [0, 25, 50, 75, 100, 100]
 
@@ -167,11 +183,18 @@ def trouver_xdelta3():
     if trouve:
         return trouve
     racine = os.path.dirname(os.path.abspath(__file__))
-    for base in (".", racine):
+    # EN APPLICATION EMBALLEE, le dossier qui compte est celui de l'executable :
+    # `__file__` pointe dans le dossier temporaire de PyInstaller, que le joueur
+    # ne voit meme pas. On regarde donc aussi a cote de l'exe, et directement
+    # dedans -- c'est la que le joueur posera `xdelta3.exe` si on le lui demande.
+    voisins = [os.path.dirname(os.path.abspath(sys.executable))] if getattr(
+        sys, "frozen", False) else []
+    for base in [".", racine] + voisins:
         for nom in ("xdelta3.exe", "xdelta3"):
-            c = os.path.join(base, "tools", "xdelta", nom)
-            if os.path.isfile(c):
-                return c
+            for c in (os.path.join(base, "tools", "xdelta", nom),
+                      os.path.join(base, nom)):
+                if os.path.isfile(c):
+                    return c
     return None
 
 
@@ -204,6 +227,38 @@ def produire_patch(source, cible):
     print(f"  application : xdelta3 -d -s \"<rom d'origine>\" "
           f"\"{os.path.basename(patch)}\" \"<rom de sortie>.nds\"")
     return patch
+
+
+def adopter_source(rom, controle=True):
+    """La ROM passee en argument devient la ROM de reference de tout le build.
+
+    POURQUOI. Le pool d'especes, les noms de monstres et les tailles de modeles
+    ne se lisent pas dans la ROM en cours de patch mais dans la VANILLA, que
+    `rom_vanilla.chemin_vanilla()` cherchait dans `banc/roms/`. Sur le PC de
+    developpement elle y est ; chez un joueur, non -- il n'a que le fichier
+    qu'il vient de deposer. Or ce fichier EST la vanilla : son empreinte le
+    prouve. On le declare donc comme tel, et la construction n'a plus besoin de
+    rien d'autre que lui.
+
+    Le controle d'empreinte n'est pas une formalite : construire a partir d'une
+    ROM deja randomisee reviendrait a randomiser une randomisation, et la
+    graine ne suffirait plus a reproduire le resultat.
+    """
+    from rom_vanilla import MD5_ATTENDU, verifier_vanilla
+    _c, md5, conforme = verifier_vanilla(rom)
+    if conforme:
+        os.environ["DQ9_VANILLA"] = os.path.abspath(rom)
+        return md5
+    if not controle:
+        print(f"  ATTENTION : empreinte {md5}, ce n'est pas la version Europe.")
+        print("  --sans-controle-rom accepte : la reference reste "
+              "DQ9_VANILLA / banc/roms/.")
+        return md5
+    raise SystemExit(
+        f"Cette ROM n'est pas celle que le randomizer sait traiter.\n"
+        f"  empreinte lue : {md5}\n"
+        f"  attendue      : {MD5_ATTENDU}  (Europe multi-langue, serial YDQP)\n"
+        "  Le randomizer refuse plutot que de produire un jeu casse.")
 
 
 def main():
@@ -372,6 +427,13 @@ def main():
                          "parce que c'est bien plus risque pour la progression : "
                          "un boss de fin trop faible banalise le jeu, un boss "
                          "precoce trop fort le bloque.")
+    ap.add_argument("--boss-garder-premier", action="store_true",
+                    help="laisser HEXACORNE tel quel (combat scripte 2, espece "
+                         "300). C'est le premier boss du scenario et le seul "
+                         "qu'on affronte SEUL, sans equipe : n'importe quel "
+                         "autre boss a sa place peut rendre la partie "
+                         "infaisable. Sans cette option il est tire comme les "
+                         "autres. N'a d'effet qu'avec --boss.")
     ap.add_argument("--stats", dest="stats", action="store_true", default=False,
                     help="randomiser AUSSI les statistiques des monstres. "
                          "Desactive par defaut : le randomizer ne touche qu'aux "
@@ -415,6 +477,168 @@ def main():
                     default=True,
                     help="avec --objets, laisser les drops des monstres "
                          "(mon_btldata.nat) tels qu'en vanilla")
+    ap.add_argument("--boss-terrain", dest="boss_terrain", action="store_true",
+                    help="EXPERIMENTAL, HORS DE L'APPLICATION. Le joueur n'en "
+                         "veut pas dans le randomizer : ce qu'il veut, ce sont "
+                         "les combats de boss du scenario (--boss), pas des "
+                         "boss qui se promenent. L'option reste parce qu'elle "
+                         "est ecrite et mesuree, mais elle n'est ni dans "
+                         "--chaos-total ni dans la fenetre, et elle seule "
+                         "active la greffe d'index a deux octets. LES BOSS "
+                         "PEUVENT ALORS APPARAITRE SUR LE TERRAIN. Le "
+                         "bestiaire s'arrete a 256 et tout ce qui suit est un "
+                         "boss ; cette option les ajoute au tirage. MESURE : "
+                         "150 identifiants hors bestiaire, 74 ont un modele de "
+                         "terrain, 54 portent un identifiant que le tireur ne "
+                         "sait pas designer -- il en reste 16, ceux que le jeu "
+                         "emploie lui-meme comme symboles d'antre. La table "
+                         "des fiches du blob grandit en consequence.")
+    ap.add_argument("--objets-chaos", dest="objets_chaos", action="store_true",
+                    help="avec --objets : IGNORER LES RANGS. N'importe quel "
+                         "objet dans n'importe quel conteneur, l'equipement "
+                         "legendaire compris, des le premier tonneau. Par "
+                         "defaut les objets rares viennent des endroits rares.")
+    ap.add_argument("--boutiques-chaos", dest="boutiques_chaos",
+                    action="store_true",
+                    help="avec --boutiques : IGNORER LES FAMILLES ET LA "
+                         "RARETE. N'importe quel objet vendable dans "
+                         "n'importe quel etal ; un armurier peut vendre une "
+                         "herbe et une epicerie une armure legendaire. Les "
+                         "trois boutiques du rare redeviennent ordinaires. La "
+                         "boutique du chronocristal reste intouchee et aucun "
+                         "objet important n'est jamais vendu.")
+    ap.add_argument("--vocations", dest="vocations", action="store_true",
+                    default=False,
+                    help="OUVRIR LES DOUZE VOCATIONS des le debut. Six "
+                         "s'obtiennent normalement par une quete (gladiateur, "
+                         "paladin, armagicien, ranger, sage, luminaire) ; le "
+                         "pere Blaise, a l'abbaye des Vocations, les propose "
+                         "toutes. Un seul mot change dans l'overlay de "
+                         "l'abbaye (scripts/patch_vocations.py). Les quetes "
+                         "restent jouables. Prouve en jeu le 25 septembre.")
+    ap.add_argument("--vocations-embauche", dest="vocations_embauche",
+                    action="store_true", default=False,
+                    help="VOCATION TIREE AU HASARD A L'EMBAUCHE : un "
+                         "compagnon recrute chez Tulipe (auberge "
+                         "d'Ablithia) recoit une vocation parmi les douze, "
+                         "quelle que soit celle qu'on a choisie dans le menu. "
+                         "Tirage fait par le jeu a la creation, donc "
+                         "different a chaque recrue. Le menu de Tulipe ne "
+                         "propose plus qu'une entree, << Aleatoire >>. Prouve "
+                         "en jeu le 25 septembre.")
+    ap.add_argument("--vocations-bloquees", dest="vocations_bloquees",
+                    action="store_true", default=False,
+                    help="VOCATIONS BLOQUEES : chez le pere Blaise, << Changer "
+                         "de vocation >> est refuse par un message (5 langues), "
+                         "et la << Voix de la vocation >> aussi. La "
+                         "renouvocation reste permise (elle ne change pas de "
+                         "vocation). Chacun garde la vocation qu'il a recue. "
+                         "Les quetes de deblocage restent jouables ; celles "
+                         "qui exigent d'exercer une autre vocation ne le sont "
+                         "plus. A combiner avec --vocations-embauche et "
+                         "--vocation-depart pour une equipe tiree au sort pour "
+                         "toute la partie.")
+    ap.add_argument("--vocation-depart", dest="vocation_depart",
+                    action="store_true", default=False,
+                    help="VOCATION DE DEPART DU HEROS TIREE AVEC LA GRAINE, au "
+                         "lieu de troubadour. Le heros reste affiche << Gardien "
+                         ">> pendant le prologue, comme dans le jeu d'origine ; "
+                         "la vocation tiree apparait apres la chute. Ne vaut "
+                         "que pour une NOUVELLE partie. Prouve en jeu le "
+                         "25 septembre.")
+    ap.add_argument("--butin-combat", dest="butin", action="store_true",
+                    default=False,
+                    help="LE BUTIN DES MONSTRES TIRE A CHAQUE COMBAT : quand "
+                         "un monstre lache un objet, l'objet est tire au "
+                         "hasard parmi les 1 088 objets du pool au lieu d'etre "
+                         "celui de son espece. Les chances de butin ne "
+                         "bougent pas. Version EQUILIBREE : un objet 4 ou 5 "
+                         "etoiles n'est garde qu'une fois sur 8 (1,7 %% des "
+                         "butins). Greffe dans l'overlay 23 "
+                         "(scripts/patch_butin.py). Prouve en jeu le "
+                         "25 septembre.")
+    ap.add_argument("--butin-combat-libre", dest="butin_libre",
+                    action="store_true", default=False,
+                    help="avec --butin-combat (qu'il implique) : N'IMPORTE "
+                         "QUEL OBJET a chances egales, l'equipement "
+                         "legendaire compris (12 %% de 4-5 etoiles).")
+    ap.add_argument("--coffres-rouges-libres", dest="rang_rouges",
+                    action="store_false", default=True,
+                    help="avec --objets : un coffre rouge peut contenir "
+                         "N'IMPORTE QUEL objet, de 0 a 5 etoiles -- le "
+                         "comportement jusqu'a la 1.5. Par defaut il garde la "
+                         "rarete de son objet vanilla a une etoile pres, "
+                         "parce qu'un coffre rouge est POSE dans une zone : "
+                         "sans cette borne la Morteresse donne une veste "
+                         "d'entrainement, constate en jeu.")
+    ap.add_argument("--objets-sans-consommables", dest="consommables",
+                    action="store_false", default=True,
+                    help="avec --objets : NE PAS reserver de part aux "
+                         "consommables, c'est-a-dire le comportement de la "
+                         "1.3. Le pool compte 944 equipements pour 144 "
+                         "consommables, donc neuf lignes sur dix rendent de "
+                         "l'equipement -- defaut signale par le joueur apres "
+                         "la 1.2 (ZER-28). Par defaut on amene des "
+                         "consommables dans les tables et on leur donne les "
+                         "plus grosses parts de chaque rang : mesure sur la "
+                         "graine 3, de 11 a 32 %% du poids pour les coffres "
+                         "bleus et de 7 a 36 %% pour les pots. Les chances "
+                         "d'or, d'embuscade et de vide ne bougent pas.")
+    ap.add_argument("--boutiques-sans-progression", dest="progression",
+                    action="store_false", default=True,
+                    help="avec --boutiques : NE PAS borner le prix de ce qu'une "
+                         "boutique vend. Par defaut chaque etal ne propose rien "
+                         "de plus cher que ce que le vanilla y vend deja -- les "
+                         "37 boutiques sont rangees par ordre d'histoire, donc "
+                         "cette borne suit la progression et une armurerie de "
+                         "debut de partie reste utilisable. Les trois "
+                         "boutiques du rare n'y sont pas soumises. Sans borne, "
+                         "le tirage est uniforme sur tout le catalogue.")
+    ap.add_argument("--sorts", dest="sorts", action="store_true", default=False,
+                    help="randomiser LES SORTS APPRIS PAR NIVEAU : les 107 "
+                         "triplets (vocation, sort, niveau) de "
+                         "data/prm/spelltable.bin. Les niveaux et le nombre de "
+                         "sorts par vocation ne bougent pas ; seuls les sorts "
+                         "changent, sans doublon dans une meme vocation. Les "
+                         "trois vocations sans magie (guerrier, artiste "
+                         "martial, gladiateur) n'en recoivent pas. DESACTIVE "
+                         "PAR DEFAUT tant que ce n'est pas valide en jeu.")
+    ap.add_argument("--sorts-chaos", dest="sorts_chaos", action="store_true",
+                    help="avec --sorts : ne pas ranger les sorts tires par "
+                         "puissance. Par defaut une vocation apprend encore "
+                         "ses sorts faibles tot et ses sorts forts tard, la "
+                         "puissance etant mesuree par le niveau median auquel "
+                         "le vanilla enseigne chaque sort. Avec cette option, "
+                         "Omniheal peut tomber au niveau 1.")
+    ap.add_argument("--aptitudes", dest="aptitudes", action="store_true",
+                    default=False,
+                    help="randomiser LES APTITUDES DES ARBRES DE COMPETENCES "
+                         "(data/prm/skilltable.bin, 26 arbres de 11 paliers). "
+                         "Par defaut les aptitudes sont melangees A "
+                         "L'INTERIEUR de chaque arbre : un arbre d'epees ne "
+                         "donne que des techniques d'epee, ce qui compte "
+                         "puisqu'une technique d'arme exige cette arme en "
+                         "main. Les bonus de caracteristique ne bougent pas. "
+                         "DESACTIVE PAR DEFAUT tant que ce n'est pas valide "
+                         "en jeu.")
+    ap.add_argument("--aptitudes-chaos", dest="aptitudes_chaos",
+                    action="store_true",
+                    help="avec --aptitudes : melanger les 147 aptitudes et les "
+                         "139 bonus entre TOUS les arbres, par bandes de cout. "
+                         "Une technique d'epee peut alors s'apprendre dans "
+                         "l'arbre des fouets -- il faudra une epee pour s'en "
+                         "servir ; un bonus d'arme garde son arme et son "
+                         "libelle la nomme.")
+    ap.add_argument("--chaos-total", dest="chaos_total", action="store_true",
+                    help="raccourci : --boss --sorts --sorts-chaos "
+                         "--aptitudes --aptitudes-chaos --objets-chaos "
+                         "--boutiques-chaos --coffres-rouges-libres "
+                         "--boss-garder-premier --vocations "
+                         "--vocations-embauche --vocation-depart "
+                         "--butin-combat "
+                         "--butin-combat-libre. "
+                         "Tout ce qui peut etre tire l'est sans borne. "
+                         "N'INCLUT PAS --boss-terrain, qui est experimental.")
     ap.add_argument("--inclure-speciaux", action="store_true",
                     help="toucher aussi les entrees de test et le mannequin d'entrainement")
     ap.add_argument("-o", "--sortie", help="chemin de la ROM produite")
@@ -430,8 +654,32 @@ def main():
                     help="langue des noms de monstres dans le journal (defaut en)")
     ap.add_argument("--a-blanc", action="store_true",
                     help="calculer et journaliser sans ecrire de ROM")
+    ap.add_argument("--sans-controle-rom", dest="controle_rom",
+                    action="store_false", default=True,
+                    help="ne pas refuser une ROM dont l'empreinte MD5 n'est "
+                         "pas celle de la version Europe. Reserve au "
+                         "developpement : la ROM de reference reste alors "
+                         "celle que DQ9_VANILLA ou banc/roms/ designe.")
     a = ap.parse_args()
 
+    if a.chaos_total:
+        # PAS --boss-terrain : voir son aide. Le chaos porte sur ce que le
+        # joueur a demande -- le loot, les etals, et les boss du scenario.
+        a.boss = True
+        # HEXACORNE RESTE EPARGNE, MEME EN CHAOS TOTAL. C'est ce que coche le
+        # prereglage "Total chaos" de la fenetre, et les deux chemins doivent
+        # produire la meme ROM. Sans ca, la graine 7 mettait Baramos (608) au
+        # premier combat du scenario, celui qu'on livre sans equipe.
+        a.boss_garder_premier = True
+        a.objets_chaos = a.boutiques_chaos = True
+        a.consommables = a.progression = a.rang_rouges = False
+        a.sorts = a.sorts_chaos = True
+        a.aptitudes = a.aptitudes_chaos = True
+        a.vocations = a.vocations_embauche = a.vocation_depart = True
+        a.butin = a.butin_libre = True
+    if a.butin_libre:
+        a.butin = True
+    adopter_source(a.rom, a.controle_rom)
     rng = random.Random(a.seed)
     print(f"lecture de {a.rom}")
     try:
@@ -461,6 +709,8 @@ def main():
 
     # --- rencontres : quelles especes apparaissent ou ---
     rencontres = None
+    # LE POOL DES BOSS D'ANTRE, tires a chaque visite par le blob (ZER-37).
+    pool_antres = None
     if a.rencontres or a.boss:
         fichiers = ((FICHIERS_RENCONTRES if a.rencontres else ())
                     + (FICHIERS_SCRIPTES if a.boss else ()))
@@ -505,10 +755,49 @@ def main():
             rng.shuffle(cibles)
             return dict(zip(pool, cibles))
 
+        # UN BOSS DOIT DEVENIR UN BOSS, et c'est un troisieme ensemble, pas
+        # deux. `construire_pool` rend « les especes qui n'apparaissent qu'en
+        # combat scripte » : sur 101, seules 89 sont des boss, les 12 autres
+        # sont des monstres ordinaires que le jeu n'emploie jamais comme
+        # symbole. Permuter les 101 ensemble donnait Zoma -> gluant, Malroth ->
+        # cuirassassin, Psaro -> scarlatin : douze combats de scenario
+        # devenaient triviaux. Mesure du 21 septembre, sur la graine 7.
+        # Le critere reste celui du jeu : le bestiaire s'arrete a 256.
+        # HEXACORNE RESTE HEXACORNE, SUR DEMANDE. On le retire du pool AVANT
+        # le melange : une espece absente du pool n'est ni source ni cible,
+        # donc elle se retrouve inchangee dans les trois tables ou elle figure
+        # (encfld, encbtl, eventbattle -- une occurrence chacune, verifie).
+        # L'ecarter apres coup ne suffirait pas : un autre boss prendrait sa
+        # place.
+        pool_vrais_boss = [i for i in pool_boss if _index.get(i) not in _MONSTRES]
+        pool_scriptes_ordinaires = [i for i in pool_boss
+                                    if _index.get(i) in _MONSTRES]
+
+        # CE QU'ON RETIRE DES TROIS POOLS AVANT DE MELANGER. Une espece
+        # absente d'un pool n'en est ni source ni cible : elle se retrouve
+        # inchangee partout ou elle figure. L'ecarter apres le melange ne
+        # suffirait pas -- une autre prendrait sa place.
+        garde = set(PROLOGUE)
+        if a.boss_garder_premier:
+            garde.add(HEXACORNE)
+        pool_terrain = [i for i in pool_terrain if i not in garde]
+        pool_vrais_boss = [i for i in pool_vrais_boss if i not in garde]
+        pool_scriptes_ordinaires = [i for i in pool_scriptes_ordinaires
+                                    if i not in garde]
+        print("  laisses en place : combat du prologue (%s)%s"
+              % (", ".join(str(i) for i in PROLOGUE),
+                 ", hexacorne (%d)" % HEXACORNE if a.boss_garder_premier
+                 else ""))
+
+        if a.boss:
+            pool_antres = list(pool_vrais_boss)
         corresp = permuter(pool_terrain)
-        corresp.update(permuter(pool_boss))
+        corresp.update(permuter(pool_vrais_boss))
+        corresp.update(permuter(pool_scriptes_ordinaires))
         print(f"  permutations : {len(pool_terrain)} especes de terrain, "
-              f"{len(pool_boss)} especes de combats scriptes, separement")
+              f"{len(pool_vrais_boss)} boss entre eux, "
+              f"{len(pool_scriptes_ordinaires)} especes de combat scripte "
+              f"ordinaires entre elles")
         rencontres = TablesRencontres(rom, fichiers)
         total, detail_fichiers = rencontres.compter(ids_valides)
         # on releve l'etat AVANT, pour pouvoir journaliser ce qui a change :
@@ -640,15 +929,67 @@ def main():
         # greffes de monstres ci-dessous.
         from patch_loot import patcher as patcher_loot
         from patch_loot import verifier as verifier_loot
-        print("objets des conteneurs (coffres, pots, tonneaux, placards) :")
+        print("objets des conteneurs (coffres, pots, tonneaux, placards)%s :"
+              % ("  [CHAOS : rangs ignores]" if a.objets_chaos else
+                 ("  [part reservee aux consommables]" if a.consommables
+                  else "  [sans part de consommables]")))
         with open(journal, "a", encoding="utf-8") as jf:
             c_loot = patcher_loot(rom, rng, langue=a.langue, journal=jf,
-                                  drops=a.drops)
+                                  drops=a.drops, chaos=a.objets_chaos,
+                                  consommables=a.consommables
+                                  and not a.objets_chaos,
+                                  rang_rouges=a.rang_rouges)
         verifier_loot(rom)
         print(f"  {c_loot['outcomes']} outcomes de table reecrits, "
               f"{c_loot['coffres']} coffres rouges, "
               f"{c_loot['coffres_gardes']} garde(s) pour cause d'objet "
               f"important, {c_loot['drops']} drops de monstres")
+    if (a.vocations or a.vocations_embauche or a.vocations_bloquees
+            or a.vocation_depart):
+        # L'OVERLAY 3 (l'abbaye et le bar de Tulipe), le 9 (la creation d'un
+        # compagnon), deux archives de textes (str_dam, bm_lui), et UN
+        # immediat de l'overlay 17 pour la vocation de depart du heros (hors
+        # de toute greffe de monstres ; diff_roms.py le sait).
+        from patch_vocations import patcher as patcher_vocations
+        from patch_vocations import verifier as verifier_vocations
+        from patch_vocations import tirer_depart
+        depart = tirer_depart(a.seed) if a.vocation_depart else None
+        print("vocations :")
+        patcher_vocations(rom, ouvrir=a.vocations,
+                          embauche=a.vocations_embauche,
+                          bloquer=a.vocations_bloquees, depart=depart)
+        verifier_vocations(rom, ouvrir=a.vocations,
+                           embauche=a.vocations_embauche,
+                           bloquer=a.vocations_bloquees, depart=depart)
+    if a.sorts:
+        # PUREMENT DE LA DONNEE : 107 mots reecrits en place dans
+        # spelltable.bin, aucune taille de fichier ne bouge.
+        from patch_sorts import patcher as patcher_sorts
+        from patch_sorts import verifier as verifier_sorts
+        print("sorts appris par niveau%s :"
+              % ("  [CHAOS : sans ordre de puissance]" if a.sorts_chaos else ""))
+        with open(journal, "a", encoding="utf-8") as jf:
+            c_sorts = patcher_sorts(rom, rng, journal=jf, chaos=a.sorts_chaos)
+        verifier_sorts(rom)
+        print(f"  {c_sorts['sorts']} sorts redistribues dans "
+              f"{c_sorts['vocations']} vocations")
+    if a.aptitudes:
+        # PUREMENT DE LA DONNEE : 147 mots reecrits en place dans
+        # skilltable.bin, aucune taille de fichier ne bouge.
+        from patch_aptitudes import patcher as patcher_aptitudes
+        from patch_aptitudes import verifier as verifier_aptitudes
+        print("aptitudes des arbres de competences%s :"
+              % ("  [CHAOS : melange entre arbres]" if a.aptitudes_chaos
+                 else ""))
+        with open(journal, "a", encoding="utf-8") as jf:
+            c_apt = patcher_aptitudes(rom, rng, journal=jf,
+                                      chaos=a.aptitudes_chaos,
+                                      langue=a.langue)
+        import ndspy.rom as _nr
+        from rom_vanilla import chemin_vanilla as _cv
+        verifier_aptitudes(rom, _nr.NintendoDSRom.fromFile(_cv()))
+        print(f"  {c_apt['aptitudes']} aptitudes et {c_apt['bonus']} bonus "
+              f"redistribues dans {c_apt['arbres']} arbres")
     if a.boutiques:
         if a.prix_objets:
             # A FAIRE AVANT LE TIRAGE DES ETALS : le pool des boutiques se
@@ -668,18 +1009,28 @@ def main():
         # aucun patch de code.
         from patch_boutiques import patcher as patcher_boutiques
         from patch_boutiques import verifier as verifier_boutiques
-        print("stock des boutiques :")
+        print("stock des boutiques%s :"
+              % ("  [CHAOS : familles, rarete et prix ignores]"
+                 if a.boutiques_chaos else
+                 ("  [prix bornes par la progression]" if a.progression
+                  else "  [sans borne de prix]")))
         with open(journal, "a", encoding="utf-8") as jf:
-            c_bout = patcher_boutiques(rom, rng, langue=a.langue, journal=jf)
-        verifier_boutiques(rom)
+            c_bout = patcher_boutiques(rom, rng, langue=a.langue, journal=jf,
+                                       chaos=a.boutiques_chaos,
+                                       prix_fabriques=a.prix_objets,
+                                       progression=a.progression
+                                       and not a.boutiques_chaos)
+        verifier_boutiques(rom, chaos=a.boutiques_chaos,
+                           prix_fabriques=a.prix_objets)
         print(f"  {c_bout['articles']} articles reecrits dans "
               f"{c_bout['boutiques']} boutiques, "
               f"{c_bout['intouchables']} intouchee(s), "
               f"{c_bout['rares']} boutique(s) du rare")
     if a.hasard:
         from patch_hasard import patcher
-        print("tirage au chargement de zone (patch de code) :")
-        patcher(rom, taille_max=a.taille_max)
+        print("tirage au chargement de zone (patch de code)%s :"
+              % ("  [BOSS SUR LE TERRAIN]" if a.boss_terrain else ""))
+        patcher(rom, taille_max=a.taille_max, boss=a.boss_terrain)
         # LA GREFFE C N'EST PLUS POSEE QU'AVEC LA ROTATION, ET C'EST GRAVE.
         #
         # Elle porte le conteneur a 150 especes, or le constructeur du jeu
@@ -722,7 +1073,11 @@ def main():
             from patch_amorce import patcher as patcher_amorce
             print("chargeur relogeable, dans un bloc alloue (P4) :")
             patcher_amorce(rom, plafond=a.plafond or None,
-                           etapes=4 if a.etapes is None else a.etapes)
+                           etapes=4 if a.etapes is None else a.etapes,
+                           boss=a.boss_terrain, antres=pool_antres)
+            if pool_antres:
+                print(f"  boss d'antre : un tirage a chaque visite, parmi "
+                      f"{len(pool_antres)} boss (ZER-37)")
         if a.chargeur and not (a.portier and a.place):
             raise SystemExit("--chargeur implique --portier et --place.")
         if a.place:
@@ -773,6 +1128,16 @@ def main():
     elif a.portier:
         raise SystemExit("--portier a besoin du patch de code : retirer "
                          "--sans-hasard.")
+    if a.butin:
+        # UNE GREFFE DANS L'OVERLAY 23, celui du combat, que personne d'autre
+        # ne touche. Independante du loot des conteneurs et des monstres.
+        from patch_butin import patcher as patcher_butin
+        from patch_butin import verifier as verifier_butin
+        print("butin des monstres tire a chaque combat%s :"
+              % ("  [LIBRE : tout objet a chances egales]" if a.butin_libre
+                 else "  [4-5 etoiles rares]"))
+        patcher_butin(rom, mode="libre" if a.butin_libre else "rares")
+        verifier_butin(rom)
     rom.saveToFile(base)
 
     # La reconstruction retire le bourrage de fin de cartouche. On le remet :
