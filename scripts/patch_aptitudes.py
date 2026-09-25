@@ -191,7 +191,17 @@ def patcher(rom, rng, journal=None, chaos=False, langue="en"):
     # cout 0, une place vide que le jeu ne montre pas. Les melanger amenait
     # ce vide sur un palier visible : le joueur a vu, le 24 septembre, une
     # ligne blanche a 16 points dans l'arbre Cran. On les epingle.
-    fixes = {i for i, _f in tous if not affiches.get(place[i])}
+    #
+    # LES 26 TECHNIQUES DE LIVRE NON PLUS (ZER-51, demande du joueur le
+    # 25 septembre). Chaque arbre a une place a 0 point : ce n'est pas un
+    # palier qu'on achete, c'est ce que donne le livre de competence de
+    # l'arbre, tenu dans l'inventaire (« L'Epee en Resume » -> Gigagash,
+    # recompense de quete). Melangees, ces techniques tombaient sur des paliers
+    # ordinaires -- le joueur a eu Hacharnement sans le livre -- et un palier
+    # ordinaire finissait reserve au livre. On les epingle : chaque livre
+    # garde sa technique, les 260 autres paliers se melangent entre eux.
+    fixes = {i for i, _f in tous
+             if not affiches.get(place[i]) or place[i][1] == 0}
 
     comptes = dict(arbres=0, paliers=0, aptitudes=0, bonus=0)
     note("=== APTITUDES ET BONUS DES ARBRES DE COMPETENCES ===")

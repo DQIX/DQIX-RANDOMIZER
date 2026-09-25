@@ -127,3 +127,27 @@ weapon* (26). Seen in game: *Melchior voit son attaque augmenter de 20 !*,
 A `str_gskl` member has the same four-word header as `sklname`; a `0x66` record
 holds the message count; records are 4 bytes of descriptor plus 4 per field.
 `PrmTable` stops before the last record (113) and must not be used on it.
+
+## §88 The 0-point milestones are the skill books (ZER-51)
+
+Each of the 26 trees has exactly one record with cost 0. It is not bought with
+skill points: it is the technique of that tree's **skill book**, one of the 26
+quest-reward items `22265`–`22290` (*Swordcraft in Summary* … *Luminary's
+Lore*), which works while held in the bag. Cross-checked against the list of
+skill manuals of the English release: the 20 labelled 0-point records are the
+20 book techniques (Gigagash, Lightning Storm, Persecutter, Zing Stick, Counter
+Wait, Serpent's Bite, Hand of God, Hustle Dance, Whopper Chop, Big Banga,
+Shining Shot, Gigathrow, Miracle Moon, Wave of Relief, Weakening Wave, Gritty
+Ditty, Solar Flair, the Armamentalist's party Fource, Twocus Pocus, Gold Rush);
+the 6 unlabelled ones are the passive books (Shield: no critical hits taken;
+Warrior: counters; Martial Artist: keeps Tension; Thief: steals after battle;
+Gladiator: double attacks; Ranger: critical rate at low HP, nature 3).
+
+Shuffling them put book techniques on ordinary milestones — seen in play:
+Whopper Chop learned by points, no book — and made an ordinary milestone only
+reachable through a book. Since ZER-51 all 26 are pinned; the other **260**
+milestones (128 abilities, 132 bonuses) are redealt. Measured on seeds 1, 15
+and 42 in both modes: 0 book record changed, 0 book technique on an ordinary
+milestone, and the 260 moved contents are exactly the original multiset.
+The two nature-0 records outside the books (wand MP regeneration, MP cost
+−25 %) are real passives keyed by their palier ID, not empty places.

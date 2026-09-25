@@ -31,7 +31,8 @@ the point -- items and the Zoom back to an inn still work.
 
 Every vocation spends skill points in skill trees: the weapon trees (swords,
 axes, whips, bows...) plus its own vocation tree. The game has **26 trees of
-11 milestones**, 286 in all. A milestone gives either an ability or a bonus
+11 milestones**, 286 in all. The trees are the same for every character; what
+differs is which trees a vocation has and where each character spends points. A milestone gives either an ability or a bonus
 (Attack +10, critical rate up, a natural stat increase, absolute mastery).
 
 The randomizer redeals **what each milestone gives**, abilities and bonuses
@@ -45,14 +46,18 @@ techniques. What changes is which ability or bonus sits behind which cost.
 
 **Total chaos** shuffles across all 26 trees, within bands of similar cost. A
 sword technique can then be learned in the whip tree -- you will learn it, but
-you will need a sword to use it. Bonuses that name the tree's weapon ("Attack
-+10 with") stay in weapon trees, where the game can show the weapon icon.
+you will need a sword to use it. A bonus that names a weapon keeps it wherever
+it lands, and its name says which one ("Attack +30 with axe").
 
-Six milestones of the original game have no name and are never shown; they
-are left in place.
+**The skill books are left alone.** Each tree has one milestone at 0 points
+that is not bought with points: it is the technique taught by that tree's
+skill book, a quest reward kept in your bag (*Swordcraft in Summary* gives
+Gigagash, *Advanced Axecraft* gives Whopper Chop...). Those 26 stay in place,
+so a book technique never shows up on an ordinary milestone and you still need
+the book. The other 260 milestones are redealt: 128 abilities and 132 bonuses.
 
 ## Vocations
 
-Vocation availability is **not** randomized. Six vocations are unlocked by
-quests in the original game, and that gate lives in the game's code and in your
-save file, not in the data the randomizer rewrites.
+With *Vocations* ticked, all twelve vocations are offered at Alltrades Abbey
+from the start (the unlock quests still work), recruits and the hero get a
+random vocation, and *locked vocations* can forbid changing vocation.

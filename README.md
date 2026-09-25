@@ -10,7 +10,7 @@ This project randomizes **Dragon Quest IX: Sentinels of the Starry Skies**:
 * **Spells.** The spells a vocation learns as it levels up are redrawn from the game's 61 spells. Levels and counts stay as they are: a Priest still learns seventeen spells, at the same seventeen levels, but not the same ones.
 * **Monster drops, at every battle.** When a monster drops an item, the item is drawn anew from the 1,088 obtainable items: the same monster can give something different each time.
 * **Vocations.** All twelve vocations are available at Alltrades Abbey from the start, and a companion created at Patty's gets a random vocation. The hero can start with a random vocation. As a challenge, vocations can also be locked: nobody can change vocation (revocation stays).
-* **Skill tree abilities and their bonuses.** All 286 skill-point milestones of the 26 trees are redealt: the 147 abilities, and the 139 stat bonuses too (Attack +10, Max MP +30, Block Chance +2%, absolute mastery). A milestone that gave an ability can give a bonus, and the other way round.
+* **Skill tree abilities and their bonuses.** The 260 skill-point milestones of the 26 trees are redealt: 128 abilities and 132 stat bonuses (Attack +10, Max MP +30, Block Chance +2%, weapon mastery). A milestone that gave an ability can give a bonus, and the other way round. The 26 techniques taught by the skill books (quest rewards such as Gigagash or Whopper Chop) stay where they are: you still need the book.
 
 Monster stats stay as they are unless you tick the experimental option. Quest rewards and treasure-map grottos are not randomized.
 
