@@ -39,6 +39,9 @@ unreadable in play; this makes it a shop again.
 - Dourbridge's secret shop and the **two Stornway stalls that open after the final boss**
   sell **4 and 5 stars only**.
 
+This holds in **every mode**, Total chaos included (since 1.5): *any item in any
+shop* mixes shop families, never rarity.
+
 ### Prices
 
 The game's own rule is kept: **an article costs twice its resale value**. Items the
@@ -55,8 +58,7 @@ sets the flag that allows an item to be listed, without which the shop prints
 
 A shop's own percentage multiplies all this. Dourbridge keeps the **500 %** of the
 original game — the town of thieves sells dear, that is a trait of the place. Its secret
-shop is set to **2000 %**, which is how a royal shield ends up at 1,000,000 gold, and
-Stornway's two post-game stalls to **800 %**.
+shop and Stornway's two post-game stalls are all set to **800 %**.
 
 ### What is never on sale
 

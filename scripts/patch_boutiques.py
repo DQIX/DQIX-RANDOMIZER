@@ -229,16 +229,21 @@ def pools(rom, langue="en", chaos=False):
     Le pool part de `vendable()` puis se range par famille large (arme,
     bouclier, torse...).
 
-    `chaos` : une seule reserve pour tout le monde, rarete comprise. La
-    discipline du vanilla -- un armurier ne vend pas d'epee, les 3 etoiles et
-    plus sont reservees aux trois boutiques du rare -- tombe.
+    `chaos` : la famille tombe (un armurier peut vendre des herbes), PAS la
+    rarete. Deux reserves sans famille : 0 a 3 etoiles pour les etals
+    ordinaires, 4 et 5 etoiles pour les trois boutiques du rare. REGLE FIXE,
+    decidee par le joueur le 25 septembre (ZER-49) apres un equipement
+    5 etoiles a 72 000 po dans la premiere boutique du jeu, en Chaos total :
+    le fin de jeu ne se vend qu'en fin de jeu, quel que soit le reglage.
     """
     permis = vendable(rom, langue)
-    if chaos:
-        tout = _Partout(sorted(permis))
-        return tout, tout
-    cat = objets.catalogue(rom)
     etoiles = objets.raretes(rom, langue)
+    if chaos:
+        return (_Partout(sorted(o for o in permis
+                                if etoiles.get(o, 0) <= ETOILES_ORDINAIRE_MAX)),
+                _Partout(sorted(o for o in permis
+                                if etoiles.get(o, 0) >= ETOILES_RARE_MIN)))
+    cat = objets.catalogue(rom)
     ordinaire, rare = {}, {}
     for ident, entree in sorted(cat.items()):
         if ident not in permis:
@@ -300,12 +305,11 @@ def patcher(rom, rng, langue="en", journal=None, chaos=False,
     boutiques ordinaires : mieux vaut un etal banal qu'un refus de construire.
 
     `chaos` : n'importe quel objet vendable dans n'importe quel etal, sans
-    egard pour la famille ni pour la rarete. Les trois boutiques du rare
-    redeviennent des boutiques ordinaires et gardent leur pourcentage du
-    vanilla -- les monter a 500 % n'aurait plus de sens, puisqu'elles ne
-    vendent plus forcement du rare. Deux invariants tiennent quand meme :
-    aucun objet important n'est jamais vendu, et la boutique du chronocristal
-    reste intouchee.
+    egard pour la famille. LA RARETE TIENT (ZER-49, regle fixe du joueur) :
+    les etals ordinaires s'arretent a 3 etoiles, les trois boutiques du rare
+    ne vendent que du 4-5 etoiles a leur pourcentage du rare. Et comme
+    toujours : aucun objet important n'est vendu, et la boutique du
+    chronocristal reste intouchee.
     """
     def note(ligne=""):
         if journal is not None:
@@ -324,16 +328,19 @@ def patcher(rom, rng, langue="en", journal=None, chaos=False,
         # pool a toutes les familles ; sans cette mise en commun, chaque
         # famille aurait son paquet et un objet sortirait dans plusieurs etals
         # bien avant que le catalogue soit epuise.
-        pioches = pioches_rares = _MemePioche(Pioche(rng, ordinaire[None]))
+        # DEUX PIOCHES PARTAGEES depuis ZER-49 : une pour les etals ordinaires,
+        # une pour les trois boutiques du rare.
+        pioches = _MemePioche(Pioche(rng, ordinaire[None]))
+        pioches_rares = _MemePioche(Pioche(rng, rare[None]))
 
     classe = classe_prix(rom)
     plafonds = plafonds_vanilla(rom, langue) if progression else {}
-    rares_actives = not chaos and prix_fabriques
-    if not rares_actives and not chaos:
+    rares_actives = prix_fabriques
+    if not rares_actives:
         note("(pas de prix fabriques : les trois boutiques du rare sont "
              "traitees comme des boutiques ordinaires)")
     _verifier_pools(etals, cat, ordinaire, rare, classe, achat,
-                    rares_actives=rares_actives)
+                    rares_actives=rares_actives, chaos=chaos)
 
     buf = bytearray(d)
     comptes = dict(boutiques=0, articles=0, intouchables=0, rares=0, prix=0)
@@ -468,9 +475,9 @@ def verifier(rom, chaos=False, prix_fabriques=True):
     du rare sont des boutiques ordinaires, et les controles qui les concernent
     ne s'appliquent pas.
 
-    `chaos` : trois controles tombent, parce que le mode les contredit par
-    construction -- la famille vendue par un etal, le seuil d'etoiles des
-    boutiques du rare et leur pourcentage a 500 %. TOUT LE RESTE TIENT, et
+    `chaos` : un seul controle tombe, la famille vendue par un etal. Les
+    etoiles et le pourcentage des boutiques du rare tiennent (ZER-49). TOUT
+    LE RESTE TIENT AUSSI, et
     c'est le plus important : pas de doublon, pas d'emplacement deplace, pas
     d'objet important en vente, pas de prix nul, et rien que la boutique ne
     saurait afficher (le fameux "Invendable").
@@ -484,7 +491,7 @@ def verifier(rom, chaos=False, prix_fabriques=True):
 
     _dv, vanilla = B.lire(_rom_vanilla())
     par_id = {e["id"]: e for e in vanilla}
-    rares_actives = not chaos and prix_fabriques
+    rares_actives = prix_fabriques
     classe = classe_prix(rom)
     achat = B.prix_achat(rom)
 
@@ -539,14 +546,14 @@ def verifier(rom, chaos=False, prix_fabriques=True):
             if achat.get(neuf, 0) <= 0:
                 raise AssertionError("boutique %d : objet %d a prix nul"
                                      % (e["id"], neuf))
-            if chaos or not prix_fabriques:
+            if not prix_fabriques:
                 continue
             if e["id"] in RARES and etoiles.get(neuf, 0) < ETOILES_RARE_MIN:
                 raise AssertionError("boutique %d du rare : %d n'a que %d "
                                      "etoiles" % (e["id"], neuf,
                                                   etoiles.get(neuf, 0)))
             if e["id"] not in RARES and etoiles.get(neuf, 0) > ETOILES_ORDINAIRE_MAX:
-                raise AssertionError("boutique %d du rare : %d n'a que %d "
+                raise AssertionError("boutique ordinaire %d : %d a %d "
                                      "etoiles" % (e["id"], neuf,
                                                   etoiles.get(neuf, 0)))
     return True

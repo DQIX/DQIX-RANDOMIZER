@@ -286,19 +286,19 @@ T = {
         "it": ('Negozi',
                'la merce dei 37 negozi')},
     "prix_libres": {
-        "en": ('endgame gear for sale from the start',
+        "en": ('expensive gear for sale from the start',
                'otherwise each shop sells gear suited to its point in the '
                'story'),
-        "fr": ('équipement de fin de jeu en vente dès le début',
+        "fr": ('équipement cher en vente dès le début',
                'sinon, chaque boutique vend des objets adaptés à son moment de'
                " l'histoire"),
-        "de": ('Endgame-Ausrüstung von Anfang an zu kaufen',
+        "de": ('teure Ausrüstung von Anfang an zu kaufen',
                'sonst verkauft jeder Laden, was zu seinem Abschnitt der '
                'Geschichte passt'),
-        "es": ('equipo del final a la venta desde el principio',
+        "es": ('equipo caro a la venta desde el principio',
                'si no, cada tienda vende lo que corresponde a su momento de la'
                ' historia'),
-        "it": ('equipaggiamento di fine gioco in vendita da subito',
+        "it": ('equipaggiamento costoso in vendita da subito',
                'altrimenti ogni negozio vende ciò che si addice al suo momento'
                ' della storia')},
     "boutiques_chaos": {

@@ -75,8 +75,8 @@ The randomizer has been tested with **melonDS through BizHawk** and **DeSmuME**.
 | | **Balanced** | **Total chaos** |
 |---|---|---|
 | Loot | rarer items come from rarer places: five-star legendary equipment only from the highest-rank chests, the rarest drops, and red chests that already held something that rare. Consumables get a real share of what containers give: about a third of the weight, against one tenth without it | any item from any container - legendary gear can come out of the first barrel of the game, and nine containers out of ten give equipment |
-| Shop prices | a shop never offers anything pricier than what the original game sells there. The 37 shops are ordered by story progression, so an early armoury stays affordable | no price bound: the first village can stock endgame gear |
-| Shops | every slot keeps its family, so an armourer never sells a sword and a grocery keeps its count of accessories; four and five-star items are reserved for Dourbridge's secret shop and the two Stornway stalls that open after the final boss | any item in any shop; those three shops become ordinary ones |
+| Shop prices | a shop never offers anything pricier than what the original game sells there. The 37 shops are ordered by story progression, so an early armoury stays affordable | no price bound: the first village can stock expensive gear, up to 3 stars |
+| Shops | every slot keeps its family, so an armourer never sells a sword and a grocery keeps its count of accessories; four and five-star items are reserved for Dourbridge's secret shop and the two Stornway stalls that open after the final boss | any item in any shop, except that 4- and 5-star items still stay in those three shops |
 | Spells | a vocation still learns weak spells early and strong ones late -- the power scale is the game's own (the median level at which vanilla teaches each spell) | Omniheal can land at level 1 |
 | Skill trees | every milestone of a tree -- abilities and stat bonuses alike -- is shuffled **within** that tree, so a sword tree still grants sword techniques, which matters since a weapon technique needs that weapon in hand | milestones move across all 26 trees, by cost band: a sword technique can show up in the whip tree. A bonus that names the tree's weapon ("Attack +10 with") stays in a weapon tree |
 | Monster drops | drawn at every battle; 4- and 5-star items stay rare (about 1 drop in 60) | any item, legendary gear included |
@@ -98,8 +98,8 @@ Every checkbox can be set individually - the preset then shows **Custom**.
 | New drops every battle | the item a monster can drop is drawn again at every battle. Drop chances do not change |
 | 4- and 5-star items as common as the rest | otherwise a 4- or 5-star item is kept only once in eight draws (about one drop in 60) |
 | Shops | what the 37 shops sell |
-| endgame gear for sale from the start | shops are no longer bound by what the original game sells there |
-| any item in any shop | shop families no longer apply: an armourer may sell herbs |
+| expensive gear for sale from the start | shops are no longer bound by what the original game sells there (4- and 5-star items still stay in the three endgame shops) |
+| any item in any shop | shop families no longer apply: an armourer may sell herbs. 4- and 5-star items still stay in the three endgame shops |
 | Story bosses | the 89 boss references of the game's scripted battles. A boss is always replaced by another boss. A story boss keeps its stand-in until you beat it; the three Gittish generals face you with a new one for the rematch; the twelve **lair bosses** get a new one every time you enter their lair. The prologue fight - two slimes and a cruelcumber against a level 1 hero with no party - is never touched, in any mode |
 | keep the first boss | Hexagoon stays himself. He is the first boss and the only one fought with no party, so any other boss in his place can make the run impossible. On by default |
 | Spells | the spells each vocation learns by levelling. The three vocations without magic (Warrior, Martial Artist, Gladiator) stay without magic |
@@ -112,7 +112,7 @@ Every checkbox can be set individually - the preset then shows **Custom**.
 | locked vocations | the abbot refuses to change anyone's vocation, in all five languages; revocation (back to level 1 in the same vocation) stays. Everyone keeps the vocation they got. The unlock quests still work, but quests that need you to practise another vocation can no longer be done. Off in both presets |
 | Monster stats (experimental) | HP, attack, defence, agility, experience and gold are swapped between all monsters, bosses included, with no bound: an early slime can get a late boss's HP. It works, but nobody has played a run with it yet. Off in both presets |
 
-Two things are never randomized, in any mode: **key items**, and the **chronocrystal shop** - both would let you break the story.
+Two things are never randomized, in any mode: **key items**, and the **chronocrystal shop** - both would let you break the story. And in every mode, 4- and 5-star items are only sold in Dourbridge's secret shop and the two Stornway stalls that open after the final boss.
 
 ## Sharing a run
 
