@@ -44,8 +44,8 @@ sensible set for you.
 
   The two 1-to-1 modes change only the game's data, not its code.
 * Monsters come in **groups**, as in the original game.
-* **Monster spells and techniques**: monsters use other monsters' spells and
-  techniques.
+* **Monster spells and abilities** (experimental): in every battle, monsters
+  draw new spells and abilities, abilities shown with their real animation.
 * **Monster stats** (experimental).
 
 **Bosses**

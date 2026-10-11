@@ -743,7 +743,8 @@ def main():
                          "--butin-combat "
                          "--butin-combat-libre. "
                          "Tout ce qui peut etre tire l'est sans borne. "
-                         "N'INCLUT PAS --boss-terrain, qui est experimental.")
+                         "N'INCLUT PAS --boss-terrain, --sorts-monstres ni "
+                         "--techniques-monstres, qui sont experimentaux.")
     ap.add_argument("--inclure-speciaux", action="store_true",
                     help="toucher aussi les entrees de test et le mannequin d'entrainement")
     ap.add_argument("-o", "--sortie", help="chemin de la ROM produite")
@@ -782,8 +783,8 @@ def main():
         a.aptitudes = a.aptitudes_chaos = True
         a.vocations = a.vocations_embauche = a.vocation_depart = True
         a.butin = a.butin_libre = True
-        a.sorts_monstres = a.sorts_monstres_ajout = True
-        a.techniques_monstres = a.techniques_monstres_ajout = True
+        # sorts et techniques des monstres : experimentaux, hors de
+        # --chaos-total (decision du joueur, 11/10/2026)
     if a.butin_libre:
         a.butin = True
     if a.aptitudes_arme_origine:

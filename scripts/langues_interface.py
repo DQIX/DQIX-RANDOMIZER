@@ -339,19 +339,19 @@ T = {
         "it": ('oggetti a 4 e 5 stelle comuni come gli altri',
                'altrimenti restano rari: circa un bottino su 60')},
     "sorts_monstres": {
-        "en": ('Monster spells drawn every battle',
+        "en": ('Monster spells drawn every battle (experimental)',
                'in every battle, the spells a monster knows are picked at '
                'random among the 53 battle spells'),
-        "fr": ('Sorts des monstres tirés à chaque combat',
+        "fr": ('Sorts des monstres tirés à chaque combat (expérimental)',
                'à chaque combat, les sorts que connaît un monstre sont tirés '
                'au hasard parmi les 53 sorts de combat'),
-        "de": ('Monsterzauber in jedem Kampf neu',
+        "de": ('Monsterzauber in jedem Kampf neu (experimentell)',
                'in jedem Kampf werden die Zauber eines Monsters zufällig aus '
                'den 53 Kampfzaubern gewählt'),
-        "es": ('Hechizos de monstruos nuevos en cada combate',
+        "es": ('Hechizos de monstruos nuevos en cada combate (experimental)',
                'en cada combate, los hechizos de un monstruo se eligen al azar '
                'entre los 53 hechizos de combate'),
-        "it": ('Magie dei mostri nuove a ogni battaglia',
+        "it": ('Magie dei mostri nuove a ogni battaglia (sperimentale)',
                'a ogni battaglia, le magie di un mostro vengono scelte a caso '
                'tra le 53 magie di battaglia')},
     "sorts_monstres_ajout": {
@@ -366,21 +366,21 @@ T = {
         "it": ('anche i mostri senza magie ne ricevono una',
                "un'azione in più tra le loro sei, non un incantatore")},
     "techniques_monstres": {
-        "en": ('Monster abilities drawn every battle',
+        "en": ('Monster abilities drawn every battle (experimental)',
                "in every battle, a monster's abilities are picked at random "
                "among those of monsters and heroes, with their real animation"),
-        "fr": ('Techniques des monstres tirées à chaque combat',
+        "fr": ('Techniques des monstres tirées à chaque combat (expérimental)',
                "à chaque combat, les techniques d'un monstre sont tirées au "
                'hasard parmi celles des monstres et des héros, avec leur vraie '
                'animation'),
-        "de": ('Monsterfähigkeiten in jedem Kampf neu',
+        "de": ('Monsterfähigkeiten in jedem Kampf neu (experimentell)',
                'in jedem Kampf werden die Fähigkeiten eines Monsters zufällig '
                'aus denen der Monster und Helden gewählt, mit ihrer echten '
                'Animation'),
-        "es": ('Habilidades de monstruos nuevas en cada combate',
+        "es": ('Habilidades de monstruos nuevas en cada combate (experimental)',
                'en cada combate, las habilidades de un monstruo se eligen al '
                'azar entre las de monstruos y héroes, con su animación real'),
-        "it": ('Abilità dei mostri nuove a ogni battaglia',
+        "it": ('Abilità dei mostri nuove a ogni battaglia (sperimentale)',
                "a ogni battaglia, le abilità di un mostro vengono scelte a "
                "caso tra quelle di mostri ed eroi, con la loro vera animazione")},
     "techniques_monstres_ajout": {

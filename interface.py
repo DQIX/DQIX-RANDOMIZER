@@ -525,11 +525,12 @@ class Application(object):
         # LE BUTIN A CHAQUE COMBAT DANS LES DEUX ; le chaos leve la rarete.
         self.butin.set(True)
         self.butin_libre.set(chaos)
-        # LES SORTS DES MONSTRES DANS LES DEUX ; le chaos en donne a tous.
-        self.sorts_monstres.set(True)
-        self.sorts_monstres_ajout.set(chaos)
-        self.techniques_monstres.set(True)
-        self.techniques_monstres_ajout.set(chaos)
+        # LES SORTS ET TECHNIQUES DES MONSTRES : EXPERIMENTAUX, hors des
+        # prereglages (decision du joueur, 11/10/2026), comme les boss sur le
+        # terrain ; cases au choix du joueur.
+        for var in (self.sorts_monstres, self.sorts_monstres_ajout,
+                    self.techniques_monstres, self.techniques_monstres_ajout):
+            var.set(False)
         self.garder_hexacorne.set(True)
         self.stats.set(False)
         # LA 1.6 : le mode aleatoire et ses groupes dans les deux ; les
