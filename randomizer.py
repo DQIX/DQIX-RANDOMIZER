@@ -71,6 +71,8 @@ IDS_SPECIAUX = {800, 801, 900}
 # le seul boss du jeu qu'on affronte SANS EQUIPE, d'ou l'option qui le laisse
 # en place (`--boss-garder-premier`).
 HEXACORNE = 300
+# Les modes d'apparition des monstres (ZER-73), voir --apparitions.
+APPARITIONS = ("aleatoire", "zone", "globale", "vanilla")
 
 # LE COMBAT DU PROLOGUE, jamais touche. L'enregistrement 0 d'`eventbattle`
 # (evenement 26) oppose deux gluants et un concombrageur au heros de niveau 1,
@@ -81,6 +83,13 @@ HEXACORNE = 300
 # Ce n'est pas un reglage d'equilibrage mais une condition pour que le jeu
 # soit jouable, donc pas d'option -- on les ecarte toujours.
 PROLOGUE = (290, 292)
+
+# AQUILA ET CORVUS DES CINEMATIQUES, jamais tires. Les especes 800 et 801
+# (evenements 131 et 135) ne sont pas de vrais boss : valeurs bouche-trou
+# (9999 PV, 255 partout, six fois l'Attaque) pour des combats mis en scene.
+# Tirees comme remplacantes d'un autre boss, elles rendent le combat
+# ingagnable (signale par un joueur, 11/10/2026). Laissees en place.
+CINEMATIQUES = (800, 801)
 
 CHOIX_RES_ELEM = [0, 25, 50, 75, 100, 100, 125, 150, 200]
 CHOIX_RES_ETAT = [0, 25, 50, 75, 100, 100]
@@ -288,6 +297,19 @@ def main():
                          "(encmons.bin, encfld.bin, encbtl.bin). ACTIF PAR DEFAUT.")
     ap.add_argument("--sans-rencontres", dest="rencontres", action="store_false",
                     help="ne pas toucher aux tables de rencontres")
+    ap.add_argument("--apparitions", choices=APPARITIONS, default=None,
+                    help="LE MODE D'APPARITION DES MONSTRES (ZER-73), qui regle "
+                         "a lui seul les options de bas niveau ci-dessous. "
+                         "aleatoire : n'importe quelle espece a CHAQUE "
+                         "apparition (le blob, mode de la 1.5) ; zone : dans "
+                         "chaque carte, chaque espece est remplacee 1 pour 1 "
+                         "par une autre, une autre carte a son propre tirage ; "
+                         "globale : une espece en remplace une autre pour TOUT "
+                         "le jeu (mode de la 1.1) ; vanilla : les monstres du "
+                         "jeu. zone, globale et vanilla ne patchent aucun code "
+                         "de monstre : le jeu precharge ses modeles comme en "
+                         "vanilla. Sans cette option, les options de bas niveau "
+                         "s'appliquent telles quelles.")
     ap.add_argument("--tirage-libre", dest="tirage_libre", action="store_true",
                     help="tirer une espece au hasard INDEPENDAMMENT pour chaque "
                          "emplacement, au lieu d'une permutation globale. Plus "
@@ -434,6 +456,48 @@ def main():
                          "autre boss a sa place peut rendre la partie "
                          "infaisable. Sans cette option il est tire comme les "
                          "autres. N'a d'effet qu'avec --boss.")
+    ap.add_argument("--sans-groupes", dest="groupes", action="store_false",
+                    default=True,
+                    help="avec --blob : laisser un monstre tire par le blob "
+                         "combattre SEUL quand son espece n'est pas une "
+                         "meneuse de la zone (comportement de la 1.5). Par "
+                         "defaut, depuis la 1.6, il prend une meneuse de la "
+                         "zone pour gabarit : meme nombre de monstres et memes "
+                         "compagnons qu'en vanilla (ZER-67).")
+    ap.add_argument("--sifflet-sans-repli", dest="sifflet", action="store_false",
+                    default=True,
+                    help="avec --blob : comportement de la 1.5 pour le "
+                         "Sifflet. Par defaut, depuis la 1.6, une ponte sans "
+                         "espece fournie (le Sifflet) qui echoue faute de place "
+                         "dans le tas prend l'espece d'un monstre vivant, dont "
+                         "le modele est deja charge (ZER-68).")
+    ap.add_argument("--boss-familles-egales", dest="boss_familles_egales",
+                    action="store_true",
+                    help="avec --boss (implique) : chaque combat de boss tire "
+                         "d'abord sa FAMILLE -- histoire, grottes, legendes, un "
+                         "tiers chacune -- puis un boss de la famille. Sans "
+                         "cette option, les boss legendaires (45 especes, "
+                         "trois niveaux chacun) prennent la moitie des combats "
+                         "d'histoire, et l'histoire un tiers (ZER-70).")
+    ap.add_argument("--boss-histoire", dest="boss_histoire",
+                    action="store_true",
+                    help="avec --boss (implique) : ne tirer QUE les boss de "
+                         "l'histoire, entre eux. Les combats des grottes et "
+                         "des boss legendaires restent ceux du jeu (ZER-71).")
+    ap.add_argument("--boss-mixte", dest="boss_mixte", action="store_true",
+                    help="avec --boss (implique) : le remplacant d'un boss "
+                         "peut aussi etre un monstre ordinaire du bestiaire. "
+                         "Les monstres comptent comme une famille de plus : "
+                         "un combat sur deux, un sur quatre avec "
+                         "--boss-familles-egales (ZER-62).")
+    ap.add_argument("--boss-chaque-combat", dest="boss_chaque_combat",
+                    action="store_true",
+                    help="avec --boss (implique) et --blob : un boss NEUF a "
+                         "chaque entree dans un combat de boss, au lieu d'un "
+                         "boss tire une fois pour toute la partie. Tire par le "
+                         "blob, donc sur les cartes a monstres (donjons, "
+                         "grottes, terrain) ; ailleurs, le tirage fait a la "
+                         "construction s'applique (ZER-60).")
     ap.add_argument("--stats", dest="stats", action="store_true", default=False,
                     help="randomiser AUSSI les statistiques des monstres. "
                          "Desactive par defaut : le randomizer ne touche qu'aux "
@@ -478,13 +542,12 @@ def main():
                     help="avec --objets, laisser les drops des monstres "
                          "(mon_btldata.nat) tels qu'en vanilla")
     ap.add_argument("--boss-terrain", dest="boss_terrain", action="store_true",
-                    help="EXPERIMENTAL, HORS DE L'APPLICATION. Le joueur n'en "
-                         "veut pas dans le randomizer : ce qu'il veut, ce sont "
-                         "les combats de boss du scenario (--boss), pas des "
-                         "boss qui se promenent. L'option reste parce qu'elle "
-                         "est ecrite et mesuree, mais elle n'est ni dans "
-                         "--chaos-total ni dans la fenetre, et elle seule "
-                         "active la greffe d'index a deux octets. LES BOSS "
+                    help="EXPERIMENTAL. Dans la fenetre depuis le 11/10/2026 "
+                         "(ZER-63), decochee par defaut, hors des prereglages "
+                         "et de --chaos-total : par defaut le joueur veut les "
+                         "combats de boss du scenario (--boss), pas des boss "
+                         "qui se promenent. Elle seule active la greffe "
+                         "d'index a deux octets. LES BOSS "
                          "PEUVENT ALORS APPARAITRE SUR LE TERRAIN. Le "
                          "bestiaire s'arrete a 256 et tout ce qui suit est un "
                          "boss ; cette option les ajoute au tirage. MESURE : "
@@ -562,6 +625,40 @@ def main():
                     help="avec --butin-combat (qu'il implique) : N'IMPORTE "
                          "QUEL OBJET a chances egales, l'equipement "
                          "legendaire compris (12 %% de 4-5 etoiles).")
+    ap.add_argument("--sorts-monstres", dest="sorts_monstres",
+                    action="store_true", default=False,
+                    help="LES SORTS DES MONSTRES TIRES A CHAQUE COMBAT : un "
+                         "monstre qui a des sorts les voit remplaces, a chaque "
+                         "combat, par des sorts tires parmi les 53 sorts de "
+                         "combat du jeu (un emplacement de sort = un sort "
+                         "tire). Les monstres sans sort n'en recoivent pas. "
+                         "PM = max(origine, 3 x le cout du sort le plus cher "
+                         "tire). Le jeu garde ses conditions : un soin ne part "
+                         "que si un allie est sous 50 %% de PV, Rappel que si "
+                         "un allie est mort... Boss et prologue exclus. Greffe "
+                         "dans l'overlay 0 (scripts/patch_actions.py, ZER-56).")
+    ap.add_argument("--sorts-monstres-ajout", dest="sorts_monstres_ajout",
+                    action="store_true", default=False,
+                    help="avec --sorts-monstres (qu'il implique) : les monstres "
+                         "SANS sort en recoivent un aussi, sur un seul de "
+                         "leurs six emplacements (un doublon de l'Attaque, de "
+                         "poids voisin d'un sixieme) : une action de plus, "
+                         "pas un lanceur de sorts.")
+    ap.add_argument("--techniques-monstres", dest="techniques_monstres",
+                    action="store_true", default=False,
+                    help="LES TECHNIQUES DES MONSTRES TIREES A CHAQUE COMBAT : "
+                         "un emplacement qui porte une technique en recoit une "
+                         "tiree, a chaque combat, parmi celles des monstres et "
+                         "celles des personnages (232). Chacune s'affiche "
+                         "(texte, animation, degats) : a defaut de mise en "
+                         "scene propre au monstre, elle emprunte un cas "
+                         "generique de default.bact. Boss et prologue exclus. "
+                         "Meme greffe que --sorts-monstres (ZER-57).")
+    ap.add_argument("--techniques-monstres-ajout", dest="techniques_monstres_ajout",
+                    action="store_true", default=False,
+                    help="avec --techniques-monstres (qu'il implique) : les "
+                         "monstres SANS technique en recoivent une, sur un seul "
+                         "de leurs six emplacements.")
     ap.add_argument("--coffres-rouges-libres", dest="rang_rouges",
                     action="store_false", default=True,
                     help="avec --objets : un coffre rouge peut contenir "
@@ -629,6 +726,14 @@ def main():
                          "l'arbre des fouets -- il faudra une epee pour s'en "
                          "servir ; un bonus d'arme garde son arme et son "
                          "libelle la nomme.")
+    ap.add_argument("--aptitudes-arme-origine", dest="aptitudes_arme_origine",
+                    action="store_true",
+                    help="avec --aptitudes (implique) : une technique d'arme "
+                         "deplacee dans un autre arbre garde l'arme de son "
+                         "arbre D'ORIGINE, comme dans le jeu de base (une "
+                         "technique d'arc rangee dans l'arbre de l'epee ne "
+                         "s'utilise qu'avec un arc). Sans cette option, elle "
+                         "demande l'arme de l'arbre ou elle arrive (ZER-65).")
     ap.add_argument("--chaos-total", dest="chaos_total", action="store_true",
                     help="raccourci : --boss --sorts --sorts-chaos "
                          "--aptitudes --aptitudes-chaos --objets-chaos "
@@ -677,8 +782,34 @@ def main():
         a.aptitudes = a.aptitudes_chaos = True
         a.vocations = a.vocations_embauche = a.vocation_depart = True
         a.butin = a.butin_libre = True
+        a.sorts_monstres = a.sorts_monstres_ajout = True
+        a.techniques_monstres = a.techniques_monstres_ajout = True
     if a.butin_libre:
         a.butin = True
+    if a.aptitudes_arme_origine:
+        a.aptitudes = True
+    if a.apparitions == "aleatoire":
+        # LE REGLAGE DE LA 1.5 ET DE L'APPLI : le blob, sans rotation.
+        a.place = a.blob = True
+        a.rotation = False
+        a.plafond = a.plafond or 1
+        a.garde = a.garde or 163840
+    if a.apparitions in ("zone", "globale", "vanilla"):
+        # AUCUNE GREFFE DE MONSTRE : ni hasard par zone, ni blob, ni rotation,
+        # ni agrandissement des groupes. Les tables seules (ZER-73).
+        a.hasard = a.rotation = a.agrandir = a.tirage_libre = False
+        a.place = a.blob = a.portier = a.chargeur = False
+        a.rencontres = a.apparitions != "vanilla"
+    import tirage_boss
+    if tirage_boss.demande(a):
+        a.boss = True
+    if a.boss_chaque_combat and not a.blob:
+        raise SystemExit("--boss-chaque-combat implique --blob : le tirage a "
+                         "chaque combat vit dans le blob.")
+    if a.sorts_monstres_ajout:
+        a.sorts_monstres = True
+    if a.techniques_monstres_ajout:
+        a.techniques_monstres = True
     adopter_source(a.rom, a.controle_rom)
     rng = random.Random(a.seed)
     print(f"lecture de {a.rom}")
@@ -711,6 +842,7 @@ def main():
     rencontres = None
     # LE POOL DES BOSS D'ANTRE, tires a chaque visite par le blob (ZER-37).
     pool_antres = None
+    tirage_table = None
     if a.rencontres or a.boss:
         fichiers = ((FICHIERS_RENCONTRES if a.rencontres else ())
                     + (FICHIERS_SCRIPTES if a.boss else ()))
@@ -755,6 +887,22 @@ def main():
             rng.shuffle(cibles)
             return dict(zip(pool, cibles))
 
+        def permuter_terrain():
+            """La permutation des especes de terrain. En mode global sans
+            blob (ZER-73), bornee par le tas des modeles de chaque carte."""
+            if a.apparitions != "globale":
+                return permuter(pool_terrain)
+            import rencontres_zone
+            from enctables import FICHIERS_RENCONTRES
+            from patch_hasard import tailles_par_code
+            par_carte, _ac = rencontres_zone.especes_par_carte(
+                TablesRencontres(rom, FICHIERS_RENCONTRES), ids_valides)
+            p, bandes, pire = rencontres_zone.permutation_globale(
+                rng, pool_terrain, tailles_par_code(), par_carte)
+            print(f"  mode global : permutation en {bandes} bande(s) de taille "
+                  f"de modele, pire carte {pire / 1024:+.0f} Ko sur le vanilla")
+            return p
+
         # UN BOSS DOIT DEVENIR UN BOSS, et c'est un troisieme ensemble, pas
         # deux. `construire_pool` rend « les especes qui n'apparaissent qu'en
         # combat scripte » : sur 101, seules 89 sont des boss, les 12 autres
@@ -777,23 +925,47 @@ def main():
         # absente d'un pool n'en est ni source ni cible : elle se retrouve
         # inchangee partout ou elle figure. L'ecarter apres le melange ne
         # suffirait pas -- une autre prendrait sa place.
-        garde = set(PROLOGUE)
+        garde = set(PROLOGUE) | set(CINEMATIQUES)
         if a.boss_garder_premier:
             garde.add(HEXACORNE)
         pool_terrain = [i for i in pool_terrain if i not in garde]
         pool_vrais_boss = [i for i in pool_vrais_boss if i not in garde]
         pool_scriptes_ordinaires = [i for i in pool_scriptes_ordinaires
                                     if i not in garde]
-        print("  laisses en place : combat du prologue (%s)%s"
+        print("  laisses en place : combat du prologue (%s), Aquila et "
+              "Corvus des cinematiques (%s)%s"
               % (", ".join(str(i) for i in PROLOGUE),
+                 ", ".join(str(i) for i in CINEMATIQUES),
                  ", hexacorne (%d)" % HEXACORNE if a.boss_garder_premier
                  else ""))
 
-        if a.boss:
-            pool_antres = list(pool_vrais_boss)
-        corresp = permuter(pool_terrain)
-        corresp.update(permuter(pool_vrais_boss))
-        corresp.update(permuter(pool_scriptes_ordinaires))
+        if a.boss and tirage_boss.demande(a):
+            # LES MODES DE LA 1.6 (tirage_boss.py). Le chemin de --boss seul,
+            # ci-dessous, reste intact : meme graine, meme ROM qu'avant.
+            from agrandir_zones import PrmTable, lire_rom
+            from patch_hasard import especes_tirables
+            corresp = permuter_terrain()
+            monstres = ([i for i in especes_tirables() if i not in garde]
+                        if a.boss_mixte else [])
+            c_boss, tirage_table = tirage_boss.plan(
+                rng, pool_vrais_boss, monstres,
+                PrmTable(lire_rom("data/event/eventbattle.bin", a.rom)).records,
+                histoire=a.boss_histoire, egales=a.boss_familles_egales,
+                mixte=a.boss_mixte, chaque_combat=a.boss_chaque_combat)
+            corresp.update(c_boss)
+            corresp.update(permuter(pool_scriptes_ordinaires))
+            print("  boss (1.6) : %d combats de boss tires%s%s%s%s"
+                  % (len(c_boss),
+                     ", familles egales" if a.boss_familles_egales else "",
+                     ", histoire seulement" if a.boss_histoire else "",
+                     ", avec les monstres" if a.boss_mixte else "",
+                     ", a chaque combat" if a.boss_chaque_combat else ""))
+        else:
+            if a.boss:
+                pool_antres = list(pool_vrais_boss)
+            corresp = permuter_terrain()
+            corresp.update(permuter(pool_vrais_boss))
+            corresp.update(permuter(pool_scriptes_ordinaires))
         print(f"  permutations : {len(pool_terrain)} especes de terrain, "
               f"{len(pool_vrais_boss)} boss entre eux, "
               f"{len(pool_scriptes_ordinaires)} especes de combat scripte "
@@ -807,10 +979,16 @@ def main():
         if a.tirage_libre:
             choix = [table[i].id for i in ordre]
             n_modif = rencontres.appliquer_tirage_libre(rng, choix, ids_valides)
+        elif a.apparitions == "zone":
+            import rencontres_zone
+            from patch_hasard import tailles_par_code
+            plan_zone, n_modif = rencontres_zone.appliquer(
+                rencontres, rng, pool_terrain, ids_valides,
+                tailles_par_code(), corresp)
         else:
             n_modif = rencontres.appliquer(corresp, ids_valides)
         print(f"rencontres : mode "
-              f"{'tirage libre' if a.tirage_libre else 'permutation globale'}")
+              f"{'tirage libre' if a.tirage_libre else '1 pour 1 par carte' if a.apparitions == 'zone' else 'permutation globale'}")
         print(f"rencontres : {total} references d'espece "
               f"({', '.join(f'{k}={v}' for k, v in sorted(detail_fichiers.items()))})")
         print(f"             {n_modif} remplacee(s)")
@@ -837,6 +1015,17 @@ def main():
         # --- ce que le randomizer a fait aux rencontres ---
         if rencontres is not None:
             par_id = {table[i].id: nom(i) for i in range(len(table))}
+            if a.apparitions == "zone":
+                jf.write("=" * 78 + "\n")
+                jf.write("SUBSTITUTION DES ESPECES, CARTE PAR CARTE (1 pour 1 "
+                         "dans chaque carte, ZER-73)\n")
+                jf.write("=" * 78 + "\n")
+                for c in sorted(plan_zone):
+                    jf.write(f"  carte {c}\n")
+                    for ancien, nouveau in sorted(plan_zone[c].items()):
+                        jf.write(f"     {str(par_id.get(ancien))[:28]:<28s} -> "
+                                 f"{par_id.get(nouveau)}\n")
+                jf.write("\n")
             if not a.tirage_libre:
                 jf.write("=" * 78 + "\n")
                 jf.write("SUBSTITUTION DES ESPECES (permutation globale : une "
@@ -990,6 +1179,14 @@ def main():
         verifier_aptitudes(rom, _nr.NintendoDSRom.fromFile(_cv()))
         print(f"  {c_apt['aptitudes']} aptitudes et {c_apt['bonus']} bonus "
               f"redistribues dans {c_apt['arbres']} arbres")
+        if a.aptitudes_arme_origine:
+            # APRES les aptitudes : l'arbre d'origine se lit par le palier,
+            # qui voyage avec sa charge (ZER-65).
+            from patch_lien_arme import patcher as patcher_lien
+            from patch_lien_arme import verifier as verifier_lien
+            _van = _nr.NintendoDSRom.fromFile(_cv())
+            patcher_lien(rom, _van)
+            verifier_lien(rom, _van)
     if a.boutiques:
         if a.prix_objets:
             # A FAIRE AVANT LE TIRAGE DES ETALS : le pool des boutiques se
@@ -1074,10 +1271,20 @@ def main():
             print("chargeur relogeable, dans un bloc alloue (P4) :")
             patcher_amorce(rom, plafond=a.plafond or None,
                            etapes=4 if a.etapes is None else a.etapes,
-                           boss=a.boss_terrain, antres=pool_antres)
+                           boss=a.boss_terrain, antres=pool_antres,
+                           tirage=tirage_table, groupes=a.groupes,
+                           sifflet=a.sifflet)
+            print("  groupes de combat : %s (ZER-67)"
+                  % ("gabarit d'une meneuse de la zone" if a.groupes
+                     else "monstre seul hors meneuses (1.5)"))
             if pool_antres:
                 print(f"  boss d'antre : un tirage a chaque visite, parmi "
                       f"{len(pool_antres)} boss (ZER-37)")
+            if tirage_table:
+                print(f"  boss tires par le blob : table de "
+                      f"{len(tirage_table)} o"
+                      + (", a chaque combat" if a.boss_chaque_combat
+                         else ", antres a chaque visite"))
         if a.chargeur and not (a.portier and a.place):
             raise SystemExit("--chargeur implique --portier et --place.")
         if a.place:
@@ -1138,6 +1345,24 @@ def main():
                  else "  [4-5 etoiles rares]"))
         patcher_butin(rom, mode="libre" if a.butin_libre else "rares")
         verifier_butin(rom)
+    if a.sorts_monstres or a.techniques_monstres:
+        # UNE GREFFE DANS L'OVERLAY 0, au debut de chaque combat, deux masques
+        # par espece dans mon_btldata +0x82/+0x83, et pour les techniques les
+        # cas generiques de default.bact (ZER-56, ZER-57, research §92-94).
+        from patch_actions import patcher as patcher_actions
+        from patch_actions import verifier as verifier_actions
+        m_sorts = (("ajouter" if a.sorts_monstres_ajout else "remplacer")
+                   if a.sorts_monstres else None)
+        m_tech = (("ajouter" if a.techniques_monstres_ajout else "remplacer")
+                  if a.techniques_monstres else None)
+        print("actions des monstres tirees a chaque combat :")
+        # les techniques gardent leur VRAIE animation, une dizaine par combat
+        # (scripts/patch_animations.py, ZER-57)
+        patcher_actions(rom, sorts=m_sorts, techniques_mode=m_tech,
+                        seed=a.seed, animations=bool(m_tech))
+        if verifier_actions(rom) != (m_sorts, m_tech):
+            raise SystemExit("actions des monstres : la verification ne "
+                             "relit pas les modes demandes")
     rom.saveToFile(base)
 
     # La reconstruction retire le bourrage de fin de cartouche. On le remet :

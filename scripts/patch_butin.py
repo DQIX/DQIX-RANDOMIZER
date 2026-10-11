@@ -16,8 +16,8 @@ elle ne changeait l'objet qu'une fois, a la construction.
 
 CE QUE FAIT CE PATCH. Les deux `ldrh` deviennent un `bl` vers une greffe qui
 relit l'objet d'origine puis, s'il n'est pas nul, le REMPLACE par un objet tire
-au hasard dans le pool (les 1 088 objets placables : ni objets importants, ni
-entrees de debogage). Les CHANCES DE BUTIN NE BOUGENT PAS : seul l'objet change,
+au hasard dans le pool (les 1 087 objets placables : ni objets importants, ni
+entrees de debogage, ni sifflet d'Aster -- ZER-66). Les CHANCES DE BUTIN NE BOUGENT PAS : seul l'objet change,
 et une place vide (objet 0) reste vide.
 
 DEUX MODES, comme toute regle d'equilibrage (garde-fous §4) :

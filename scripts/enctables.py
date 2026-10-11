@@ -167,6 +167,45 @@ class TablesRencontres:
             modifs += 1
         return modifs
 
+    def contextes(self, nom):
+        """Rend [(carte, aire)] pour chaque enregistrement de `nom`.
+
+        encfld : un 0x69 ouvre une carte, un 0x68 une aire de cette carte ;
+        encbtl : un 0x68 ouvre une aire (sans carte : on la retrouve par
+        encfld) ; encmons : chaque 0x66 porte sa carte en champ 0. Mesure
+        (ZER-73) : une aire n'appartient jamais a deux cartes, et les
+        meneuses d'une aire d'encbtl sont les especes de terrain de la meme
+        aire d'encfld (286 / 290)."""
+        out = []
+        carte = aire = None
+        for r in self.tables[nom].records:
+            if nom == "encmons.bin":
+                out.append((r.fields[0] if r.tag == 0x66 and r.fields
+                            else None, None))
+                continue
+            if r.tag == 0x69 and nom == "encfld.bin":
+                carte, aire = r.fields[0], None
+            elif r.tag == 0x68 and r.fields:
+                aire = r.fields[0]
+            out.append((carte, aire))
+        return out
+
+    def appliquer_fonction(self, f, ids_valides):
+        """Remplace chaque identifiant par `f(nom, i_enreg, ancien)`. Comme
+        `appliquer`, mais la correspondance peut dependre de l'endroit."""
+        modifs = 0
+        for nom, ir, ic, dec, masque, ancien in list(
+                self.references(ids_valides)):
+            nouveau = f(nom, ir, ancien)
+            if nouveau == ancien:
+                continue
+            t = self.tables[nom]
+            v = t.records[ir].fields[ic]
+            v = (v & ~(masque << dec)) | ((nouveau & masque) << dec)
+            t.set_field(ir, ic, v)
+            modifs += 1
+        return modifs
+
     def ecrire_dans_rom(self):
         for nom, t in self.tables.items():
             fid = self.rom.filenames.idOf(CHEMINS[nom])

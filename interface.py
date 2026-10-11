@@ -131,6 +131,22 @@ class Sortie(object):
             self.reste = ""
 
 
+# L'OPTION MERE DE CHAQUE SOUS-OPTION : celle sans laquelle `arguments` ne la
+# passe pas. Les sous-options des vocations n'en ont pas (independantes).
+MERES = {"groupes": "monstres", "app_aleatoire": "monstres",
+         "app_zone": "monstres", "app_globale": "monstres",
+         "sorts_monstres_ajout": "sorts_monstres",
+         "techniques_monstres_ajout": "techniques_monstres",
+         "garder_hexacorne": "boss", "boss_familles_egales": "boss",
+         "boss_histoire": "boss", "boss_mixte": "boss",
+         "boss_chaque_combat": "boss", "boss_terrain": "monstres",
+         "sans_consommables": "objets", "objets_chaos": "objets",
+         "rouges_libres": "objets", "butin_libre": "butin",
+         "prix_libres": "boutiques", "boutiques_chaos": "boutiques",
+         "sorts_chaos": "sorts", "aptitudes_chaos": "aptitudes",
+         "aptitudes_arme_origine": "aptitudes"}
+
+
 class Application(object):
 
     def __init__(self, racine):
@@ -185,8 +201,45 @@ class Application(object):
             except tk.TclError:
                 pass
         self.choix_langue.set(dict(L.LANGUES)[code])
+        for onglets, page, titre in getattr(self, "_onglets", ()):
+            onglets.tab(page, text=self._t(titre))
         if memoriser:
             memoriser_langue(code)
+
+    def _case(self, page, cle, variable, retrait, valeur=None):
+        """Une ligne : la case (ou le bouton radio si `valeur`), son libelle
+        et son detail. Rend le widget cliquable."""
+        ligne = ttk.Frame(page)
+        ligne.pack(fill="x", anchor="w", padx=(22 * retrait, 0))
+        if valeur is None:
+            c = ttk.Checkbutton(ligne, variable=variable,
+                                command=self.choix_manuel)
+        else:
+            c = ttk.Radiobutton(ligne, variable=variable, value=valeur,
+                                command=self.choix_manuel)
+        c.pack(side="left")
+        self._poser(c, cle, partie=0)
+        d = ttk.Label(ligne, foreground="#666")
+        d.pack(side="left")
+        self._poser(d, cle, partie=1)
+        return c
+
+    def _etat_cases_blob(self):
+        """Griser ce qui ne compterait pas dans la ligne de commande : une
+        sous-option dont l'option mere est decochee, les options du blob hors
+        du mode aleatoire, << familles egales >> avec << histoire seulement >>
+        (une seule famille reste : elle n'y changerait rien). Une case grisee
+        garde sa coche ; `arguments` l'ignore."""
+        aleatoire = (self.monstres.get()
+                     and self.apparitions.get() == "aleatoire")
+        for c in getattr(self, "_cases_blob", ()):
+            c.configure(state="normal" if aleatoire else "disabled")
+        for cle, c in getattr(self, "_cases_filles", ()):
+            actif = getattr(self, MERES[cle]).get()
+            if cle == "boss_familles_egales" and self.boss_histoire.get():
+                actif = False
+            if c not in self._cases_blob or not actif:
+                c.configure(state="normal" if actif else "disabled")
 
     def _langue_choisie(self, _evenement=None):
         nom = self.choix_langue.get()
@@ -270,9 +323,11 @@ class Application(object):
         aide.grid(row=5, column=0, sticky="w")
         self._poser(aide, "prereglage_aide")
 
-        boite = ttk.LabelFrame(cadre, padding=10)
-        self._poser(boite, "quoi")
-        boite.grid(row=6, column=0, sticky="ew", pady=(8, 0))
+        # LES ONGLETS (ZER-64) : les cases rangees par sujet. Le titre d'un
+        # onglet ne passe pas par `configure`, d'ou leur registre a part.
+        onglets = ttk.Notebook(cadre)
+        onglets.grid(row=6, column=0, sticky="ew", pady=(8, 0))
+        self._onglets = []
         self.monstres = tk.BooleanVar(value=True)
         self.objets = tk.BooleanVar(value=True)
         self.sans_consommables = tk.BooleanVar(value=False)
@@ -297,24 +352,55 @@ class Application(object):
         # regle d'equilibrage : 4-5 etoiles rares, ou tout objet a egalite.
         self.butin = tk.BooleanVar(value=False)
         self.butin_libre = tk.BooleanVar(value=False)
+        # LES SORTS DES MONSTRES tires a chaque combat (ZER-56) : remplacer
+        # ceux qu'ils ont, ou en donner aussi a ceux qui n'en ont pas.
+        self.sorts_monstres = tk.BooleanVar(value=False)
+        self.sorts_monstres_ajout = tk.BooleanVar(value=False)
+        # ET LEURS TECHNIQUES (ZER-57), memes deux versions.
+        self.techniques_monstres = tk.BooleanVar(value=False)
+        self.techniques_monstres_ajout = tk.BooleanVar(value=False)
         self.sorts = tk.BooleanVar(value=False)
         self.sorts_chaos = tk.BooleanVar(value=False)
         self.aptitudes = tk.BooleanVar(value=False)
         self.aptitudes_chaos = tk.BooleanVar(value=False)
         self.stats = tk.BooleanVar(value=False)
+        # LA 1.6. Le mode d'apparition (ZER-73) est un choix exclusif, pas une
+        # case : trois boutons sous « Monstres du terrain ». Les groupes
+        # (ZER-67) sont un correctif, coches par defaut ; le reste est en
+        # option, decoche.
+        self.apparitions = tk.StringVar(value="aleatoire")
+        self.groupes = tk.BooleanVar(value=True)
+        self.boss_familles_egales = tk.BooleanVar(value=False)
+        self.boss_histoire = tk.BooleanVar(value=False)
+        self.boss_mixte = tk.BooleanVar(value=False)
+        self.boss_chaque_combat = tk.BooleanVar(value=False)
+        # LES BOSS SUR LE TERRAIN (ZER-63) : dans la fenetre depuis le
+        # 11/10/2026, a la demande du joueur, decoches et hors des prereglages.
+        self.boss_terrain = tk.BooleanVar(value=False)
+        self.aptitudes_arme_origine = tk.BooleanVar(value=False)
         self._applique = False
-        # L'ORDRE ET LES TEXTES DES CASES viennent de `langues_interface.CASES` ;
-        # la cle d'une case est le nom de sa variable ici.
-        for cle, retrait in L.CASES:
-            ligne = ttk.Frame(boite)
-            ligne.pack(fill="x", anchor="w", padx=(22 * retrait, 0))
-            c = ttk.Checkbutton(ligne, variable=getattr(self, cle),
-                                command=self.choix_manuel)
-            c.pack(side="left")
-            self._poser(c, cle, partie=0)
-            d = ttk.Label(ligne, foreground="#666")
-            d.pack(side="left")
-            self._poser(d, cle, partie=1)
+        # L'ORDRE ET LES TEXTES DES CASES viennent de `langues_interface` ;
+        # la cle d'une case est le nom de sa variable ici. Les options qui
+        # vivent dans le blob ne valent que pour le mode aleatoire : elles se
+        # grisent dans les deux autres.
+        self._cases_blob = []
+        self._cases_filles = []
+        for titre, cases in L.ONGLETS:
+            page = ttk.Frame(onglets, padding=10)
+            onglets.add(page, text=self._t(titre))
+            self._onglets.append((onglets, page, titre))
+            for cle, retrait in cases:
+                c = self._case(page, cle, getattr(self, cle), retrait)
+                if cle in ("groupes", "boss_chaque_combat", "boss_terrain"):
+                    self._cases_blob.append(c)
+                if cle in MERES:
+                    self._cases_filles.append((cle, c))
+                if cle == "monstres":
+                    for mode in L.APPARITIONS:
+                        r = self._case(page, "app_" + mode, self.apparitions,
+                                       1, valeur=mode)
+                        self._cases_filles.append(("app_" + mode, r))
+        self._etat_cases_blob()
 
         # --- sortie --------------------------------------------------------
         s = ttk.LabelFrame(cadre, padding=10)
@@ -439,12 +525,28 @@ class Application(object):
         # LE BUTIN A CHAQUE COMBAT DANS LES DEUX ; le chaos leve la rarete.
         self.butin.set(True)
         self.butin_libre.set(chaos)
+        # LES SORTS DES MONSTRES DANS LES DEUX ; le chaos en donne a tous.
+        self.sorts_monstres.set(True)
+        self.sorts_monstres_ajout.set(chaos)
+        self.techniques_monstres.set(True)
+        self.techniques_monstres_ajout.set(chaos)
         self.garder_hexacorne.set(True)
         self.stats.set(False)
+        # LA 1.6 : le mode aleatoire et ses groupes dans les deux ; les
+        # options neuves restent au choix du joueur.
+        self.apparitions.set("aleatoire")
+        self.groupes.set(True)
+        for var in (self.boss_familles_egales, self.boss_histoire,
+                    self.boss_mixte, self.boss_chaque_combat,
+                    self.boss_terrain,
+                    self.aptitudes_arme_origine):
+            var.set(False)
+        self._etat_cases_blob()
         self._applique = False
 
     def choix_manuel(self):
         """Une case cochee a la main : on n'est plus sur un prereglage."""
+        self._etat_cases_blob()
         if not self._applique:
             self.prereglage.set("custom")
 
@@ -458,10 +560,19 @@ class Application(object):
             os.path.dirname(os.path.abspath(self.rom)),
             "DQIX-Randomizer-seed%s.nds" % seed)
         args = [self.rom, "--seed", seed]
-        if self.monstres.get():
+        # LE MODE ALEATOIRE GARDE SA LIGNE D'AVANT (les greffes du blob) : la
+        # meme ROM que `--apparitions aleatoire`, verifie par la matrice.
+        aleatoire = self.monstres.get() and self.apparitions.get() == "aleatoire"
+        if not self.monstres.get():
+            args += ["--apparitions", "vanilla"]
+        elif aleatoire:
             args += GREFFES_MONSTRES
+            if not self.groupes.get():
+                args.append("--sans-groupes")
+            if self.boss_terrain.get():
+                args.append("--boss-terrain")
         else:
-            args += ["--sans-rencontres", "--sans-hasard"]
+            args += ["--apparitions", self.apparitions.get()]
         if self.objets.get():
             if self.sans_consommables.get():
                 args.append("--objets-sans-consommables")
@@ -482,6 +593,15 @@ class Application(object):
             args.append("--boss")
             if self.garder_hexacorne.get():
                 args.append("--boss-garder-premier")
+            if (self.boss_familles_egales.get()
+                    and not self.boss_histoire.get()):
+                args.append("--boss-familles-egales")
+            if self.boss_histoire.get():
+                args.append("--boss-histoire")
+            if self.boss_mixte.get():
+                args.append("--boss-mixte")
+            if self.boss_chaque_combat.get() and aleatoire:
+                args.append("--boss-chaque-combat")
         if self.sorts.get():
             args.append("--sorts")
             if self.sorts_chaos.get():
@@ -490,10 +610,20 @@ class Application(object):
             args.append("--aptitudes")
             if self.aptitudes_chaos.get():
                 args.append("--aptitudes-chaos")
+            if self.aptitudes_arme_origine.get():
+                args.append("--aptitudes-arme-origine")
         if self.butin.get():
             args.append("--butin-combat")
             if self.butin_libre.get():
                 args.append("--butin-combat-libre")
+        if self.sorts_monstres.get():
+            args.append("--sorts-monstres")
+            if self.sorts_monstres_ajout.get():
+                args.append("--sorts-monstres-ajout")
+        if self.techniques_monstres.get():
+            args.append("--techniques-monstres")
+            if self.techniques_monstres_ajout.get():
+                args.append("--techniques-monstres-ajout")
         if self.vocations.get():
             args.append("--vocations")
         if self.vocations_embauche.get():
@@ -525,7 +655,9 @@ class Application(object):
                 or self.aptitudes.get() or self.stats.get()
                 or self.vocations.get() or self.vocations_embauche.get()
                 or self.vocations_bloquees.get() or self.vocation_depart.get()
-                or self.butin.get()):
+                or self.butin.get() or self.sorts_monstres.get()
+                or self.techniques_monstres.get()
+                or (self.boss_terrain.get() and self.monstres.get())):
             messagebox.showerror(TITRE, self._t("rien_coche"))
             return
         args, sortie = self.arguments()

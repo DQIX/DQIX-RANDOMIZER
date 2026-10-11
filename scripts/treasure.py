@@ -6,7 +6,8 @@ L'archive porte 268 membres :
     (coffre rouge, pot, tonneau, placard, coffre bleu) avec l'opcode 0x67 ;
   - `randTBox.bin` : la table de tirage des COFFRES BLEUS, rangs 1 a 5 ;
   - `randTTT.bin`  : celle des POTS, TONNEAUX et PLACARDS, rangs 1 a 20 ;
-  - `randTD.bin`   : celle des GROTTOS, rangs 1 a 10. HORS PERIMETRE.
+  - `randTD.bin`   : celle des GROTTOS, rangs 1 a 10. HORS PERIMETRE, sauf
+    les montants d'or depuis la 1.6 (ZER-59).
 
 Format des membres : le script Nitro generique de la classe `Script` du decomp.
 

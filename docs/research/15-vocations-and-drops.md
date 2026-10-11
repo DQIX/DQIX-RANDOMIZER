@@ -213,6 +213,10 @@ Table: `u16 count, u16 first id`, then one byte per run of consecutive ids —
 bit 7 = 4–5★ run, bits 6–4 = gap since the previous run (7: gap in the next
 byte, 255 there: u16 gap), bits 3–0 = length (0: length in the next byte).
 The 1088 pool items fit in 225 (`libre`) or 278 (`rares`) bytes.
+Since ZER-66 (28/09/2026) the pool also excludes Sterling's whistle (22256):
+1087 items; since ZER-72 (11/10/2026) also the five dragon warrior pieces
+(12785, 13162, 15286, 16256, 17303): 1082. The count is read from the table
+header, not from the code.
 
 Where: **after overlay 23's BSS**. Overlays 22–30 share the slot starting at
 `0x021D8A40`; overlay 24 ends at `0x02200160`, overlay 23's BSS at

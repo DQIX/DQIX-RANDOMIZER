@@ -750,7 +750,9 @@ def verifier(rom, vanilla=None):
             v8 = van[f[CHAMP_ID]][CHAMP_MESSAGE]
             chez_lui = f[CHAMP_ARBRE] == arbre_de[f[CHAMP_ID]]
             attendu = v8 if chez_lui or v8 not in GENERIQUE else GENERIQUE[v8]
-            if f[CHAMP_MESSAGE] != attendu:
+            # Le jeu ne lit que cinq bits du message (§88) ; les bits hauts
+            # portent l'arbre d'origine avec --aptitudes-arme-origine (ZER-65).
+            if f[CHAMP_MESSAGE] & 0x1F != attendu:
                 faux.append((f[CHAMP_ARBRE], f[CHAMP_COUT], f[CHAMP_MESSAGE]))
         if faux:
             raise AssertionError("%d message(s) d'apprentissage nomment une "

@@ -91,6 +91,13 @@ NOM_TABLE = "dq9fich.bin"         # la table des fiches de terrain (ZER-8)
 #   dans sa propre allocation, evite d'agrandir ce tampon -- donc de prendre
 #   sa memoire au tas des modeles, et a ZER-5.
 TAILLE_BLOB = 8192                # code ET table des fiches, a synchroniser
+# LE GRAND BLOB (11/10/2026). `TAILLE_BLOB` n'est que la longueur que
+# l'amorce vide des caches : le blob est lu dans le tampon de 12 Kio, dont
+# environ 10 750 octets sont utiles (voir TAILLE_TAMPON). Les options de la
+# 1.6 cumulees avec --boss-terrain le portent a 8 484 octets ; on vide alors
+# 10 Kio. Seulement dans ce cas : une construction dont le blob tient en
+# 8 Kio garde son amorce, octet pour octet.
+TAILLE_BLOB_GRAND = 10240
 # LE TAMPON N'EST PAS LA DESTINATION, c'est le plan de travail du systeme de
 # fichiers -- et la VALEUR DE RETOUR pointe sur le contenu lu. L'appelant du jeu
 # le montre : `bl 0x20750A8` puis `movs r4, r0`, et c'est r4 qui porte les
@@ -143,7 +150,7 @@ def relais(adr):
     ], adr, litteraux=(0,))
 
 
-def amorce(adr, chemin_litteral):
+def amorce(adr, chemin_litteral, taille_blob=TAILLE_BLOB):
     """Alloue, lit le blob, synchronise les caches, installe, et enchaine.
 
     Entree  r0 = le contexte de terrain, r5 = la taille du tas des modeles --
@@ -187,10 +194,10 @@ def amorce(adr, chemin_litteral):
         #    prefetch d'instructions ne le verrait pas. Les deux primitives sont
         #    des feuilles qui ecrasent r0 et r1, d'ou les deux rechargements.
         "mov r0, r5",
-        "mov r1, #%d" % TAILLE_BLOB,
+        "mov r1, #%d" % taille_blob,
         "bl #%d" % DC_FLUSH,
         "mov r0, r5",
-        "mov r1, #%d" % TAILLE_BLOB,
+        "mov r1, #%d" % taille_blob,
         "bl #%d" % IC_INVALIDE,
         # 4. installer, puis enchainer sur le talon que l'installateur rend
         "ldr r1, [r5]",                     # en-tete : son deplacement
@@ -372,7 +379,8 @@ def talon_capture(adr):
     ], adr)
 
 
-def patcher(rom, bavard=True, plafond=None, etapes=4, boss=False, antres=None):
+def patcher(rom, bavard=True, plafond=None, etapes=4, boss=False, antres=None,
+            tirage=None, groupes=False, sifflet=False):
     """Pose l'amorce, la chaine, le tireur, et ajoute le fichier du blob.
 
     A appeler APRES patch_hasard (qui pose le bitmap et la greffe A2) et
@@ -406,10 +414,13 @@ def patcher(rom, bavard=True, plafond=None, etapes=4, boss=False, antres=None):
     # le jeu ne retrouvait plus le blob (mesure : plus rien en memoire). La table
     # voyage donc avec lui.
     blob, etiq = patch_blob.construire(plafond, originaux=originaux,
-                                       boss=boss, antres=antres)
-    if len(blob) > TAILLE_BLOB:
-        raise SystemExit(f"blob de {len(blob)} o : l'amorce n'en alloue que "
-                         f"{TAILLE_BLOB}")
+                                       boss=boss, antres=antres,
+                                       tirage=tirage, groupes=groupes,
+                                       sifflet=sifflet)
+    taille_blob = TAILLE_BLOB if len(blob) <= TAILLE_BLOB else TAILLE_BLOB_GRAND
+    if len(blob) > taille_blob:
+        raise SystemExit(f"blob de {len(blob)} o : l'amorce n'en vide que "
+                         f"{taille_blob}")
 
     # --- le fichier d'abord : son chemin depend du dossier qui porte les
     # --- derniers identifiants, donc on ne le connait qu'apres l'avoir ajoute
@@ -429,7 +440,7 @@ def patcher(rom, bavard=True, plafond=None, etapes=4, boss=False, antres=None):
     # bouger -- et l'amorce derriere lui. Ecrire le tireur apres l'amorce
     # l'effacerait, puisque l'effacement porte sur les 132 octets.
     t = tireur(GREFFE_B)
-    code = amorce(AMORCE, CHEMIN_ADR)
+    code = amorce(AMORCE, CHEMIN_ADR, taille_blob)
     if len(t) + len(code) > TAILLE_TIREUR:
         raise SystemExit(f"tireur {len(t)} o + amorce {len(code)} o : la "
                          f"fonction n'en tient que {TAILLE_TIREUR}")

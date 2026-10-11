@@ -130,6 +130,19 @@ SITE_MODELE_ALLOC = 0x02075678    # `bl Allocate` du lecteur de fichier
 # tirer a cette recherche donne un boss par visite.
 SITE_ANTRE = 0x020740B8
 EVT_DEMANDE = 0x020F0D2C
+# LES GROUPES DE COMBAT (ZER-67). Au contact d'un symbole, `GenerateCompanionByBT`
+# (0x0209AFE4, ARM9) cherche l'espece touchee parmi les MENEUSES de la zone
+# dans `encbtl` (0x0209B8E4 : six zones de 0x4C octets, six meneuses de 8
+# octets a +4, six compagnons de 4 octets a +0x34). Trouvee, sa fiche donne le
+# nombre de monstres et les compagnons ; ABSENTE, le groupe vaut 1 et c'est
+# fini (`cmp sl, #0` en 0x0209B050, puis `strheq r6, [r4, #6]`). Avec le blob,
+# l'espece apparue n'est presque jamais une meneuse de la zone : le monstre
+# combat seul. La greffe prend alors une meneuse de la zone au hasard comme
+# GABARIT -- tailles et compagnons --, l'espece touchee restant en tete.
+SITE_GROUPE = 0x0209B050
+ORIGINE_GROUPE = 0xE35A0000       # cmp sl, #0
+RAND_BT = 0x0207430C              # (generateur, n) -> [0, n[, celui de la
+#                                   fonction, deja dans r5
 ANTRE_PREMIER, ANTRE_N = 34, 12
 SITE_TABLEAU_ALLOC = 0x021A28F0   # `bl Allocate` du tableau de fiches, dans le
 #   prechargeur : (borne x 0xB0) octets pris au tas des modeles a chaque appel.
@@ -144,6 +157,17 @@ SITE_TABLEAU_ALLOC = 0x021A28F0   # `bl Allocate` du tableau de fiches, dans le
 TIREUR = 0x02073FEC
 SITE_TIRAGE_TIC = 0x02073CA0      # `bl TIREUR`, ARM9
 SITE_TIRAGE_REPLI = 0x021A24CC    # `bl TIREUR`, overlay 17
+# LE SIFFLET CHERCHE LA FICHE DE SON ESPECE (ZER-68, mesure en jeu du
+# 11/10/2026). Le wrapper d'apparition (0x021A23E4), apres le repli, cherche
+# l'espece dans le conteneur de la carte (`add r0, sb, #0x2f8` ; `bl
+# 0x0206F500`) et rend 0 si elle n'y est pas. Vanilla, le tireur ne rend
+# que des especes de la carte ; avec le blob, presque jamais : l'espece 257
+# tiree, la ponte n'a pas lieu, et le Sifflet reste dans l'etat ou l'on
+# traverse les monstres. Le tic n'y passe pas (il appelle 0x021A2128, dont
+# la meme recherche, 0x021A2164, est deja confiee au portier 1). Meme
+# greffe ici, avec `sifflet` seulement.
+SITE_PORTIER1_SIFFLET = 0x021A24E8
+ORIGINE_PORTIER1_SIFFLET = 0xEBFB3404    # bl 0x0206F500
 ESSAIS_UNIQUE = 8                 # puis -1 : pas d'apparition a cette image
 BATIR_NOEUDS = 0x0206EE90         # (conteneur, tas, donnees, taille, especes, n)
 #   Analyse `data/prm/fld_mondata.bin` -- 441 enregistrements, un par espece --
@@ -289,6 +313,8 @@ EXTRACTEUR = 0x0206EF50           # `ldrsh r0, [r0, #8]` : la cle d'un enreg.
 SUIVANT = 0x10                    # champ suivant d'un noeud du conteneur 2
 DEBUT_SITES4 = 0x02073CA0         # le site du tic, hors des autres plages :
 PLAGE_SITES4 = 0x20               # une ligne de cache, adresse alignee
+DEBUT_SITES5 = 0x0209B040         # le site des groupes (ZER-67), dans
+PLAGE_SITES5 = 0x20               # l'ARM9 : une ligne de cache, alignee
 DEBUT_SITES = 0x021A2164          # la plus basse adresse patchee
 PLAGE_SITES = 0x1000              # jusqu'a 0x021A2ACC, avec de la marge
 
@@ -298,7 +324,8 @@ SITES_PATCHES = (SITE_VIDE, SITE_TABLEAU, SITE_VRAM, SITE_DEPART, SITE_ESPECE,
                  SITE_BOUCLE, SITE_MODELE, SITE_PORTIER1_SPAWN,
                  SITE_PORTIER1_PRECH, SITE_PORTIER2_SPAWN, SITE_PORTIER2_RELU,
                  SITE_PORTIER2_PRECH, SITE_MODELE_ALLOC, SITE_TABLEAU_ALLOC,
-                 SITE_TIRAGE_TIC, SITE_TIRAGE_REPLI, SITE_ANTRE)
+                 SITE_TIRAGE_TIC, SITE_TIRAGE_REPLI, SITE_ANTRE,
+                 SITE_GROUPE, SITE_PORTIER1_SIFFLET)
 
 EMPLACEMENTS = 12
 PLAFOND = 5
@@ -372,7 +399,8 @@ NOEUD_N = NOEUDS * NOEUD_MOTS + 1 # les huit noeuds, puis le tour de rotation
 
 
 def construire(plafond=PLAFOND, site_declencheur=0, originaux=None,
-               boss=False, antres=None):
+               boss=False, antres=None, tirage=None, groupes=False,
+               sifflet=False):
     """Rend (octets du blob, deplacement de l'installateur).
 
     `site_declencheur` est l'adresse du `mov r0, r0` d'`emprunt` a transformer en
@@ -401,6 +429,20 @@ def construire(plafond=PLAFOND, site_declencheur=0, originaux=None,
     def saut(cible):
         return ["ldr pc, [pc, #%s]" % lit(cible)]
 
+    def plage5():
+        """Vider les caches sur le site des groupes, s'il est pose. Rien
+        sinon : le blob sans --groupes reste octet pour octet le meme."""
+        if not groupes:
+            return []
+        return ["ldr r0, [pc, #%s]" % lit(DEBUT_SITES5),
+                "mov r1, #%d" % PLAGE_SITES5] + appel(DC_FLUSH) + [
+                "ldr r0, [pc, #%s]" % lit(DEBUT_SITES5),
+                "mov r1, #%d" % PLAGE_SITES5] + appel(IC_INVALIDE)
+
+    # UNE ENTREE DE PLUS dans la table des sites pour la greffe des groupes.
+    # Une autre pour la recherche de fiche du Sifflet (ZER-68).
+    entrees = TABLE_ENTREES + (1 if groupes else 0) + (1 if sifflet else 0)
+
     # --- les donnees, reservees par des instructions inoffensives jamais
     # --- executees, et reecrites apres l'assemblage
     lignes = ["mots:"] + ["mov r0, r0"] * MOTS_N
@@ -417,6 +459,13 @@ def construire(plafond=PLAFOND, site_declencheur=0, originaux=None,
     # tant qu'on y reste. Elle protege aussi d'une seconde recherche du meme
     # combat : mesure, le demandeur ecrit parfois l'identifiant deux fois.
     lignes += ["cache_antres:"] + ["mov r0, r0"] * (ANTRE_N // 2)
+    # LA TABLE DU TIRAGE DES BOSS DE LA 1.6 (tirage_boss.py : familles,
+    # monstres, masques par evenement). Absente sans les options de la 1.6 :
+    # le blob de `--boss` seul reste alors octet pour octet celui de ZER-37.
+    if tirage and antres:
+        raise SystemExit("construire : `antres` et `tirage` s'excluent")
+    if tirage:
+        lignes += ["boss_t:"] + ["mov r0, r0"] * ((len(tirage) + 3) // 4)
     # PLUS DE LISTE D'ESPECES ICI. Elle servait a la greffe de montage, qui ne
     # s'executait jamais (l'overlay du jeu efface sa pose a chaque carte) et qui
     # a ete remplacee par la creation de fiche au chargement d'un modele. Ses
@@ -441,7 +490,7 @@ def construire(plafond=PLAFOND, site_declencheur=0, originaux=None,
     lignes += ["talon_off:", "mov r0, r0"]      # le deplacement du talon de source
     lignes += ["src:"] + ["mov r0, r0"] * SRC_N
     lignes += ["noeud:"] + ["mov r0, r0"] * NOEUD_N
-    lignes += ["table:"] + ["mov r0, r0"] * (MOTS_PAR_ENTREE * TABLE_ENTREES)
+    lignes += ["table:"] + ["mov r0, r0"] * (MOTS_PAR_ENTREE * entrees)
 
 
     # --- l'installateur : reecrit les sites, synchronise, rend le talon ---
@@ -492,7 +541,7 @@ def construire(plafond=PLAFOND, site_declencheur=0, originaux=None,
     ] + appel(DC_FLUSH) + [
         "ldr r0, [pc, #%s]" % lit(DEBUT_SITES4),
         "mov r1, #%d" % PLAGE_SITES4,
-    ] + appel(IC_INVALIDE) + [
+    ] + appel(IC_INVALIDE) + plage5() + [
         # ET L'AMORCE ELLE-MEME. Sans cela, une reecriture de son code -- un patch
         # RAM de banc, par exemple -- reste invisible au processeur, qui continue
         # a servir l'ancienne instruction depuis son cache (la taille du tampon
@@ -581,7 +630,7 @@ def construire(plafond=PLAFOND, site_declencheur=0, originaux=None,
     ] + appel(DC_FLUSH) + [
         "ldr r0, [pc, #%s]" % lit(DEBUT_SITES4),
         "mov r1, #%d" % PLAGE_SITES4,
-    ] + appel(IC_INVALIDE) + [
+    ] + appel(IC_INVALIDE) + plage5() + [
         # ET L'AMORCE ELLE-MEME. Sans cela, une reecriture de son code -- un patch
         # RAM de banc, par exemple -- reste invisible au processeur, qui continue
         # a servir l'ancienne instruction depuis son cache (la taille du tampon
@@ -856,6 +905,159 @@ def construire(plafond=PLAFOND, site_declencheur=0, originaux=None,
         "pop {r4, pc}",
     ]
 
+    # --- greffe des boss de la 1.6 (tirage_boss.py), a la place de la
+    # --- greffe d'antre quand une option de la 1.6 est demandee ---
+    #
+    # Meme site, memes registres : r4 = emplacement 0..2, r1 = l'enregistrement
+    # ou ecrire, r0 = l'espece lue ; r4 a r7 et ip sont rendus intacts. Un
+    # emplacement est retire si son bit est pose dans le masque de l'evenement
+    # demande. On tire une famille (les monstres en sont une de plus avec
+    # --boss-mixte), puis une espece de la famille. Les antres gardent leur
+    # memoire de visite (ZER-37) sauf avec --boss-chaque-combat.
+    greffe_tirage = [
+        "greffe_antre:",
+        "push {r1, r4, r5, r6, r7, ip, lr}",
+        "mov r7, r0",                       # par defaut : l'espece telle quelle
+        "sub r5, pc, #{@@H:boss_t}",
+        "sub r5, r5, #{@@L:boss_t}",
+        "ldr r2, [pc, #%s]" % lit(EVT_DEMANDE),
+        "ldr r6, [r2]",                     # l'evenement demande
+        "ldrb r2, [r5, #3]",
+        "cmp r6, r2",
+        "bcs #{@bt_fin}",                   # hors des masques
+        "add r2, r5, #16",
+        "ldrb r2, [r2, r6]",
+        "mov r3, #1",
+        "tst r2, r3, lsl r4",
+        "beq #{@bt_fin}",                   # emplacement non retire
+        "mov r3, #0",                       # r3 -> r6 : ou retenir le tirage
+        "ldrb r2, [r5, #2]",
+        "cmp r2, #0",
+        "beq #{@bt_tirer}",
+        "cmp r4, #0",
+        "bne #{@bt_tirer}",
+        "sub r2, r6, #%d" % ANTRE_PREMIER,
+        "cmp r2, #%d" % ANTRE_N,
+        "bcs #{@bt_tirer}",                 # pas un antre : rien a retenir
+        "sub r3, pc, #{@@H:cache_antres}",
+        "sub r3, r3, #{@@L:cache_antres}",
+        "add r3, r3, r2, lsl #1",           # la memoire de CET antre
+        "ldrh r2, [r3]",
+        "cmp r2, #0",
+        "movne r7, r2",                     # deja tire pendant cette visite
+        "bne #{@bt_fin}",
+        "bt_tirer:",
+        "mov r6, r3",
+        "ldrb r0, [r5, #0]",
+        "ldrb r2, [r5, #1]",
+        "add r0, r0, r2",                   # familles de boss + monstres
+    ] + appel(RAND) + [
+        "ldrb r2, [r5, #0]",
+        "cmp r0, r2",
+        "bcs #{@bt_monstre}",
+        "mov r4, #0",                       # r4 = premier rang de la famille
+        "add r2, r5, #4",
+        "bt_base:",
+        "cmp r0, #0",
+        "beq #{@bt_famille}",
+        "ldrh r1, [r2], #2",
+        "add r4, r4, r1",
+        "sub r0, r0, #1",
+        "b #{@bt_base}",
+        "bt_famille:",
+        "ldrh r0, [r2]",                    # compte de la famille
+    ] + appel(RAND) + [
+        "add r0, r0, r4",
+        "ldrh r2, [r5, #10]",
+        "add r2, r5, r2",
+        "mov r0, r0, lsl #1",
+        "ldrh r7, [r2, r0]",
+        "b #{@bt_retenir}",
+        "bt_monstre:",
+        "ldrh r4, [r5, #12]",
+        "add r4, r5, r4",                   # le bitmap des monstres
+        "bt_encore:",
+        "mov r0, #%d" % (8 * 48),
+    ] + appel(RAND) + [
+        "mov r2, r0, lsr #3",
+        "ldrb r2, [r4, r2]",
+        "and r3, r0, #7",
+        "mov r1, #1",
+        "tst r2, r1, lsl r3",
+        "beq #{@bt_encore}",
+        "mov r7, r0",
+        "bt_retenir:",
+        "cmp r6, #0",
+        "strhne r7, [r6]",                  # retenu pour la visite
+        "bt_fin:",
+        "mov r0, r7",
+        "pop {r1, r4, r5, r6, r7, ip, lr}",
+        "strh r0, [r1, #2]",
+        "bx lr",
+    ]
+
+    # --- greffe des groupes : une meneuse de la zone pour gabarit (ZER-67) ---
+    #
+    # Remplace `cmp sl, #0` en 0x0209B050 et rend les drapeaux de ce `cmp`,
+    # que les deux instructions suivantes lisent. sb = les zones d'`encbtl`,
+    # r8 = la zone, r5 = le generateur, sl = la meneuse trouvee ou 0. r0 a r3
+    # sont relus par le jeu apres le site ; on les rend quand meme, et ip.
+    if groupes:
+        lignes += [
+            "greffe_groupe:",
+            "cmp sl, #0",
+            "bxne lr",                      # meneuse de la zone : rien a faire
+            "push {r0, r1, r2, r3, ip, lr}",
+            "mov r0, #0",
+            "g_zone:",
+            "cmp r0, #6",
+            "bge #{@g_rien}",
+            "mov r1, #0x4c",
+            "mul r2, r0, r1",
+            "ldrh r3, [sb, r2]",
+            "cmp r3, r8",
+            "beq #{@g_trouve}",
+            "add r0, r0, #1",
+            "b #{@g_zone}",
+            "g_trouve:",
+            "add r2, sb, r2",
+            "add r2, r2, #4",               # les six meneuses de la zone
+            "mov r3, #0",
+            "mov r1, #0",
+            "g_compte:",
+            "ldr r0, [r2, r1, lsl #3]",
+            "movs r0, r0, lsl #20",         # une espece sur les 12 bits bas ?
+            "addne r3, r3, #1",
+            "add r1, r1, #1",
+            "cmp r1, #6",
+            "blt #{@g_compte}",
+            "cmp r3, #0",
+            "beq #{@g_rien}",
+            "push {r2}",
+            "mov r0, r5",
+            "mov r1, r3",
+        ] + appel(RAND_BT) + [
+            "pop {r2}",
+            "mov r1, #0",
+            "g_choix:",
+            "ldr r3, [r2, r1, lsl #3]",
+            "movs r3, r3, lsl #20",
+            "beq #{@g_suivant}",
+            "subs r0, r0, #1",
+            "bmi #{@g_pris}",
+            "g_suivant:",
+            "add r1, r1, #1",
+            "cmp r1, #6",
+            "blt #{@g_choix}",
+            "b #{@g_rien}",
+            "g_pris:",
+            "add sl, r2, r1, lsl #3",       # le gabarit
+            "g_rien:",
+            "pop {r0, r1, r2, r3, ip, lr}",
+            "cmp sl, #0",
+            "bx lr",
+        ]
+
     # --- greffe antre : un boss neuf a chaque visite d'antre (ZER-37) ---
     #
     # Remplace `strh r0, [r1, #2]` en 0x020740B8 et le refait elle-meme. Apres
@@ -863,7 +1065,7 @@ def construire(plafond=PLAFOND, site_declencheur=0, originaux=None,
     # sont libres. r4 (l'emplacement 0..2), r5 et r6 lui appartiennent et ne
     # sont pas touches. Seul le PREMIER emplacement d'un evenement d'antre est
     # retire : c'est le boss, les deux autres sont vides.
-    lignes += [
+    lignes += greffe_tirage if tirage else [
         "greffe_antre:",
         "cmp r4, #0",
         "bne #{@antre_ecrit}",
@@ -1227,6 +1429,24 @@ def construire(plafond=PLAFOND, site_declencheur=0, originaux=None,
     # dont le modele ne peut pas etre charge N'APPARAIT PAS, il apparaitra
     # quand un autre aura libere sa place. On charge donc ici, avant la ponte ;
     # `emprunt` trouvera le modele au premier etage.
+    # LE SIFFLET (ZER-68). Le repli (0x021A24CC) sert aux pontes sans espece
+    # fournie, dont celle du Sifflet (machine a etats de l'overlay 17,
+    # 0x021C2784 : UNE seule tentative, espece -1). Le tic retente a chaque
+    # image, le Sifflet non : avec le tas plein, -1 et rien n'apparait, puis
+    # la branche d'echec du Sifflet laisse le joueur dans un etat ou il
+    # traverse les monstres (seule la branche de reussite remet
+    # `[joueur+0xC3]` a zero). Au repli, un echec prend donc l'espece d'un
+    # monstre VIVANT au hasard : son modele est en memoire, la ponte reussit.
+    # Exception voulue a « jamais deux fois la meme espece », limitee a ce
+    # cas (tas plein, ponte unique). `sifflet=False` : le code de la 1.5.
+    if sifflet:
+        echecs = ["blt #{@echec_unique}",
+                  "b #{@echec_unique}",
+                  ["beq #{@echec_unique}"]]
+    else:
+        echecs = ["poplt {r4, r5, r6, pc}",
+                  "mvn r0, #0",
+                  ["mvneq r6, #0"]]
     lignes += [
         "tirage_unique:",
         "push {r4, r5, r6, lr}",
@@ -1236,22 +1456,69 @@ def construire(plafond=PLAFOND, site_declencheur=0, originaux=None,
         "mov r0, r4",
     ] + appel(TIREUR) + [
         "cmp r0, #0",
-        "poplt {r4, r5, r6, pc}",            # -1 : rien a tirer, tel quel
+        echecs[0],                          # -1 : rien a tirer, tel quel
         "mov r6, r0",
         "bl #{@espece_vivante}",
         "cmp r0, #0",
         "beq #{@espece_libre}",
         "subs r5, r5, #1",                  # deja a l'ecran : un essai de moins
         "bne #{@essai_unique}",
-        "mvn r0, #0",                       # huit doublons : pas cette fois-ci
-        "pop {r4, r5, r6, pc}",
+        echecs[1],                          # huit doublons : pas cette fois-ci
+    ] + ([] if sifflet else ["pop {r4, r5, r6, pc}"]) + [
         "espece_libre:",
         "mov r0, r6",
         "bl #{@modele_pret}",
         "cmp r0, #0",
-        "mvneq r6, #0",                     # pas de modele : pas de ponte
+    ] + echecs[2] + [                       # pas de modele : pas de ponte
         "mov r0, r6",
         "pop {r4, r5, r6, pc}",
+    ]
+    if sifflet:
+        lignes += [
+            "echec_unique:",
+            "ldr r1, [pc, #%s]" % lit(SITE_TIRAGE_REPLI + 4),
+            "ldr r2, [sp, #12]",            # l'appelant (lr empile)
+            "cmp r2, r1",
+            "mvnne r0, #0",                 # le tic : il retentera
+            "popne {r4, r5, r6, pc}",
+            "bl #{@vivant_au_hasard}",
+            "pop {r4, r5, r6, pc}",
+
+            # --- l'espece d'un acteur vivant, au hasard, ou -1 ---
+            "vivant_au_hasard:",
+            "push {r4, lr}",
+            "bl #{@compte_acteurs}",
+            "cmp r0, #0",
+            "mvneq r0, #0",
+            "popeq {r4, pc}",
+        ] + appel(RAND) + [
+            "mov r4, r0",                   # le rang du vivant retenu
+            "ldr r1, [pc, #%s]" % lit(CARTE_VARIANTE),
+            "ldrh r1, [r1]",
+            "and r1, r1, #3",
+            "add r1, r1, r1, lsl #1",
+            "mov r1, r1, lsl #2",
+            "add r1, r1, #%d" % ACTEURS_BASE,
+            "ldr r2, [pc, #%s]" % lit(TABLE_BASE),
+            "add r1, r2, r1, lsl #2",
+            "mov r2, #%d" % ACTEURS_N,
+            "boucle_hasard:",
+            "ldr r3, [r1], #4",
+            "cmp r3, #0",
+            "beq #{@hasard_suivant}",
+            "ldrsh r3, [r3, #2]",
+            "cmp r3, #0",
+            "blt #{@hasard_suivant}",
+            "subs r4, r4, #1",
+            "movmi r0, r3",
+            "popmi {r4, pc}",
+            "hasard_suivant:",
+            "subs r2, r2, #1",
+            "bne #{@boucle_hasard}",
+            "mvn r0, #0",
+            "pop {r4, pc}",
+        ]
+    lignes += [
 
         # --- le modele de l'espece r0 est-il en memoire, quitte a le charger ? ---
         #
@@ -1447,6 +1714,10 @@ def construire(plafond=PLAFOND, site_declencheur=0, originaux=None,
     moities = list(antres) + [0] * (len(antres) % 2)
     for k in range(0, len(moities), 2):
         ecrire(etiq["antres"] + 4 + 2 * k, moities[k] | (moities[k + 1] << 16))
+    if tirage:
+        t = bytes(tirage) + bytes(-len(tirage) % 4)
+        for k in range(0, len(t), 4):
+            ecrire(etiq["boss_t"] + k, struct.unpack_from("<I", t, k)[0])
     for k in range(SRC_N):
         ecrire(etiq["src"] + 4 * k, 0)
     for k in range(NOEUD_N):
@@ -1470,9 +1741,17 @@ def construire(plafond=PLAFOND, site_declencheur=0, originaux=None,
         (SITE_TABLEAU_ALLOC, etiq["greffe_tableau"]),
         (SITE_TIRAGE_TIC, etiq["tirage_unique"]),
         (SITE_TIRAGE_REPLI, etiq["tirage_unique"]),
-    ] + ([(SITE_ANTRE, etiq["greffe_antre"])] if antres else [])
-    if len(paires) >= TABLE_ENTREES:
-        raise SystemExit(f"table : {len(paires)} entrees pour {TABLE_ENTREES - 1}")
+    ] + ([(SITE_ANTRE, etiq["greffe_antre"])] if antres or tirage else [])
+    paires += [(SITE_GROUPE, etiq["greffe_groupe"])] if groupes else []
+    paires += [(SITE_PORTIER1_SIFFLET, etiq["portier1"])] if sifflet else []
+    if sifflet and originaux[SITE_PORTIER1_SIFFLET] != ORIGINE_PORTIER1_SIFFLET:
+        raise SystemExit(f"{SITE_PORTIER1_SIFFLET:#010x} : attendu `bl "
+                         f"0x0206F500`, lu {originaux[SITE_PORTIER1_SIFFLET]:#010x}")
+    if groupes and originaux[SITE_GROUPE] != ORIGINE_GROUPE:
+        raise SystemExit(f"{SITE_GROUPE:#010x} : attendu `cmp sl, #0`, lu "
+                         f"{originaux[SITE_GROUPE]:#010x}")
+    if len(paires) >= entrees:
+        raise SystemExit(f"table : {len(paires)} entrees pour {entrees - 1}")
     for site in (SITE_TIRAGE_TIC, SITE_TIRAGE_REPLI):
         d = (TIREUR - (site + 8)) >> 2
         attendu = 0xEB000000 | (d & 0xFFFFFF)

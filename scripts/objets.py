@@ -181,12 +181,28 @@ def objets_importants(rom, langue="en"):
 # apres le 18 septembre ne redonnent donc plus le MD5 des versions 1.2 et 1.2.1.
 DEBUG = {22125, 22126}
 
+# LE SIFFLET D'ASTER (Sterling's whistle), hors de tout tirage, dans TOUS les
+# modes (ZER-66). Il casse le jeu et ne s'obtient en vanilla que par sa quete
+# de fin de jeu : aucun coffre, pot, drop ni boutique ne le porte. Il n'est
+# pourtant pas classe important (quartet 8), donc le pool le distribuait -- un
+# joueur l'a obtenu. L'exclure change le tirage : les constructions faites
+# apres le 28 septembre 2026 ne redonnent plus le MD5 de la 1.5.
+SIFFLET = 22256
+
+# L'EQUIPEMENT DE DRACOGUERRIER (dragon warrior), hors de tout tirage, dans
+# TOUS les modes (ZER-72). Le scenario le donne et en a besoin ; aucun
+# conteneur, drop ni boutique ne le porte en vanilla, mais il n'est pas classe
+# important, donc le pool le distribuait -- un testeur en a obtenu une piece.
+DRACOGUERRIER = {12785, 13162, 15286, 16256, 17303}   # casque, armure, gants,
+#                                                       culotte, bottes
+HORS_TIRAGE = DEBUG | {SIFFLET} | DRACOGUERRIER
+
 
 def pool(rom, langue="en"):
     """Les identifiants qu'on s'autorise a placer dans un conteneur."""
     cat = catalogue(rom, langue)
     imp = objets_importants(rom, langue)
-    return sorted(set(cat) - imp - DEBUG)
+    return sorted(set(cat) - imp - HORS_TIRAGE)
 
 
 # L'ORDRE DES NOMS. `itemname_<lg>.nat` range ses 1178 noms en mettant bout a

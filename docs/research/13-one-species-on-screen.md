@@ -153,3 +153,18 @@ nothing was ever evicted.
 A size-aware draw (pick a species whose model fits the largest hole) would give
 back the density, but it favours small monsters whenever the heap is full.
 **Refused by the player**: every monster must have the same chance.
+
+## Field actor position (ZER-50)
+
+In the field actor structure (0x198 bytes, table `0x020F33D8 + 8`, entries
+`0x70 + 12 × (variant % 4)`, 12 actors), **+0x84 is x, +0x88 y, +0x8C z**, in
+fx32 (divide by 4096). Found by dumping whole structures every 20 frames and
+ranking words by how often and how smoothly they change; confirmed on the
+player's sessions: a monster appears at (0, 0) for one reading, then moves by
+about one unit per second, or stays put. +0x14C–0x154 change at every reading
+but are an animation counter, not a position.
+
+Measured with `scripts/lua/balade.lua` and `scripts/analyse_balade.py`, 1.5
+against 1.3 in the plain outside Stornway, player playing: 3.1 against 3.2
+monsters on screen on average, 27 species in 28 spawns against 24 in 24, and in
+both about a quarter of the monsters stand still while the others wander.

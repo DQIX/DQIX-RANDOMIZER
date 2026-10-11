@@ -344,3 +344,29 @@ exactly the legendary equipment (hypernova sword, legendary armour, seraph's bow
 
 1090 pool by stars: 0★ 64, 1★ 405, 2★ 204, 3★ 285, 4★ 110, 5★ 22. Function:
 `objets.raretes()`.
+
+### 81.2 Gold amounts (ZER-59, 1.6)
+
+A gold outcome (lootType 1) carries its amount in bits 7-22 (u16), and a red
+chest with gold carries it in the low 16 bits of its packedID: amounts up to
+65 535 fit in place, no size change. Vanilla amounts: blue chests (randTBox)
+ranks 1-5: 18, 52, 240, 525, 1 000 G; grottos (randTD): 125 to 3 000 G; pots,
+barrels, wardrobes (randTTT): 2 to 240 G; 16 red chests: 50 to 5 000 G.
+
+Since 1.6, with the container randomization, every amount is redrawn
+uniformly: 1 to 10 000 G in chests (red, blue, grotto), 1 to 1 000 G in pots,
+barrels and wardrobes (player's decision, 26/09/2026). The chances of gold do
+not move. The draw uses its own RNG, seeded from the state of the main one
+without consuming it: items, drops and shops come out exactly as without it
+(checked: 1 493 table lines and containers identical apart from gold).
+Grottos are touched for gold only. Matrix check `or_tire`.
+
+### 81.3 Ambushes: replacing the species id does not work (ZER-21, tested 11/10/2026)
+
+An ambush outcome (lootType 3) carries 38, 39 or 40: the INTERNAL species ids
+of cannibox, mimic and pandora's box, which the spawn wrapper (`0x021A2464`)
+and `GenerateCompanionByBT` (`0x0209B02C`, one monster) special-case (§95.1).
+Tried for 1.6: every blue-chest and grotto ambush line given another bestiary
+species (test ROM: five ambush lines at 20 % per rank). **Failed in game**,
+so the option was withdrawn; the chest code must handle the three ids itself,
+which is still to be found. Details on ZER-21.

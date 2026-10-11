@@ -177,16 +177,77 @@ T = {
     # --- les cases : (libelle, detail) -----------------------------------
     "monstres": {
         "en": ('Field monsters',
-               'any of the 256 monsters can appear anywhere'),
+               'which monsters appear, in the mode chosen below'),
         "fr": ('Monstres du terrain',
-               "n'importe lequel des 256 monstres peut apparaître partout"),
+               'quels monstres apparaissent, dans le mode choisi ci-dessous'),
         "de": ('Monster im Gelände',
-               'jedes der 256 Monster kann überall auftauchen'),
+               'welche Monster erscheinen, im unten gewählten Modus'),
         "es": ('Monstruos del mapa',
-               'cualquiera de los 256 monstruos puede aparecer en cualquier '
-               'sitio'),
+               'qué monstruos aparecen, en el modo elegido abajo'),
         "it": ('Mostri sul campo',
-               'ognuno dei 256 mostri può comparire ovunque')},
+               'quali mostri compaiono, nella modalità scelta sotto')},
+    # --- les modes d'apparition (ZER-73) : (libelle, detail) ------------
+    "app_aleatoire": {
+        "en": ('Random at every spawn',
+               'any monster each time one appears (the most varied)'),
+        "fr": ('Aléatoire à chaque apparition',
+               "n'importe quel monstre chaque fois qu'un monstre apparaît "
+               '(le plus varié)'),
+        "de": ('Zufällig bei jedem Erscheinen',
+               'bei jedem Erscheinen ein beliebiges Monster (am '
+               'abwechslungsreichsten)'),
+        "es": ('Aleatorio en cada aparición',
+               'cualquier monstruo cada vez que aparece uno (lo más variado)'),
+        "it": ('Casuale a ogni comparsa',
+               'un mostro qualsiasi a ogni comparsa (il più vario)')},
+    "app_zone": {
+        "en": ('1-to-1 per area',
+               'in each area, a monster is always replaced by the same other '
+               'one; more stable, less varied'),
+        "fr": ('1 pour 1 par zone',
+               'dans chaque zone, un monstre est toujours remplacé par le même '
+               'autre ; plus stable, moins varié'),
+        "de": ('1 zu 1 pro Gebiet',
+               'in jedem Gebiet wird ein Monster immer durch dasselbe andere '
+               'ersetzt; stabiler, weniger abwechslungsreich'),
+        "es": ('1 a 1 por zona',
+               'en cada zona, un monstruo se sustituye siempre por el mismo '
+               'otro; más estable, menos variado'),
+        "it": ('1 a 1 per zona',
+               'in ogni zona un mostro è sempre sostituito dallo stesso altro; '
+               'più stabile, meno vario')},
+    "app_globale": {
+        "en": ('1-to-1 for the whole game',
+               'a monster is replaced by the same other one everywhere; more stable, '
+               'less varied'),
+        "fr": ('1 pour 1 dans tout le jeu',
+               'un monstre est remplacé par le même autre partout ; plus stable, '
+               'moins varié'),
+        "de": ('1 zu 1 im ganzen Spiel',
+               'ein Monster wird überall durch dasselbe andere ersetzt; stabiler, '
+               'weniger abwechslungsreich'),
+        "es": ('1 a 1 en todo el juego',
+               'un monstruo se sustituye por el mismo otro en todas partes; '
+               'más estable, menos variado'),
+        "it": ('1 a 1 in tutto il gioco',
+               'un mostro è sostituito dallo stesso altro ovunque; più '
+               'stabile, meno vario')},
+    "groupes": {
+        "en": ('monsters in groups',
+               'a random monster brings companions, as in the base game '
+               '(random mode)'),
+        "fr": ('monstres en groupe',
+               'un monstre tiré au hasard vient avec des compagnons, comme '
+               'dans le jeu de base (mode aléatoire)'),
+        "de": ('Monster in Gruppen',
+               'ein zufälliges Monster bringt Begleiter mit, wie im '
+               'Originalspiel (Zufallsmodus)'),
+        "es": ('monstruos en grupo',
+               'un monstruo al azar trae compañeros, como en el juego original '
+               '(modo aleatorio)'),
+        "it": ('mostri in gruppo',
+               'un mostro casuale porta compagni, come nel gioco originale '
+               '(modalità casuale)')},
     "objets": {
         "en": ('Chest and pot contents',
                'chests, pots, barrels and cupboards, plus the item each '
@@ -205,20 +266,23 @@ T = {
                'ogni mostro')},
     "sans_consommables": {
         "en": ('mostly equipment',
-               'the game has six times more equipment than consumables; '
-               'without this option, the two are rebalanced'),
+               'a plain draw over every item: about 6 pieces of equipment per '
+               'consumable; unticked, more herbs and potions'),
         "fr": ("surtout de l'équipement",
-               "le jeu compte six fois plus d'équipements que de consommables "
-               '; sans cette option, on rééquilibre les deux'),
+               'un tirage simple parmi tous les objets : environ 6 '
+               "équipements pour 1 consommable ; décochée, plus d'herbes et "
+               'de potions'),
         "de": ('vor allem Ausrüstung',
-               'das Spiel hat sechsmal mehr Ausrüstung als '
-               'Verbrauchsgegenstände; ohne diese Option wird das ausgeglichen'),
+               'reine Zufallsziehung über alle Gegenstände: etwa 6 '
+               'Ausrüstungsteile pro Verbrauchsgegenstand; ohne Haken mehr '
+               'Kräuter und Tränke'),
         "es": ('sobre todo equipo',
-               'el juego tiene seis veces más equipo que consumibles; sin esta'
-               ' opción, se reequilibran'),
+               'un sorteo simple entre todos los objetos: unas 6 piezas de '
+               'equipo por consumible; sin marcar, más hierbas y pociones'),
         "it": ('soprattutto equipaggiamento',
-               'il gioco ha sei volte più equipaggiamento che consumabili; '
-               'senza questa opzione, vengono ribilanciati')},
+               'estrazione semplice tra tutti gli oggetti: circa 6 '
+               'equipaggiamenti per consumabile; senza spunta, più erbe e '
+               'pozioni')},
     "objets_chaos": {
         "en": ('rare items everywhere',
                'legendary gear can turn up in the very first barrel'),
@@ -274,6 +338,62 @@ T = {
                'si no, siguen siendo raros: más o menos uno de cada 60 botines'),
         "it": ('oggetti a 4 e 5 stelle comuni come gli altri',
                'altrimenti restano rari: circa un bottino su 60')},
+    "sorts_monstres": {
+        "en": ('Monster spells drawn every battle',
+               'in every battle, the spells a monster knows are picked at '
+               'random among the 53 battle spells'),
+        "fr": ('Sorts des monstres tirés à chaque combat',
+               'à chaque combat, les sorts que connaît un monstre sont tirés '
+               'au hasard parmi les 53 sorts de combat'),
+        "de": ('Monsterzauber in jedem Kampf neu',
+               'in jedem Kampf werden die Zauber eines Monsters zufällig aus '
+               'den 53 Kampfzaubern gewählt'),
+        "es": ('Hechizos de monstruos nuevos en cada combate',
+               'en cada combate, los hechizos de un monstruo se eligen al azar '
+               'entre los 53 hechizos de combate'),
+        "it": ('Magie dei mostri nuove a ogni battaglia',
+               'a ogni battaglia, le magie di un mostro vengono scelte a caso '
+               'tra le 53 magie di battaglia')},
+    "sorts_monstres_ajout": {
+        "en": ('monsters without spells get one too',
+               'one extra action among their six, not a spellcaster'),
+        "fr": ('les monstres sans sort en reçoivent un aussi',
+               'une action de plus parmi leurs six, pas un lanceur de sorts'),
+        "de": ('Monster ohne Zauber bekommen auch einen',
+               'eine Aktion mehr unter ihren sechs, kein Zauberer'),
+        "es": ('los monstruos sin hechizos también reciben uno',
+               'una acción más entre sus seis, no un lanzador de hechizos'),
+        "it": ('anche i mostri senza magie ne ricevono una',
+               "un'azione in più tra le loro sei, non un incantatore")},
+    "techniques_monstres": {
+        "en": ('Monster abilities drawn every battle',
+               "in every battle, a monster's abilities are picked at random "
+               "among those of monsters and heroes, with their real animation"),
+        "fr": ('Techniques des monstres tirées à chaque combat',
+               "à chaque combat, les techniques d'un monstre sont tirées au "
+               'hasard parmi celles des monstres et des héros, avec leur vraie '
+               'animation'),
+        "de": ('Monsterfähigkeiten in jedem Kampf neu',
+               'in jedem Kampf werden die Fähigkeiten eines Monsters zufällig '
+               'aus denen der Monster und Helden gewählt, mit ihrer echten '
+               'Animation'),
+        "es": ('Habilidades de monstruos nuevas en cada combate',
+               'en cada combate, las habilidades de un monstruo se eligen al '
+               'azar entre las de monstruos y héroes, con su animación real'),
+        "it": ('Abilità dei mostri nuove a ogni battaglia',
+               "a ogni battaglia, le abilità di un mostro vengono scelte a "
+               "caso tra quelle di mostri ed eroi, con la loro vera animazione")},
+    "techniques_monstres_ajout": {
+        "en": ('monsters without abilities get one too',
+               'one extra action among their six'),
+        "fr": ('les monstres sans technique en reçoivent une aussi',
+               'une action de plus parmi leurs six'),
+        "de": ('Monster ohne Fähigkeit bekommen auch eine',
+               'eine Aktion mehr unter ihren sechs'),
+        "es": ('los monstruos sin habilidades también reciben una',
+               'una acción más entre sus seis'),
+        "it": ("anche i mostri senza abilità ne ricevono una",
+               "un'azione in più tra le loro sei")},
     "boutiques": {
         "en": ('Shops',
                'what the 37 shops sell'),
@@ -316,19 +436,129 @@ T = {
         "it": ('qualsiasi oggetto in qualsiasi negozio',
                'un armaiolo può vendere erbe e un emporio armature')},
     "boss": {
-        "en": ('Story bosses',
-               'each boss fight is against another boss, picked at random'),
-        "fr": ("Boss de l'histoire",
-               'chaque combat de boss se fait contre un autre boss, tiré au '
-               'hasard'),
-        "de": ('Bosse der Geschichte',
-               'jeder Bosskampf findet gegen einen anderen, zufälligen Boss '
-               'statt'),
-        "es": ('Jefes de la historia',
-               'cada combate contra un jefe es contra otro jefe elegido al '
-               'azar'),
-        "it": ('Boss della storia',
-               'ogni scontro con un boss è contro un altro boss scelto a caso')},
+        "en": ('Boss fights',
+               'every boss fight (story, grottos, legacy bosses) is against '
+               'another boss, picked at random'),
+        "fr": ('Combats de boss',
+               'chaque combat de boss (histoire, grottes, légendes) se fait '
+               'contre un autre boss, tiré au hasard'),
+        "de": ('Bosskämpfe',
+               'jeder Bosskampf (Geschichte, Grotten, Legenden) findet gegen '
+               'einen anderen, zufälligen Boss statt'),
+        "es": ('Combates contra jefes',
+               'cada combate contra un jefe (historia, grutas, leyendas) es '
+               'contra otro jefe elegido al azar'),
+        "it": ('Scontri con i boss',
+               'ogni scontro con un boss (storia, grotte, leggende) è contro '
+               'un altro boss scelto a caso')},
+    "boss_familles_egales": {
+        "en": ('equal boss families',
+               'story, grotto and legacy bosses come out as often as each '
+               'other'),
+        "fr": ('familles de boss égales',
+               "les boss de l'histoire, des grottes et des légendes sortent "
+               'aussi souvent les uns que les autres'),
+        "de": ('gleiche Boss-Familien',
+               'Geschichts-, Grotten- und Legendenbosse erscheinen gleich oft'),
+        "es": ('familias de jefes iguales',
+               'los jefes de la historia, de las grutas y legendarios salen '
+               'con la misma frecuencia'),
+        "it": ('famiglie di boss alla pari',
+               'i boss della storia, delle grotte e leggendari escono con la '
+               'stessa frequenza')},
+    "boss_histoire": {
+        "en": ('story bosses only',
+               'only story bosses are shuffled; grotto and legacy fights stay '
+               'as they are'),
+        "fr": ("boss de l'histoire seulement",
+               "seuls les boss de l'histoire sont mélangés ; les combats des "
+               'grottes et des légendes ne changent pas'),
+        "de": ('nur Geschichtsbosse',
+               'nur die Bosse der Geschichte werden gemischt; Grotten- und '
+               'Legendenkämpfe bleiben gleich'),
+        "es": ('solo jefes de la historia',
+               'solo se mezclan los jefes de la historia; los combates de '
+               'grutas y legendarios no cambian'),
+        "it": ('solo boss della storia',
+               'si mescolano solo i boss della storia; gli scontri delle '
+               'grotte e leggendari restano uguali')},
+    "boss_mixte": {
+        "en": ('bosses or monsters',
+               'a boss fight can also be against an ordinary monster'),
+        "fr": ('boss ou monstres',
+               'un combat de boss peut aussi se faire contre un monstre '
+               'ordinaire'),
+        "de": ('Bosse oder Monster',
+               'ein Bosskampf kann auch gegen ein gewöhnliches Monster '
+               'stattfinden'),
+        "es": ('jefes o monstruos',
+               'un combate de jefe también puede ser contra un monstruo '
+               'normal'),
+        "it": ('boss o mostri',
+               'uno scontro con un boss può essere anche contro un mostro '
+               'comune')},
+    "boss_chaque_combat": {
+        "en": ('new boss every attempt',
+               'another boss is drawn each time you enter the fight, e.g. '
+               'after a defeat (random mode)'),
+        "fr": ('nouveau boss à chaque essai',
+               "un autre boss est tiré chaque fois qu'on entre dans le "
+               'combat, par exemple après une défaite (mode aléatoire)'),
+        "de": ('neuer Boss bei jedem Versuch',
+               'bei jedem Betreten des Kampfes, z. B. nach einer Niederlage, '
+               'wird ein anderer Boss gezogen (Zufallsmodus)'),
+        "es": ('jefe nuevo en cada intento',
+               'se sortea otro jefe cada vez que entras en el combate, por '
+               'ejemplo tras una derrota (modo aleatorio)'),
+        "it": ('nuovo boss a ogni tentativo',
+               'viene estratto un altro boss ogni volta che entri nello '
+               'scontro, per esempio dopo una sconfitta (modalità casuale)')},
+    "boss_terrain": {
+        "en": ('Bosses on the field (experimental)',
+               'some bosses can also wander the map like monsters (random '
+               'mode)'),
+        "fr": ('Boss sur le terrain (expérimental)',
+               'certains boss peuvent aussi se promener sur la carte comme '
+               'des monstres (mode aléatoire)'),
+        "de": ('Bosse im Gelände (experimentell)',
+               'einige Bosse können auch wie Monster über die Karte streifen '
+               '(Zufallsmodus)'),
+        "es": ('Jefes en el mapa (experimental)',
+               'algunos jefes también pueden deambular por el mapa como '
+               'monstruos (modo aleatorio)'),
+        "it": ('Boss sul campo (sperimentale)',
+               'alcuni boss possono anche girare sulla mappa come mostri '
+               '(modalità casuale)')},
+    "aptitudes_arme_origine": {
+        "en": ('techniques keep their weapon',
+               'a weapon technique moved to another tree still needs its '
+               'original weapon'),
+        "fr": ('les techniques gardent leur arme',
+               "une technique d'arme déplacée dans un autre arbre demande "
+               "toujours son arme d'origine"),
+        "de": ('Techniken behalten ihre Waffe',
+               'eine Waffentechnik in einem anderen Baum braucht weiterhin '
+               'ihre ursprüngliche Waffe'),
+        "es": ('las técnicas conservan su arma',
+               'una técnica de arma movida a otro árbol sigue necesitando su '
+               'arma original'),
+        "it": ("le tecniche mantengono l'arma",
+               "una tecnica d'arma spostata in un altro albero richiede ancora "
+               "la sua arma originale")},
+    # --- les onglets (ZER-64) --------------------------------------------
+    "onglet_monstres": {
+        "en": 'Monsters', "fr": 'Monstres', "de": 'Monster',
+        "es": 'Monstruos', "it": 'Mostri'},
+    "onglet_boss": {
+        "en": 'Bosses', "fr": 'Boss', "de": 'Bosse', "es": 'Jefes',
+        "it": 'Boss'},
+    "onglet_objets": {
+        "en": 'Items & shops', "fr": 'Objets et boutiques',
+        "de": 'Gegenstände & Läden', "es": 'Objetos y tiendas',
+        "it": 'Oggetti e negozi'},
+    "onglet_equipe": {
+        "en": 'Party', "fr": 'Équipe', "de": 'Gruppe', "es": 'Grupo',
+        "it": 'Squadra'},
     "garder_hexacorne": {
         "en": ('keep the first boss',
                'Hexagoon stays as he is: you fight him alone, without a party'),
@@ -588,13 +818,31 @@ T = {
 }
 
 # L'ordre des cases dans la fenetre : (cle, retrait).
-CASES = (("monstres", 0), ("objets", 0), ("sans_consommables", 1),
-         ("objets_chaos", 1), ("rouges_libres", 1), ("butin", 0),
-         ("butin_libre", 1), ("boutiques", 0), ("prix_libres", 1),
-         ("boutiques_chaos", 1), ("boss", 0), ("garder_hexacorne", 1),
-         ("sorts", 0), ("sorts_chaos", 1), ("aptitudes", 0),
-         ("aptitudes_chaos", 1), ("vocations", 0), ("vocations_embauche", 1),
-         ("vocation_depart", 1), ("vocations_bloquees", 1), ("stats", 0))
+# LES ONGLETS DE LA FENETRE (ZER-64) : (cle du titre, cases), chaque case
+# (cle, retrait). La cle d'une case est le nom de sa variable dans
+# l'interface. Les modes d'apparition (`APPARITIONS`) sont des boutons radio,
+# poses en tete de l'onglet des monstres, sous la case `monstres`.
+ONGLETS = (
+    ("onglet_monstres", (("monstres", 0), ("groupes", 1), ("stats", 0),
+                         ("sorts_monstres", 0), ("sorts_monstres_ajout", 1),
+                         ("techniques_monstres", 0),
+                         ("techniques_monstres_ajout", 1))),
+    ("onglet_boss", (("boss", 0), ("garder_hexacorne", 1),
+                     ("boss_familles_egales", 1), ("boss_histoire", 1),
+                     ("boss_mixte", 1), ("boss_chaque_combat", 1),
+                     ("boss_terrain", 0))),
+    ("onglet_objets", (("objets", 0), ("sans_consommables", 1),
+                       ("objets_chaos", 1), ("rouges_libres", 1),
+                       ("butin", 0), ("butin_libre", 1),
+                       ("boutiques", 0), ("prix_libres", 1),
+                       ("boutiques_chaos", 1))),
+    ("onglet_equipe", (("sorts", 0), ("sorts_chaos", 1), ("aptitudes", 0),
+                       ("aptitudes_chaos", 1), ("aptitudes_arme_origine", 1),
+                       ("vocations", 0), ("vocations_embauche", 1),
+                       ("vocation_depart", 1), ("vocations_bloquees", 1))),
+)
+CASES = tuple(c for _o, cases in ONGLETS for c in cases)
+APPARITIONS = ("aleatoire", "zone", "globale")
 
 
 def texte(cle, langue, *args):
@@ -648,6 +896,12 @@ def verifier():
     for cle, _r in CASES:
         if cle not in T or not isinstance(T[cle]["en"], tuple):
             defauts.append("case %s : pas de (libelle, detail)" % cle)
+    for mode in APPARITIONS:
+        if "app_" + mode not in T:
+            defauts.append("mode d'apparition %s : pas de texte" % mode)
+    for onglet, _c in ONGLETS:
+        if onglet not in T:
+            defauts.append("onglet %s : pas de titre" % onglet)
     return defauts
 
 

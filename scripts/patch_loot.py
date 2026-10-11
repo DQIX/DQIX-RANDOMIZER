@@ -44,6 +44,7 @@ une construction sans extension ne sont plus valides.
 """
 import collections
 import os
+import random
 import struct
 import sys
 
@@ -207,9 +208,25 @@ def _lot_zones(membres):
     return {k: v for k, v in membres.items() if k not in T.TABLES}
 
 
+# L'OR DES CONTENEURS (ZER-59, decision du joueur du 26/09) : chaque montant
+# d'or est retire, de 1 a 10 000 G dans les coffres (rouges, bleus, grottos),
+# de 1 a 1 000 G dans les pots, tonneaux et placards. Les CHANCES d'or ne
+# bougent pas, seulement les montants ; pas de case dans le lanceur, cela
+# fait partie de la randomisation des conteneurs. Vanilla : coffres bleus 18
+# a 1 000 G, grottos 125 a 3 000 G, pots 2 a 240 G, rouges 50 a 5 000 G.
+OR_COFFRES = (1, 10000)
+OR_POTS = (1, 1000)
+
+
+def tirer_or(rng, table=None):
+    """Un montant d'or pour une ligne de `table`, ou pour un coffre rouge."""
+    bas, haut = OR_POTS if table == T.TABLE_POTS else OR_COFFRES
+    return rng.randint(bas, haut)
+
+
 def patcher(rom, rng, langue="en", journal=None,
             tables=True, coffres_rouges=True, drops=True, etendre=True,
-            chaos=False, consommables=True, rang_rouges=True):
+            chaos=False, consommables=True, rang_rouges=True, montants_or=True):
     """Reecrit le loot dans la ROM chargee. Rend un dictionnaire de comptes.
 
     Trois temps : on RECENSE tous les emplacements (lignes de tables, coffres
@@ -267,8 +284,11 @@ def patcher(rom, rng, langue="en", journal=None,
     taille_avant = len(arc)
     membres = T.membres_narc(bytes(arc))
     comptes = dict(outcomes=0, coffres=0, coffres_gardes=0, or_intact=0,
-                   embuscades_intactes=0, drops=0,
+                   or_tire=0, embuscades_intactes=0, drops=0,
                    coffres_bleus_deplaces=0)
+    # UN HASARD A PART POUR L'OR, derive de l'etat sans le consommer : les
+    # objets, les boutiques et la suite tirent exactement comme sans lui.
+    rng_or = random.Random(str(rng.getstate())) if montants_or else None
     emplacements = []   # (cle, etoiles acceptees)
 
     # ---- recensement 1 et 2 : les deux tables -------------------------------
@@ -481,6 +501,11 @@ def patcher(rom, rng, langue="en", journal=None,
                 o["id"] = affecte[("t", table, k)]
                 comptes["outcomes"] += 1
                 etiq = nom(o["id"])
+            elif o["loot"] == T.TYPE_OR and rng_or:
+                avant = o["id"]
+                o["id"] = tirer_or(rng_or, table)
+                comptes["or_tire"] += 1
+                etiq = "%d or (vanilla %d)" % (o["id"], avant)
             elif o["loot"] == T.TYPE_OR:
                 comptes["or_intact"] += 1
                 etiq = "%d or" % o["id"]
@@ -510,6 +535,39 @@ def patcher(rom, rng, langue="en", journal=None,
                  (zone, c["unique"], nom(c["item"]), nom(neuf)))
         note()
 
+    # ---- ecriture : l'or des coffres rouges et des grottos -------------------
+    # Les grottos (randTD) ne sont touches QUE pour l'or : leurs objets et leurs
+    # embuscades restent vanilla. Un coffre rouge decrit par deux zones (meme
+    # uniqueID) garde un seul montant.
+    if rng_or:
+        note("-" * 78)
+        note("OR DES COFFRES ROUGES ET DES GROTTOS (ZER-59)")
+        note("-" * 78)
+        deb_td, _f = membres[T.TABLE_GROTTOS]
+        for off, o in T.outcomes(bytes(arc), deb_td):
+            if o["loot"] == T.TYPE_OR:
+                neuf = tirer_or(rng_or, T.TABLE_GROTTOS)
+                T.ecrire_u32(arc, off, T.encoder_outcome(
+                    o["pct"], neuf, T.TYPE_OR, o["rang"]))
+                comptes["or_tire"] += 1
+                note("  grotto rang %-2d %3d %%  %5d or (vanilla %d)"
+                     % (o["rang"], o["pct"], neuf, o["id"]))
+        if coffres_rouges:
+            montant = {}
+            for zone, (d0, _d1) in sorted(_lot_zones(membres).items()):
+                for c in T.conteneurs(bytes(arc), d0):
+                    if c["conteneur"] != 0 or c["loot"] != T.TYPE_OR:
+                        continue
+                    if c["unique"] not in montant:
+                        montant[c["unique"]] = tirer_or(rng_or)
+                        comptes["or_tire"] += 1
+                    T.ecrire_u32(arc, c["off_packed"], T.encoder_packed(
+                        c["unique"], montant[c["unique"]]))
+                    comptes["or_intact"] -= 1
+                    note("  %-12s %-6d %5d or (vanilla %d)"
+                         % (zone, c["unique"], montant[c["unique"]], c["item"]))
+        note()
+
     if len(arc) != taille_avant:
         raise AssertionError("treasure.nsarc a change de taille : %d -> %d"
                              % (taille_avant, len(arc)))
@@ -534,10 +592,11 @@ def patcher(rom, rng, langue="en", journal=None,
         note()
 
     note("bilan : %d outcomes de table reecrits, %d coffres rouges reecrits, "
-         "%d gardes, %d montants d'or intacts, %d embuscades intactes, "
-         "%d drops de monstres"
+         "%d gardes, %d montants d'or tires, %d intacts, %d embuscades "
+         "intactes, %d drops de monstres"
          % (comptes["outcomes"], comptes["coffres"], comptes["coffres_gardes"],
-            comptes["or_intact"], comptes["embuscades_intactes"],
+            comptes["or_tire"], comptes["or_intact"],
+            comptes["embuscades_intactes"],
             comptes["drops"]))
     note()
     return comptes
