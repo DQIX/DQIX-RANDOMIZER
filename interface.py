@@ -82,14 +82,33 @@ def langue_initiale():
     return L.langue_systeme()
 
 
-def memoriser_langue(code):
+def lire_reglage(cle):
+    try:
+        with open(_fichier_reglages(), encoding="utf-8") as f:
+            return json.load(f).get(cle)
+    except Exception:
+        return None
+
+
+def memoriser(cle, valeur):
+    """Un reglage de plus dans le fichier, les autres gardes."""
     try:
         chemin = _fichier_reglages()
+        try:
+            with open(chemin, encoding="utf-8") as f:
+                d = json.load(f)
+        except Exception:
+            d = {}
+        d[cle] = valeur
         os.makedirs(os.path.dirname(chemin), exist_ok=True)
         with open(chemin, "w", encoding="utf-8") as f:
-            json.dump({"langue": code}, f)
+            json.dump(d, f)
     except Exception:
         pass                    # un choix non memorise n'empeche rien
+
+
+def memoriser_langue(code):
+    memoriser("langue", code)
 
 
 def empreinte(chemin, progres=None):
@@ -137,6 +156,8 @@ MERES = {"groupes": "monstres", "app_aleatoire": "monstres",
          "app_zone": "monstres", "app_globale": "monstres",
          "sorts_monstres_ajout": "sorts_monstres",
          "techniques_monstres_ajout": "techniques_monstres",
+         # le kit fixe vaut pour les deux : mere = sorts OU techniques
+         "actions_fixes": "sorts_monstres",
          "garder_hexacorne": "boss", "boss_familles_egales": "boss",
          "boss_histoire": "boss", "boss_mixte": "boss",
          "boss_legacy_tous": "boss",
@@ -148,7 +169,10 @@ MERES = {"groupes": "monstres", "app_aleatoire": "monstres",
          "sorts_chaos": "sorts", "aptitudes_chaos": "aptitudes",
          "aptitudes_arme_origine": "aptitudes",
          "medailles_chaos": "medailles",
-         "medailles_seuils_vanilla": "medailles"}
+         "medailles_seuils_vanilla": "medailles",
+         "stats_chaos": "stats", "stats_combat": "stats",
+         "stats_boss_chaos": "stats_boss", "stats_boss_combat": "stats_boss",
+         "points_par_rang": "points"}
 
 
 class Application(object):
@@ -284,6 +308,9 @@ class Application(object):
             c.configure(state="normal" if aleatoire else "disabled")
         for cle, c in getattr(self, "_cases_filles", ()):
             actif = getattr(self, MERES[cle]).get()
+            if cle == "actions_fixes":
+                actif = (self.sorts_monstres.get()
+                         or self.techniques_monstres.get())
             if (cle in ("boss_familles_egales", "boss_legacy_tous",
                         "seuil_grottes", "seuil_legendes")
                     and self.boss_histoire.get()):
@@ -338,6 +365,13 @@ class Application(object):
         b = ttk.Button(barre, command=self.choisir_rom)
         b.pack(side="left")
         self._poser(b, "parcourir")
+        # MODIFIER UNE ROM D'UNE PARTIE EN COURS (joueur, 20/10/2026)
+        b = ttk.Button(barre, command=self.modifier_rom)
+        b.pack(side="right")
+        self._poser(b, "modifier_rom")
+        self.a_modifier = None
+        # une ROM randomisee glissee avant sa ROM d'origine (verifiee apres)
+        self._modif_attente = None
         self.etat_rom = ttk.Label(barre)
         self.etat_rom.pack(side="left", padx=10)
         self._poser(self.etat_rom, "rom_europe")
@@ -432,11 +466,20 @@ class Application(object):
         # ET LEURS TECHNIQUES (ZER-57), memes deux versions.
         self.techniques_monstres = tk.BooleanVar(value=False)
         self.techniques_monstres_ajout = tk.BooleanVar(value=False)
+        self.actions_fixes = tk.BooleanVar(value=False)
         self.sorts = tk.BooleanVar(value=False)
         self.sorts_chaos = tk.BooleanVar(value=False)
         self.aptitudes = tk.BooleanVar(value=False)
         self.aptitudes_chaos = tk.BooleanVar(value=False)
         self.stats = tk.BooleanVar(value=False)
+        self.stats_chaos = tk.BooleanVar(value=False)
+        self.stats_combat = tk.BooleanVar(value=False)
+        # LES BOSS A PART, dans l'onglet Boss (joueur, 20/10/2026)
+        self.stats_boss = tk.BooleanVar(value=False)
+        self.stats_boss_chaos = tk.BooleanVar(value=False)
+        self.stats_boss_combat = tk.BooleanVar(value=False)
+        self.points = tk.BooleanVar(value=False)
+        self.points_par_rang = tk.BooleanVar(value=False)
         # LA 1.6. Le mode d'apparition (ZER-73) est un choix exclusif, pas une
         # case : trois boutons sous « Monstres du terrain ». Les groupes
         # (ZER-67) sont un correctif, coches par defaut ; le reste est en
@@ -567,6 +610,7 @@ class Application(object):
             return
         self.rom = chemin
         self.rom_conforme = False
+        self.a_modifier = None
         self.bouton.configure(state="disabled")
         self._poser(self.zone, brut=os.path.basename(chemin), fg="#444")
         self._poser(self.etat_rom, "verification", foreground="")
@@ -586,6 +630,216 @@ class Application(object):
         self.bouton.configure(state="disabled")
         self._poser(self.zone, "zone_vide", fg="#444")
         self._poser(self.etat_rom, cle, *args, foreground="#b00")
+
+    # ------------------------------------------------- modifier une ROM
+
+    # Les cases que la ligne de commande coche d'un drapeau, une a une.
+    DRAPEAUX = {
+        "--objets-consommables": "equilibrer_conso",
+        "--coffres-rouges-libres": "rouges_libres",
+        "--boutiques-sans-progression": "prix_libres",
+        "--boutiques-chaos": "boutiques_chaos", "--boss": "boss",
+        "--boss-garder-premier": "garder_hexacorne",
+        "--boss-familles-egales": "boss_familles_egales",
+        "--boss-histoire": "boss_histoire",
+        "--boss-legacy-tous": "boss_legacy_tous",
+        "--boss-mixte": "boss_mixte",
+        "--boss-chaque-combat": "boss_chaque_combat",
+        "--boss-terrain": "boss_terrain", "--sorts": "sorts",
+        "--sorts-chaos": "sorts_chaos", "--aptitudes": "aptitudes",
+        "--aptitudes-chaos": "aptitudes_chaos",
+        "--aptitudes-arme-origine": "aptitudes_arme_origine",
+        "--points-brillants": "points",
+        "--points-brillants-par-rang": "points_par_rang",
+        "--alchimie": "alchimie", "--medailles": "medailles",
+        "--medailles-chaos": "medailles_chaos",
+        "--medailles-seuils-vanilla": "medailles_seuils_vanilla",
+        "--butin-combat": "butin", "--butin-combat-libre": "butin_libre",
+        "--sorts-monstres": "sorts_monstres",
+        "--sorts-monstres-ajout": "sorts_monstres_ajout",
+        "--techniques-monstres": "techniques_monstres",
+        "--techniques-monstres-ajout": "techniques_monstres_ajout",
+        "--actions-fixes": "actions_fixes", "--vocations": "vocations",
+        "--vocations-embauche": "vocations_embauche",
+        "--vocation-depart": "vocation_depart",
+        "--vocations-bloquees": "vocations_bloquees", "--stats": "stats",
+        "--stats-chaos": "stats_chaos", "--stats-combat": "stats_combat",
+        "--stats-boss": "stats_boss", "--stats-boss-chaos": "stats_boss_chaos",
+        "--stats-boss-combat": "stats_boss_combat",
+        "--patch": "patch"}
+    # celles que cochent leur ABSENCE
+    ABSENCES = {"--sans-objets": "objets", "--sans-boutiques": "boutiques",
+                "--sans-groupes": "groupes", "--objets-par-rang": "objets_chaos"}
+    # drapeaux a valeur
+    VALEURS = {"--seed": None, "--langue": None, "--apparitions": None,
+               "--boss-grottes-des": "seuil_grottes",
+               "--boss-legendes-des": "seuil_legendes"}
+
+    def appliquer_arguments(self, opts):
+        """Coche les cases d'une ligne de commande (celle qu'`arguments`
+        produit) ; rend les options qu'aucune case ne represente."""
+        self._applique = True
+        inconnus = []
+        for var in list(self.DRAPEAUX.values()):
+            getattr(self, var).set(False)
+        for var in self.ABSENCES.values():
+            getattr(self, var).set(True)
+        self.monstres.set(True)
+        self.apparitions.set("aleatoire")
+        for var in (self.seuil_grottes, self.seuil_legendes):
+            var.set("debut")
+        if all(x in opts for x in GREFFES_MONSTRES):
+            self.apparitions.set("aleatoire")
+        i = 0
+        while i < len(opts):
+            x = opts[i]
+            if x in self.VALEURS and i + 1 < len(opts):
+                v = opts[i + 1]
+                if x == "--seed":
+                    self.graine.set(v)
+                elif x == "--apparitions":
+                    if v == "vanilla":
+                        self.monstres.set(False)
+                    else:
+                        self.apparitions.set(v)
+                elif self.VALEURS[x]:
+                    getattr(self, self.VALEURS[x]).set(v)
+                i += 2
+                continue
+            if x in self.DRAPEAUX:
+                getattr(self, self.DRAPEAUX[x]).set(True)
+                mere = MERES.get(self.DRAPEAUX[x])
+                if mere and mere != "monstres" and x != "--actions-fixes":
+                    getattr(self, mere).set(True)
+            elif x in self.ABSENCES:
+                getattr(self, self.ABSENCES[x]).set(False)
+            elif x not in GREFFES_MONSTRES:
+                inconnus.append(x)
+            i += 1
+        if "--boss" not in opts:
+            self.garder_hexacorne.set(True)
+        for menu, variable in self._listes:
+            self._remplir_liste(menu, variable)
+        self.prereglage.set("custom")
+        self._etat_cases_blob()
+        self._applique = False
+        return inconnus
+
+    @staticmethod
+    def lire_options(chemin_rom):
+        """Les options du journal d'une ROM randomisee, ou None."""
+        journal = os.path.splitext(chemin_rom)[0] + "_journal.txt"
+        try:
+            with open(journal, encoding="utf-8") as f:
+                for ligne in f:
+                    if ligne.startswith("options : "):
+                        import json
+                        return json.loads(ligne[len("options : "):])
+                    if not ligne.strip():
+                        break
+        except (OSError, ValueError):
+            pass
+        return None
+
+    @staticmethod
+    def lire_graine(chemin_rom):
+        """La graine d'un journal, meme d'une version qui n'enregistrait pas
+        les options (premiere ligne : « ... seed=N ... »)."""
+        import re
+        journal = os.path.splitext(chemin_rom)[0] + "_journal.txt"
+        try:
+            with open(journal, encoding="utf-8") as f:
+                m = re.search(r"\bseed=(\d+)", f.readline())
+        except OSError:
+            return None
+        return m.group(1) if m else None
+
+    @staticmethod
+    def lire_source(chemin_rom):
+        """La ROM d'origine que le journal d'une ROM randomisee nomme."""
+        journal = os.path.splitext(chemin_rom)[0] + "_journal.txt"
+        try:
+            with open(journal, encoding="utf-8") as f:
+                for ligne in f:
+                    if ligne.startswith("ROM source : "):
+                        return ligne[len("ROM source : "):].strip()
+                    if not ligne.strip():
+                        break
+        except OSError:
+            pass
+        return None
+
+    @staticmethod
+    def _ancienne(chemin):
+        return os.path.splitext(chemin)[0] + "_avant_modif.nds"
+
+    def modifier_rom(self, c=None):
+        """Reprendre une ROM randomisee : ses cases, sa graine, et la
+        reconstruire SOUS LE MEME NOM, pour que la sauvegarde (rangee par
+        nom de ROM dans melonDS, DeSmuME, BizHawk) continue. `c` : la ROM
+        glissee dans la fenetre (sinon, on la demande)."""
+        if self.en_cours:
+            return
+        if not self.rom_conforme:
+            messagebox.showinfo(TITRE, self._t("modifier_vanilla_dabord"))
+            return
+        if c is None:
+            c = filedialog.askopenfilename(
+                title=self._t("modifier_titre"),
+                filetypes=[(self._t("type_rom"), "*.nds"),
+                           (self._t("type_tout"), "*.*")])
+        if not c:
+            return
+        opts = self.lire_options(c)
+        if opts is None:
+            # UN JOURNAL D'UNE VERSION PLUS ANCIENNE : la graine seulement,
+            # les cases restent celles de la fenetre (joueur, 20/10/2026)
+            graine = self.lire_graine(c)
+            if graine is None:
+                messagebox.showerror(TITRE, self._t(
+                    "modifier_sans_journal",
+                    os.path.basename(os.path.splitext(c)[0] + "_journal.txt")))
+                return
+            if self.personnalise():
+                self.notebook.select(0)
+            self.graine.set(graine)
+            self.a_modifier = os.path.abspath(c)
+            texte = self._t("modifier_ancienne", graine)
+            self._ecrire("")
+            self._ecrire(texte)
+            messagebox.showinfo(TITRE, texte)
+            return
+        if "--config" in opts:
+            messagebox.showinfo(TITRE, self._t(
+                "modifier_config", os.path.basename(self._chemin_config(c))))
+            return
+        inconnus = self.appliquer_arguments(opts)
+        if self.personnalise():
+            self.notebook.select(0)
+        self.a_modifier = os.path.abspath(c)
+        texte = self._t("modifier_pret", os.path.basename(c),
+                        os.path.basename(self._ancienne(c)))
+        self._ecrire("")
+        self._ecrire(texte)
+        if inconnus:
+            self._ecrire(self._t("modifier_inconnus", " ".join(inconnus)))
+        messagebox.showinfo(TITRE, texte)
+
+    def _remplacer(self, neuve):
+        """La ROM construite prend la place de celle qu'on modifie ; son
+        journal et son patch aussi. L'ancienne ROM est gardee a cote."""
+        cible = self.a_modifier
+        self.a_modifier = None
+        ancienne = self._ancienne(cible)
+        if os.path.exists(ancienne):
+            os.remove(ancienne)
+        os.replace(cible, ancienne)
+        os.replace(neuve, cible)
+        b_n, b_c = os.path.splitext(neuve)[0], os.path.splitext(cible)[0]
+        for suffixe in ("_journal.txt", ".xdelta"):
+            if os.path.exists(b_n + suffixe):
+                os.replace(b_n + suffixe, b_c + suffixe)
+        return cible, ancienne
 
     # ---------------------------------------------------------- construire
 
@@ -621,11 +875,11 @@ class Application(object):
         # LE BUTIN A CHAQUE COMBAT DANS LES DEUX ; le chaos leve la rarete.
         self.butin.set(True)
         self.butin_libre.set(chaos)
-        # LES SORTS ET TECHNIQUES DES MONSTRES : EXPERIMENTAUX, hors des
-        # prereglages (decision du joueur, 11/10/2026), comme les boss sur le
-        # terrain ; cases au choix du joueur.
+        # LES SORTS ET TECHNIQUES DES MONSTRES : hors des prereglages
+        # (decision du joueur, 11/10/2026) ; cases au choix du joueur.
         for var in (self.sorts_monstres, self.sorts_monstres_ajout,
                     self.techniques_monstres, self.techniques_monstres_ajout,
+                    self.actions_fixes,
                     self.medailles_seuils_vanilla):
             var.set(False)
         # LE CAPITAINE DANS LES DEUX ; le chaos leve la bande d'etoiles
@@ -635,7 +889,15 @@ class Application(object):
         # L'ALCHIMIE DANS LES DEUX (ZER-53, joueur, 14/10/2026).
         self.alchimie.set(True)
         self.garder_hexacorne.set(True)
-        self.stats.set(False)
+        # LES STATS DES MONSTRES : hors des prereglages (ZER-58), au choix.
+        for var in (self.stats, self.stats_chaos, self.stats_combat,
+                    self.stats_boss, self.stats_boss_chaos,
+                    self.stats_boss_combat):
+            var.set(False)
+        # LES POINTS BRILLANTS (ZER-97) DANS LES DEUX (joueur, 20/10/2026) ;
+        # « proches de l'origine » reste au choix.
+        self.points.set(True)
+        self.points_par_rang.set(False)
         # LA 1.6 : le mode aleatoire et ses groupes dans les deux ; les
         # options neuves restent au choix du joueur.
         self.apparitions.set("aleatoire")
@@ -747,6 +1009,10 @@ class Application(object):
                 args.append("--aptitudes-chaos")
             if self.aptitudes_arme_origine.get():
                 args.append("--aptitudes-arme-origine")
+        if self.points.get():
+            args.append("--points-brillants")
+            if self.points_par_rang.get():
+                args.append("--points-brillants-par-rang")
         if self.alchimie.get():
             args.append("--alchimie")
         if self.medailles.get():
@@ -767,6 +1033,9 @@ class Application(object):
             args.append("--techniques-monstres")
             if self.techniques_monstres_ajout.get():
                 args.append("--techniques-monstres-ajout")
+        if self.actions_fixes.get() and (self.sorts_monstres.get()
+                                         or self.techniques_monstres.get()):
+            args.append("--actions-fixes")
         if self.vocations.get():
             args.append("--vocations")
         if self.vocations_embauche.get():
@@ -777,6 +1046,16 @@ class Application(object):
             args.append("--vocations-bloquees")
         if self.stats.get():
             args.append("--stats")
+            if self.stats_chaos.get():
+                args.append("--stats-chaos")
+            if self.stats_combat.get():
+                args.append("--stats-combat")
+        if self.stats_boss.get():
+            args.append("--stats-boss")
+            if self.stats_boss_chaos.get():
+                args.append("--stats-boss-chaos")
+            if self.stats_boss_combat.get():
+                args.append("--stats-boss-combat")
         if self.patch.get():
             args.append("--patch")
         # LA LANGUE DU JOURNAL suit celle de la fenetre (noms de monstres et
@@ -797,6 +1076,8 @@ class Application(object):
         if not (self.monstres.get() or self.objets.get() or self.boutiques.get()
                 or self.boss.get() or self.sorts.get()
                 or self.aptitudes.get() or self.stats.get()
+                or self.stats_boss.get()
+                or self.points.get()
                 or self.vocations.get() or self.vocations_embauche.get()
                 or self.vocations_bloquees.get() or self.vocation_depart.get()
                 or self.butin.get() or self.sorts_monstres.get()
@@ -807,7 +1088,14 @@ class Application(object):
             messagebox.showerror(TITRE, self._t("rien_coche"))
             return
         args, sortie = self.arguments()
-        if os.path.exists(sortie) and not messagebox.askyesno(
+        if self.a_modifier and not self.personnalise():
+            # construite a cote, sous un nom provisoire, puis echangee
+            # (`_remplacer`) : un echec laisse la ROM de la partie intacte
+            sortie = os.path.splitext(self.a_modifier)[0] + "_nouvelle.nds"
+            args[args.index("-o") + 1] = sortie
+            if os.path.exists(sortie):
+                os.remove(sortie)
+        elif os.path.exists(sortie) and not messagebox.askyesno(
                 TITRE, self._t("existe_deja", os.path.basename(sortie))):
             return
         if "--config" in args:
@@ -893,7 +1181,26 @@ class Application(object):
         if erreur:
             self._refuser(chemin, "lecture_impossible", erreur)
             return
+        if md5 != MD5_ATTENDU and (self.lire_options(chemin) is not None
+                                   or self.lire_graine(chemin) is not None):
+            # UNE ROM RANDOMISEE GLISSEE (joueur, 20/10/2026) : on reprend
+            # sa ROM d'origine (nommee par son journal), puis on la modifie
+            # la ROM d'origine : celle du journal, a defaut la derniere
+            # deposee (retenue dans les reglages)
+            self._modif_attente = chemin
+            for src in (self.lire_source(chemin), lire_reglage("vanilla")):
+                if (src and os.path.isfile(src)
+                        and os.path.abspath(src) != os.path.abspath(chemin)):
+                    self.adopter(src)
+                    return
+            self.rom, self.rom_conforme = None, False
+            self.bouton.configure(state="disabled")
+            self._poser(self.zone, "zone_vide", fg="#444")
+            self._poser(self.etat_rom, brut="")
+            messagebox.showinfo(TITRE, self._t("modifier_glisse"))
+            return
         if md5 != MD5_ATTENDU:
+            self._modif_attente = None
             self.rom_conforme = False
             self.bouton.configure(state="disabled")
             self._poser(self.zone, brut=os.path.basename(chemin), fg="#b00")
@@ -902,6 +1209,7 @@ class Application(object):
             self._ecrire(self._t("rom_pas_europe"))
             self._ecrire(self._t("md5_lu", md5))
             self._ecrire(self._t("md5_attendu", MD5_ATTENDU))
+            self._ecrire(self._t("modifier_indice"))
             return
         self.rom_conforme = True
         # LA ROM DU JOUEUR EST LA VANILLA de reference : les modules qui
@@ -909,12 +1217,18 @@ class Application(object):
         # ainsi dans l'exe, qui n'a pas de banc/roms (20/10 : onglet « Creer
         # sa ROM » vide, monstres et actions la relisent)
         os.environ["DQ9_VANILLA"] = os.path.abspath(chemin)
+        # RETENUE pour « Modifier ma ROM » : glisser une ROM randomisee
+        # suffit ensuite, meme si son journal ne retrouve plus l'origine
+        memoriser("vanilla", os.path.abspath(chemin))
         self.bouton.configure(state="normal")
         self._poser(self.zone, brut=os.path.basename(chemin), fg="#070")
         self._poser(self.etat_rom, "rom_ok", foreground="#070")
         self._poser(self.dossier, "dossier",
                     os.path.dirname(os.path.abspath(chemin)))
         self.creer.rom_prete()
+        if self._modif_attente:
+            c, self._modif_attente = self._modif_attente, None
+            self.modifier_rom(c)
 
     def _xdelta_trouve(self, chemin):
         if chemin:
@@ -945,6 +1259,19 @@ class Application(object):
 
     def _termine(self, sortie):
         self._fin_de_travail()
+        if self.a_modifier and sortie.endswith("_nouvelle.nds"):
+            try:
+                cible, ancienne = self._remplacer(sortie)
+            except OSError as e:
+                self._echoue(str(e))
+                return
+            self._ecrire("")
+            self._ecrire(self._t("modifier_fini", cible,
+                                 os.path.basename(ancienne)))
+            messagebox.showinfo(TITRE, self._t(
+                "modifier_fini", os.path.basename(cible),
+                os.path.basename(ancienne)))
+            return
         self._ecrire("")
         self._ecrire(self._t("fini", sortie))
         if messagebox.askyesno(TITRE, self._t("prete", sortie)):

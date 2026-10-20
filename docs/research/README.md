@@ -39,6 +39,7 @@ way it does.
 | [19-alchemy.md](19-alchemy.md) | §102 | Alchemy: `recipe.gp2` decoded (470 recipes, product, three ingredients and quantities), the 22 great-success pairs, where recipe books live and what text will lie once ingredients move |
 | [20-mini-medals.md](20-mini-medals.md) | §103 | Cap'n Max Meddlin': his milestone and shop tables in overlay 4, the save counters, how few mini medals the randomized loot leaves, and the medal randomizer |
 | [21-boss-field-models.md](21-boss-field-models.md) | §104 | Battle and field model files (`<code>.mon`, `<code>_f.mon`) in `enemy.gp2`; which of the 54 boss models have a field file, which can borrow one from a colour variant, which have none |
+| [22-sparkly-spots-and-stats.md](22-sparkly-spots-and-stats.md) | §105-107 | Sparkly spots: `flditem.pac` (one item per group of points, 87 groups) and `izmitm.bin` (zones 98/99, 8 tables of 16 items, one per save); monster stats written to both monster files, resistance values; fixed monster kits with real ability animations in the models' `.bact`, rewriting `enemy.gp2` (raw index) |
 
 ## Where to start
 
@@ -49,6 +50,7 @@ way it does.
 - **Vocations and per-battle drops (1.5)**: §89–§90.
 - **Alchemy recipes**: §102.
 - **Mini medals and Cap'n Max Meddlin'**: §103.
+- **Sparkly spots, monster stats**: §105–§106.
 - **Why a savestate stops being valid**: §38, §40, §61 and §82.
 - **Before writing any ARM9 patch**: §27 (`CompressedStaticEnd`), §38/§40/§61
   (savestates and file layout), §69 and §72 (code space), §74.1 (validate probes first).

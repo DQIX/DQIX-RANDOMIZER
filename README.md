@@ -45,9 +45,17 @@ option is a checkbox; the two presets tick a sensible set for you.
 
   The two 1-to-1 modes change only the game's data, not its code.
 * Monsters come in **groups**, as in the original game.
-* **Monster spells and abilities** (experimental): in every battle, monsters
-  draw new spells and abilities, abilities shown with their real animation.
-* **Monster stats** (experimental).
+* **Monster spells and abilities**: in every battle, monsters draw new
+  spells and abilities, abilities shown with their real animation; or a
+  **fixed kit for each monster**, drawn once (every slime has the same
+  spells and abilities for the whole game), abilities also with their real
+  animation.
+* **Monster stats**: HP, MP, attack, defence, agility and resistances (7
+  elements, 14 ailments), drawn between ×0.5 and ×2 of the
+  original (resistances one step up or down), or over the whole range
+  (*chaos*), at build time or **again in every battle**. The tutorial fight
+  of the prologue is never touched. Bosses have the same option, set apart
+  in the Bosses tab.
 
 **Bosses**
 * **Story bosses**: every scripted boss fight is against another boss. Options:
@@ -68,6 +76,11 @@ option is a checkbox; the two presets tick a sensible set for you.
   any container; untick *rare items everywhere* to make rarity follow the
   container's rank, and tick *balance equipment and consumables* for about a
   third of herbs, potions and seeds.
+* **Sparkly spots** give any regular item (never equipment, never a quest
+  item): each map has its own pool of up to 127 items, 16 of them are drawn
+  each time you enter the map and one at each pickup, and all 143 items can
+  be found somewhere. Options: a fixed item per spot, or items close to the
+  original rank.
 * **New drops every battle**: what a monster drops is drawn again each time.
   The bestiary shows the drops of your ROM.
 * **Shops** sell a new stock, fixed for the whole run. The flowing dress, the
@@ -91,8 +104,10 @@ option is a checkbox; the two presets tick a sensible set for you.
 * Decide every case yourself: each boss fight, each shop's stock, chests,
   pots and grottos, alchemy, Cap'n Max Meddlin', skill trees, vocation
   spells, vocations, field monsters per area or for the whole game, battle
-  drops, and each monster's six actions (fixed, or a spell or ability drawn
-  at every battle, from a pool you choose).
+  drops, each monster's six actions (fixed, or a spell or ability drawn
+  at every battle, from a pool you choose), each monster's stats and
+  resistances (fixed, or drawn between bounds you set), and each map's
+  sparkly spot items. A search field finds a line in the long lists.
 * Start from the original game, from your options or from a file; re-roll
   one category; a case you change by hand stays pinned. Save it all in a
   file to share: the same file always gives the same ROM.
@@ -117,9 +132,27 @@ How it works, for players: [monsters](docs/guide/MONSTERS.md) -
 | Bosses | untouched | every boss fight against another boss |
 | Alchemy | new ingredients for every recipe, same quantities | same |
 | Cap'n Max Meddlin' | rewards within one star of the original, a quarter of the medals | any item, a quarter of the medals |
+| Sparkly spots | any regular item, 16 drawn per map at every visit | same |
 
 "Balanced" is still a randomizer, and it is still hard: the game's difficulty
 is not rebalanced.
+
+## Changing a ROM during a game
+
+Your in-game save is a separate file: it keeps working on a new ROM. Drop
+the ROM of your game on the window (or click **Change a randomized
+ROM...**): the window ticks its seed and options again, read from the log
+next to it, and takes back your original ROM from the same log (if it moved,
+the window asks you to drop it). Change what you
+want and click **Randomize**: the ROM is rebuilt from your original ROM and
+replaces the old one **under the same name** (the old one is kept as
+`..._avant_modif.nds`), so your emulator finds your save as usual. What is
+already done in your game stays done (opened chests, beaten bosses, items in
+your bag). Emulator savestates do not carry over: use the in-game save.
+
+Each of the newer options only changes its own data (measured): adding
+sparkly spots, monster stats or fixed monster kits leaves the rest of the
+ROM untouched.
 
 ## What never changes
 
@@ -140,7 +173,7 @@ is not rebalanced.
 
 ## Known issues
 
-* Tested from a fresh game start only, and on emulators only.
+* Tested on emulators only.
 * In *random at every spawn* mode, when the model memory is full, a new monster
   waits until another one leaves before it appears.
 * An emulator savestate only works with the exact ROM it was made on.

@@ -105,6 +105,7 @@ ACTDEF = "data/bin/actdef.nsarc"
 ENTETE, MOD_TAILLE, BTL_TAILLE = 4, 64, 132
 MOD_ACTIONS, MOD_IA = 0x32, 0x0C
 BTL_ACTIONS = 0x18
+MOD_PM, BTL_PM = 0x04, 0x5E          # PM (patch_stats.OFF_MOD / OFF_BTL)
 # LES MASQUES VIVENT DANS mon_btldata, +0x82 (sorts) et +0x83 (techniques) :
 # deux octets a zero dans les 438 fiches (bourrage de fin). La copie de combat
 # (0x84 o) existe pour TOUTES les especes presentes, alors que la fiche
@@ -539,11 +540,20 @@ def _op01(ids):
 
 
 LISTE_MAX = 40                  # 40 par liste : mesure ; 50 fait geler
+# avec le tas agrandi de 16 Ko (~15 o par commande) : ~1 000 commandes de
+# plus que les ~660 d'origine ; marge gardee (patch_animations.BUDGET = 900)
+COMMANDES_FIXE_MAX = 596 + 900
 LISTES_COUP, LISTES_AURA = 4, 2  # 650 commandes en tout (662 passent)
 COMMANDES_MAX = 662             # mesure : 662 passent, 740 font geler
 
 
-def allonger_default(d, ajouts):
+# LE HANDLER op01 (0x02169BF0) COPIE LES IDS D'UNE LISTE SUR 0x40 OCTETS DE
+# PILE : 32 au plus (research §94.7, mesure apres celle des 40 ci-dessus) ;
+# au-dela, il ecrase des registres sauves. Le kit fixe s'y tient.
+LISTE_PILE = 32
+
+
+def allonger_default(d, ajouts, liste_max=LISTE_MAX):
     """Rattache des actions aux cas generiques de default.bact :
     {cas: [actions]}. La liste `op01 [cas]` d'origine est allongee jusqu'a
     LISTE_MAX actions ; au-dela, le cas est DUPLIQUE a la fin du fichier
@@ -551,8 +561,8 @@ def allonger_default(d, ajouts):
     une liste de 50 fait geler le combat, deux de 40 passent ; ~660
     commandes passent, 740 font geler."""
     ajouts = {c: [a for a in l if a != c] for c, l in ajouts.items()}
-    tete = {c: l[:LISTE_MAX - 1] for c, l in ajouts.items()}
-    reste = {c: l[LISTE_MAX - 1:] for c, l in ajouts.items()}
+    tete = {c: l[:liste_max - 1] for c, l in ajouts.items()}
+    reste = {c: l[liste_max - 1:] for c, l in ajouts.items()}
     d = _allonger(d, tete)
     h, cmds = _bact_lire(d)
     fin = cmds[-1][0] + cmds[-1][3]
@@ -566,8 +576,8 @@ def allonger_default(d, ajouts):
         while cmds[m][1] != 2:
             m += 1
         corps = b"".join(d[p:p + t] for p, _o, _a, t in cmds[k + 1:m + 1])
-        for g in range(0, len(l), LISTE_MAX):
-            out += _op01(l[g:g + LISTE_MAX]) + corps
+        for g in range(0, len(l), liste_max):
+            out += _op01(l[g:g + liste_max]) + corps
             ncmd += 1 + (m - k)
     out += d[fin:h[1]]
     pool = len(out)
@@ -720,6 +730,13 @@ def poser_code(rom, pool_sorts, cas, animations=True, bavard=True,
         raise ValueError("pool des sorts : %s" % sorted(pool_sorts))
     if any(a < BORNE_SORTS or a >= BORNE_TECH for a in techs + list(techs_table)):
         raise ValueError("pool des techniques hors de [0x3F, 0x3F0[")
+    # LA GREFFE DES STATS A CHAQUE COMBAT (patch_stats, ZER-96) se chaine
+    # sur le site 0x02165A30 : on la retire le temps de poser, puis on la
+    # repose, qui rend alors la main a notre greffe.
+    import patch_stats
+    stats_combat = patch_stats.combat_pose(rom)
+    if stats_combat:
+        patch_stats.retirer_combat(rom)
     ovl = rom.loadArm9Overlays()
     o = ovl[OVL]
     d = bytearray(o.data)
@@ -734,6 +751,8 @@ def poser_code(rom, pool_sorts, cas, animations=True, bavard=True,
     o.data = bytes(d)
     rom.files[o.fileID] = o.save(compress=True)
     rom.arm9OverlayTable = ndspy.code.saveOverlayTable(ovl)
+    if stats_combat:
+        patch_stats.poser_combat(rom)
     bilan = {}
     if techs and animations:
         # LES VRAIES ANIMATIONS (patch_animations) : le combat lit une
@@ -806,6 +825,248 @@ def patcher(rom, sorts=None, techniques_mode=None, seed=0, bavard=True,
     return bilan
 
 
+def fixer(rom, sorts=None, techniques_mode=None, seed=0, bavard=True):
+    """UN KIT FIXE PAR MONSTRE (joueur, 20/10/2026) : les memes emplacements
+    que `patcher` (`remplacer` / `ajouter`), mais tires UNE FOIS, a la
+    construction -- tous les gluants ont le meme kit toute la partie.
+    Aucune greffe : les actions sont ecrites dans mon_moddata et
+    mon_btldata, masques a zero. Les techniques tirees sont rattachees aux
+    cas generiques de default.bact (texte, animation generique, degats),
+    le filet ; patch_kits_animes leur donne ensuite leur VRAIE animation
+    dans le .bact du modele (prioritaire). Les sorts ont leur mise en
+    scene generique. PM = max(origine, FACTEUR_PM x cout le plus cher),
+    plafond 255, comme la greffe. Rend le bilan."""
+    import ndspy.narc
+    if sorts is None and techniques_mode is None:
+        raise ValueError("ni sorts ni techniques")
+    for m in (sorts, techniques_mode):
+        if m is not None and m not in ("remplacer", "ajouter"):
+            raise ValueError(m)
+    fm, fb = _fid(rom, MOD), _fid(rom, BTL)
+    mod, btl = bytearray(rom.files[fm]), bytearray(rom.files[fb])
+    cas = techniques(rom, bytes(mod))
+    pool = sorted(a for l in cas.values() for a in l)
+    rng = random.Random("actions-fixes-%s" % seed)
+    bilan = marquer(mod, btl, sorts, techniques_mode, pool, rng)
+    fiches = actions_rom(rom)
+    liste_sorts = globals()["sorts"]()
+    places = set()
+    pool_set = set(pool)
+    # TOUS LES GLUANTS : 25 noms du bestiaire ont plusieurs fiches (gluant :
+    # 1, 266, 267, 291). Un tirage par NOM, sur la premiere fiche qui a des
+    # emplacements a tirer ; ses six actions vont aux autres fiches du nom.
+    elig = eligibles(mod)
+    rep_de = groupes_par_nom(mod, elig, btl)
+    kits = {}
+    # les references d'abord : leurs copies viennent apres
+    for i in sorted(elig, key=lambda i: (rep_de.get(i, i) != i, i)):
+        om = ENTETE + i * MOD_TAILLE
+        ob = ENTETE + i * BTL_TAILLE
+        acts = list(struct.unpack_from("<6H", mod, om + MOD_ACTIONS))
+        r = rep_de.get(i, i)
+        if r != i and r in kits:
+            # la copie : une action que ni le jeu (fiche d'origine) ni
+            # default.bact ne sait mettre en scene garde celle d'origine
+            src, pris = kits[r]
+            for k, a in enumerate(src):
+                if (a in acts or a < BORNE_SORTS or a in pool_set
+                        or est_sort(a)):
+                    acts[k] = a
+            pris = set(pris) & set(acts)
+        else:
+            pris = set()
+            for masque, choix in ((btl[ob + BTL_MASQUE], liste_sorts),
+                                  (btl[ob + BTL_MASQUE_T], pool)):
+                for k in range(6):
+                    if not masque >> k & 1:
+                        continue
+                    # pas deux fois la meme action dans un kit, si possible
+                    libres = [a for a in choix if a not in pris] or choix
+                    acts[k] = rng.choice(libres)
+                    pris.add(acts[k])
+            kits[i] = (list(acts), set(pris))
+        btl[ob + BTL_MASQUE] = btl[ob + BTL_MASQUE_T] = 0
+        struct.pack_into("<6H", mod, om + MOD_ACTIONS, *acts)
+        struct.pack_into("<6H", btl, ob + BTL_ACTIONS, *acts)
+        places.update(a for a in pris if a >= BORNE_SORTS)
+        cmax = max([fiches[a][10] for a in pris
+                    if a in fiches and fiches[a][10] != 255] or [0])
+        pm0 = struct.unpack_from("<H", mod, om + MOD_PM)[0]
+        pm = max(pm0, min(255, FACTEUR_PM * cmax))
+        struct.pack_into("<H", mod, om + MOD_PM, pm)
+        struct.pack_into("<H", btl, ob + BTL_PM, pm)
+    rom.files[fm], rom.files[fb] = bytes(mod), bytes(btl)
+    ajouts = {c: [a for a in l if a in places] for c, l in cas.items()}
+    ajouts = {c: l for c, l in ajouts.items() if l}
+    if ajouts:
+        # ECRAN NOIR A CHAQUE COMBAT (joueur, v17z5, 20/10/2026) avec des
+        # listes de 40 et le tas d'origine : listes de LISTE_PILE, et le tas
+        # du combat agrandi comme pour les vraies animations (+16 Ko, valide
+        # en jeu, patch_animations)
+        fa = rom.filenames.idOf(ACTDEF)
+        narc = ndspy.narc.NARC(rom.files[fa])
+        narc.files[0] = allonger_default(bytes(narc.files[0]), ajouts,
+                                         liste_max=LISTE_PILE)
+        bilan["commandes"] = struct.unpack_from("<I", narc.files[0], 0)[0]
+        if bilan["commandes"] > COMMANDES_FIXE_MAX:
+            raise SystemExit("default.bact : %d commandes, au-dela de %d "
+                             "avec le tas agrandi" % (bilan["commandes"],
+                                                      COMMANDES_FIXE_MAX))
+        rom.files[fa] = narc.save()
+        agrandir_tas(rom)
+    bilan["pool"] = len(pool)
+    bilan["techniques_placees"] = len(places)
+    if bavard:
+        if sorts:
+            print("  sorts [%s] : un kit fixe par monstre parmi %d ; %d "
+                  "especes a sorts%s" % (sorts, len(globals()["sorts"]()),
+                                         bilan["a_sorts"],
+                                         ", %d en recoivent un"
+                                         % bilan["sorts_ajoutes"]
+                                         if sorts == "ajouter" else ""))
+        if techniques_mode:
+            print("  techniques [%s] : un kit fixe par monstre parmi %d (%d "
+                  "differentes placees) ; %d especes a techniques%s"
+                  % (techniques_mode, len(pool), len(places),
+                     bilan["a_techniques"],
+                     ", %d en recoivent une" % bilan["techniques_ajoutees"]
+                     if techniques_mode == "ajouter" else ""))
+            if ajouts:
+                print("  default.bact : %d commandes" % bilan["commandes"])
+        print("  PM : max(origine, %d x cout de l'action la plus chere), "
+              "plafond 255 ; boss et prologue exclus" % FACTEUR_PM)
+    return bilan
+
+
+def agrandir_tas(rom):
+    """Le tas de trame du combat (litteral de l'overlay 17) + 16 Ko, comme
+    patch_animations (valide en jeu). Idempotent."""
+    import ndspy.code
+    import patch_animations as A
+    ovl = rom.loadArm9Overlays()
+    o17 = ovl[17]
+    d17 = bytearray(o17.data)
+    i = A.LITTERAL_TAS - o17.ramAddress
+    v = struct.unpack_from("<I", d17, i)[0]
+    if v == A.TAS_ORIGINE + A.TAS_PLUS:
+        return
+    if v != A.TAS_ORIGINE:
+        raise SystemExit("overlay 17 : taille du tas inattendue")
+    struct.pack_into("<I", d17, i, A.TAS_ORIGINE + A.TAS_PLUS)
+    o17.data = bytes(d17)
+    rom.files[o17.fileID] = o17.save(compress=True)
+    rom.arm9OverlayTable = ndspy.code.saveOverlayTable(ovl)
+
+
+def tas_agrandi(rom):
+    import patch_animations as A
+    o17 = rom.loadArm9Overlays()[17]
+    return struct.unpack_from("<I", o17.data, A.LITTERAL_TAS
+                              - o17.ramAddress)[0] == A.TAS_ORIGINE + A.TAS_PLUS
+
+
+def groupes_par_nom(mod, elig, btl=None):
+    """{fiche: fiche de reference} des fiches eligibles qui partagent un nom
+    (anglais) : la reference est la premiere qui a un emplacement a tirer
+    (masques de `btl`), a defaut la premiere."""
+    import monnames
+    from rom_vanilla import chemin_vanilla
+    lignes = monnames.charger(chemin_vanilla(), "en")
+    par_nom = {}
+    for i in elig:
+        l = lignes[i] if i < len(lignes) else None
+        nom = l.get("nom") if isinstance(l, dict) else None
+        if nom:
+            par_nom.setdefault(nom, []).append(i)
+    out = {}
+    for fiches in par_nom.values():
+        if len(fiches) < 2:
+            continue
+        r = fiches[0]
+        if btl is not None:
+            r = next((i for i in fiches
+                      if btl[ENTETE + i * BTL_TAILLE + BTL_MASQUE]
+                      or btl[ENTETE + i * BTL_TAILLE + BTL_MASQUE_T]), r)
+        for i in fiches:
+            out[i] = r
+    return out
+
+
+def verifier_fixe(rom):
+    """Relit un kit fixe : aucune greffe ni masque, chaque technique d'une
+    espece eligible a une mise en scene (cas du default.bact ou action
+    d'origine de l'espece), PM >= FACTEUR_PM x cout. Rend le nombre
+    d'especes dont le kit a change."""
+    import ndspy.narc
+    import ndspy.rom
+    from rom_vanilla import chemin_vanilla
+    lu = lire(rom)
+    if lu["code"]:
+        raise AssertionError("kit fixe : la greffe est posee")
+    if any(m[0] or m[1] for m in lu["masques"]):
+        raise AssertionError("kit fixe : un masque n'est pas a zero")
+    van = ndspy.rom.NintendoDSRom.fromFile(chemin_vanilla())
+    vmod = bytes(van.files[_fid(van, MOD)])
+    mod = bytes(rom.files[_fid(rom, MOD)])
+    btl = bytes(rom.files[_fid(rom, BTL)])
+    d = bytes(ndspy.narc.NARC(rom.files[rom.filenames.idOf(ACTDEF)]).files[0])
+    defaut = actions_default(d)
+    _h, cmds = _bact_lire(d)
+    if any(op == 1 and len(args) > LISTE_PILE for _p, op, args, _t in cmds):
+        raise AssertionError("default.bact : une liste de plus de %d ids"
+                             % LISTE_PILE)
+    if _h[0] > COMMANDES_MAX and not tas_agrandi(rom):
+        raise AssertionError("default.bact : %d commandes, tas d'origine"
+                             % _h[0])
+    fiches = actions_rom(rom)
+    elig = set(eligibles(mod))
+    for i, r in groupes_par_nom(mod, sorted(elig)).items():
+        a_i = struct.unpack_from("<6H", mod, ENTETE + i * MOD_TAILLE
+                                 + MOD_ACTIONS)
+        a_r = struct.unpack_from("<6H", mod, ENTETE + r * MOD_TAILLE
+                                 + MOD_ACTIONS)
+        v_i = struct.unpack_from("<6H", vmod, ENTETE + i * MOD_TAILLE
+                                 + MOD_ACTIONS)
+        v_r = struct.unpack_from("<6H", vmod, ENTETE + r * MOD_TAILLE
+                                 + MOD_ACTIONS)
+        if (a_i != v_i or a_r != v_r) and set(a_i) - set(v_i) - set(a_r):
+            raise AssertionError("fiches %d et %d (meme nom) : kits "
+                                 "differents" % (r, i))
+    n = 0
+    for i in range(struct.unpack_from("<I", mod, 0)[0]):
+        om = ENTETE + i * MOD_TAILLE
+        ob = ENTETE + i * BTL_TAILLE
+        acts = struct.unpack_from("<6H", mod, om + MOD_ACTIONS)
+        va = struct.unpack_from("<6H", vmod, om + MOD_ACTIONS)
+        if acts != struct.unpack_from("<6H", btl, ob + BTL_ACTIONS):
+            raise AssertionError("fiche %d : moddata et btldata different" % i)
+        if acts == va:
+            continue
+        if i not in elig:
+            raise AssertionError("fiche %d (boss ou prologue) changee" % i)
+        n += 1
+        for a in acts:
+            if a >= BORNE_SORTS and a not in va and a not in defaut:
+                raise AssertionError("fiche %d : technique %#x sans mise en "
+                                     "scene" % (i, a))
+        # les PM suivent les actions TIREES (celles d'origine gardent le
+        # comportement du jeu)
+        cmax = max([fiches[a][10] for a in set(acts) - set(va)
+                    if a in fiches and fiches[a][10] != 255] or [0])
+        pm = struct.unpack_from("<H", mod, om + MOD_PM)[0]
+        if pm < min(255, FACTEUR_PM * cmax) or pm != struct.unpack_from(
+                "<H", btl, ob + BTL_PM)[0]:
+            raise AssertionError("fiche %d : PM %d" % (i, pm))
+    return n
+
+
+def _chaine_stats(rom, adr):
+    """Le site 0x02165A30 porte la greffe des stats a chaque combat
+    (patch_stats, ZER-96), qui rend la main a la notre."""
+    import patch_stats
+    return adr == SITE2 and patch_stats.cible_toutes(rom) == adresse_toutes()
+
+
 def lire(rom):
     """Ce que la ROM porte, pour « Creer sa ROM » (config_actions) :
     {"actions": [6 ids] par fiche (mon_moddata), "masques": [(sorts,
@@ -831,7 +1092,8 @@ def lire(rom):
     pool = [a for a in range(0x400) if table[a >> 3] >> (a & 7) & 1]
     for adr, _avant, apres in blocs(pool):
         j = adr - o.ramAddress
-        if bytes(o.data[j:j + len(apres)]) != apres:
+        if (bytes(o.data[j:j + len(apres)]) != apres
+                and not _chaine_stats(rom, adr)):
             raise AssertionError("overlay 0 : bloc 0x%08X inattendu" % adr)
     out.update(code=True, sorts=[a for a in pool if a < BORNE_SORTS],
                techniques=[a for a in pool if a >= BORNE_SORTS])
@@ -847,9 +1109,13 @@ def retirer(rom, vanilla=None):
     import ndspy.code
     import ndspy.codeCompression as cc
     import patch_animations
+    import patch_stats
     lu = lire(rom)
     if not lu["code"]:
         return
+    stats_combat = patch_stats.combat_pose(rom)       # chainee, ZER-96
+    if stats_combat:
+        patch_stats.retirer_combat(rom)
     if patch_animations.present(rom):
         patch_animations.retirer(rom)
     elif lu["techniques"]:
@@ -872,6 +1138,9 @@ def retirer(rom, vanilla=None):
     o.data = bytes(d)
     rom.files[o.fileID] = o.save(compress=True)
     rom.arm9OverlayTable = ndspy.code.saveOverlayTable(ovl)
+    if stats_combat:
+        patch_stats.poser_combat(rom)
+        return
     if vanilla is None:
         return
     ovl = rom.loadArm9Overlays()
@@ -901,7 +1170,8 @@ def verifier(rom):
     pool = [a for a in range(0x400) if table[a >> 3] >> (a & 7) & 1]
     for adr, _avant, apres in blocs(pool):
         i = adr - o.ramAddress
-        if bytes(o.data[i:i + len(apres)]) != apres:
+        if (bytes(o.data[i:i + len(apres)]) != apres
+                and not _chaine_stats(rom, adr)):
             raise AssertionError("overlay 0 : bloc 0x%08X inattendu" % adr)
     pool_set = {a for a in pool if a >= BORNE_SORTS}     # les techniques
     import patch_animations

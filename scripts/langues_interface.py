@@ -351,21 +351,26 @@ T = {
         "it": ('oggetti a 4 e 5 stelle comuni come gli altri',
                'altrimenti restano rari: circa un bottino su 60')},
     "sorts_monstres": {
-        "en": ('Monster spells drawn every battle (experimental)',
-               'in every battle, the spells a monster knows are picked at '
-               'random among the 53 battle spells'),
-        "fr": ('Sorts des monstres tirés à chaque combat (expérimental)',
-               'à chaque combat, les sorts que connaît un monstre sont tirés '
-               'au hasard parmi les 53 sorts de combat'),
-        "de": ('Monsterzauber in jedem Kampf neu (experimentell)',
-               'in jedem Kampf werden die Zauber eines Monsters zufällig aus '
-               'den 53 Kampfzaubern gewählt'),
-        "es": ('Hechizos de monstruos nuevos en cada combate (experimental)',
-               'en cada combate, los hechizos de un monstruo se eligen al azar '
-               'entre los 53 hechizos de combate'),
-        "it": ('Magie dei mostri nuove a ogni battaglia (sperimentale)',
-               'a ogni battaglia, le magie di un mostro vengono scelte a caso '
-               'tra le 53 magie di battaglia')},
+        "en": ('Monster spells',
+               'the spells a monster knows are picked at random among the 53 '
+               'battle spells, in every battle (or once for the whole game '
+               'with the fixed kit below)'),
+        "fr": ('Sorts des monstres',
+               'les sorts que connaît un monstre sont tirés au hasard parmi '
+               'les 53 sorts de combat, à chaque combat (ou une fois pour '
+               'toute la partie avec le kit fixe plus bas)'),
+        "de": ('Monsterzauber',
+               'die Zauber eines Monsters werden zufällig aus den 53 '
+               'Kampfzaubern gewählt, in jedem Kampf (oder einmal für das '
+               'ganze Spiel mit dem festen Satz unten)'),
+        "es": ('Hechizos de monstruos',
+               'los hechizos de un monstruo se eligen al azar entre los 53 '
+               'hechizos de combate, en cada combate (o una vez para toda la '
+               'partida con el kit fijo de abajo)'),
+        "it": ('Magie dei mostri',
+               'le magie di un mostro vengono scelte a caso tra le 53 magie '
+               'di battaglia, a ogni battaglia (o una volta per tutta la '
+               'partita con il kit fisso qui sotto)')},
     "sorts_monstres_ajout": {
         "en": ('monsters without spells get one too',
                'one extra action among their six, not a spellcaster'),
@@ -378,23 +383,29 @@ T = {
         "it": ('anche i mostri senza magie ne ricevono una',
                "un'azione in più tra le loro sei, non un incantatore")},
     "techniques_monstres": {
-        "en": ('Monster abilities drawn every battle (experimental)',
-               "in every battle, a monster's abilities are picked at random "
-               "among those of monsters and heroes, with their real animation"),
-        "fr": ('Techniques des monstres tirées à chaque combat (expérimental)',
-               "à chaque combat, les techniques d'un monstre sont tirées au "
-               'hasard parmi celles des monstres et des héros, avec leur vraie '
-               'animation'),
-        "de": ('Monsterfähigkeiten in jedem Kampf neu (experimentell)',
-               'in jedem Kampf werden die Fähigkeiten eines Monsters zufällig '
-               'aus denen der Monster und Helden gewählt, mit ihrer echten '
-               'Animation'),
-        "es": ('Habilidades de monstruos nuevas en cada combate (experimental)',
-               'en cada combate, las habilidades de un monstruo se eligen al '
-               'azar entre las de monstruos y héroes, con su animación real'),
-        "it": ('Abilità dei mostri nuove a ogni battaglia (sperimentale)',
-               "a ogni battaglia, le abilità di un mostro vengono scelte a "
-               "caso tra quelle di mostri ed eroi, con la loro vera animazione")},
+        "en": ('Monster abilities',
+               "a monster's abilities are picked at random among those of "
+               "monsters and heroes, with their real animation: in every "
+               "battle, or once for the whole game with the fixed kit "
+               "below"),
+        "fr": ('Techniques des monstres',
+               "les techniques d'un monstre sont tirées au hasard parmi celles "
+               'des monstres et des héros, avec leur vraie animation : à '
+               'chaque combat, ou une fois pour toute la partie avec le kit '
+               'fixe plus bas'),
+        "de": ('Monsterfähigkeiten',
+               'die Fähigkeiten eines Monsters werden zufällig aus denen der '
+               'Monster und Helden gewählt: in jedem Kampf mit ihrer echten '
+               'Animation, oder einmal für das ganze Spiel mit dem festen '
+               'Satz unten'),
+        "es": ('Habilidades de monstruos',
+               'las habilidades de un monstruo se eligen al azar entre las de '
+               'monstruos y héroes: en cada combate con su animación real, o '
+               'una vez para toda la partida con el kit fijo de abajo'),
+        "it": ('Abilità dei mostri',
+               "le abilità di un mostro vengono scelte a caso tra quelle di "
+               "mostri ed eroi: a ogni battaglia con la loro vera animazione, "
+               "o una volta per tutta la partita con il kit fisso qui sotto")},
     "techniques_monstres_ajout": {
         "en": ('monsters without abilities get one too',
                'one extra action among their six'),
@@ -406,6 +417,27 @@ T = {
                'una acción más entre sus seis'),
         "it": ("anche i mostri senza abilità ne ricevono una",
                "un'azione in più tra le loro sei")},
+    "actions_fixes": {
+        "en": ('a fixed kit for each monster',
+               'spells and abilities drawn once, when the ROM is built: every '
+               'slime has the same kit for the whole game, abilities with '
+               'their real animation'),
+        "fr": ('un kit fixe pour chaque monstre',
+               'sorts et techniques tirés une fois, à la création de la ROM : '
+               'tous les gluants ont le même kit toute la partie, techniques '
+               'avec leur vraie animation'),
+        "de": ('ein fester Satz für jedes Monster',
+               'Zauber und Fähigkeiten werden einmal beim Erstellen des ROMs '
+               'gewählt: jeder Schleim hat das ganze Spiel denselben Satz, '
+               'Fähigkeiten mit ihrer echten Animation'),
+        "es": ('un kit fijo para cada monstruo',
+               'hechizos y habilidades elegidos una vez, al crear la ROM: '
+               'todos los limos tienen el mismo kit toda la partida, las '
+               'habilidades con su animación real'),
+        "it": ('un kit fisso per ogni mostro',
+               "magie e abilità scelte una volta, alla creazione della ROM: "
+               "tutti gli slime hanno lo stesso kit per tutta la partita, le "
+               "abilità con la loro vera animazione")},
     "boutiques": {
         "en": ('Shops',
                'what the 37 shops sell'),
@@ -754,21 +786,184 @@ T = {
                "nessuno può cambiare vocazione all'abbazia, ma la rivocazione "
                'resta possibile (fuori dalle preimpostazioni)')},
     "stats": {
-        "en": ('Monster stats (experimental)',
-               'HP, attack, defence, experience and gold are swapped between '
-               'all monsters, bosses included'),
-        "fr": ('Statistiques des monstres (expérimental)',
-               'PV, attaque, défense, expérience et or sont échangés entre '
-               'tous les monstres, boss compris'),
-        "de": ('Monsterwerte (experimentell)',
-               'LP, Angriff, Verteidigung, Erfahrung und Gold werden zwischen '
-               'allen Monstern getauscht, Bosse eingeschlossen'),
-        "es": ('Estadísticas de los monstruos (experimental)',
-               'PV, ataque, defensa, experiencia y oro se intercambian entre '
-               'todos los monstruos, jefes incluidos'),
-        "it": ('Statistiche dei mostri (sperimentale)',
-               'PV, attacco, difesa, esperienza e oro vengono scambiati tra '
-               'tutti i mostri, boss compresi')},
+        "en": ('Monster stats',
+               'HP, MP, attack, defence, agility and resistances drawn, '
+               'bosses in their own option (Bosses tab); each stat between x0.5 and x2 of its value '
+               '(a slime with 8 HP: 4 to 16), each resistance one step away '
+               'at most. The prologue fight never changes'),
+        "fr": ('Statistiques des monstres',
+               'PV, PM, attaque, défense, agilité et résistances tirés, boss '
+               "à part (onglet Boss) ; chaque stat entre x0,5 et x2 de sa valeur (un gluant "
+               "à 8 PV : 4 à 16), chaque résistance à un cran près. Le combat "
+               "du prologue ne change jamais"),
+        "de": ('Monsterwerte',
+               'LP, MP, Angriff, Verteidigung, Beweglichkeit und Resistenzen '
+               'gezogen, Bosse separat (Reiter Bosse); jeder Wert zwischen x0,5 und '
+               'x2 seines Werts (ein Schleim mit 8 LP: 4 bis 16), jede '
+               'Resistenz höchstens eine Stufe daneben. Der Prolog-Kampf '
+               'ändert sich nie'),
+        "es": ('Estadísticas de los monstruos',
+               'PV, PM, ataque, defensa, agilidad y resistencias sorteados, '
+               'jefes aparte (pestaña Jefes); cada estadística entre x0,5 y x2 de su valor '
+               '(un limo con 8 PV: de 4 a 16), cada resistencia a un nivel '
+               'como mucho. El combate del prólogo nunca cambia'),
+        "it": ('Statistiche dei mostri',
+               'PV, PM, attacco, difesa, agilità e resistenze estratti, boss '
+               'a parte (scheda Boss); ogni statistica tra x0,5 e x2 del suo valore (uno '
+               'slime con 8 PV: da 4 a 16), ogni resistenza a un livello al '
+               'massimo. Il combattimento del prologo non cambia mai')},
+    "stats_chaos": {
+        "en": ('chaos stats',
+               'each stat drawn over its whole range, whatever its value. '
+               'Monsters: HP 4-1477, MP 0-255, attack 9-748, defence 6-798, '
+               'agility 7-505. Bosses: HP 93-8500, MP 18-255, attack 30-900, '
+               'defence 22-637, agility 11-375. Resistances anywhere on '
+               'their scale'),
+        "fr": ('stats en chaos',
+               'chaque stat tirée sur toute sa plage, sans regarder sa valeur. '
+               'Monstres : PV 4-1477, PM 0-255, attaque 9-748, défense 6-798, '
+               'agilité 7-505. Boss : PV 93-8500, PM 18-255, attaque 30-900, '
+               'défense 22-637, agilité 11-375. Résistances n\'importe où sur '
+               'leur échelle'),
+        "de": ('Werte im Chaos',
+               'jeder Wert über seinen ganzen Bereich gezogen, egal wie hoch '
+               'er war. Monster: LP 4-1477, MP 0-255, Angriff 9-748, '
+               'Verteidigung 6-798, Beweglichkeit 7-505. Bosse: LP 93-8500, '
+               'MP 18-255, Angriff 30-900, Verteidigung 22-637, '
+               'Beweglichkeit 11-375. Resistenzen beliebig auf ihrer Skala'),
+        "es": ('estadísticas en caos',
+               'cada estadística sorteada en todo su rango, sin mirar su '
+               'valor. Monstruos: PV 4-1477, PM 0-255, ataque 9-748, defensa '
+               '6-798, agilidad 7-505. Jefes: PV 93-8500, PM 18-255, ataque '
+               '30-900, defensa 22-637, agilidad 11-375. Resistencias en '
+               'cualquier punto de su escala'),
+        "it": ('statistiche nel caos',
+               'ogni statistica estratta su tutto il suo intervallo, senza '
+               'guardare il suo valore. Mostri: PV 4-1477, PM 0-255, attacco '
+               '9-748, difesa 6-798, agilità 7-505. Boss: PV 93-8500, PM '
+               '18-255, attacco 30-900, difesa 22-637, agilità 11-375. '
+               'Resistenze ovunque sulla loro scala')},
+    "stats_combat": {
+        "en": ('drawn again at every battle',
+               'HP, MP, attack, defence and agility are drawn again in their '
+               'range at the start of every battle (two slimes of the same '
+               'battle share them); resistances stay those of the ROM'),
+        "fr": ('retirées à chaque combat',
+               'PV, PM, attaque, défense et agilité sont retirés dans leur '
+               'plage au début de chaque combat (deux gluants du même combat '
+               'les partagent) ; les résistances restent celles de la ROM'),
+        "de": ('bei jedem Kampf neu gezogen',
+               'LP, MP, Angriff, Verteidigung und Beweglichkeit werden zu '
+               'Beginn jedes Kampfes in ihrem Bereich neu gezogen (zwei '
+               'Schleime desselben Kampfes teilen sie); die Resistenzen '
+               'bleiben die der ROM'),
+        "es": ('sorteadas en cada combate',
+               'PV, PM, ataque, defensa y agilidad se vuelven a sortear en su '
+               'rango al empezar cada combate (dos limos del mismo combate '
+               'los comparten); las resistencias siguen siendo las de la ROM'),
+        "it": ('estratte a ogni combattimento',
+               'PV, PM, attacco, difesa e agilità vengono riestratti nel loro '
+               'intervallo all\'inizio di ogni combattimento (due slime dello '
+               'stesso combattimento li condividono); le resistenze restano '
+               'quelle della ROM')},
+    "stats_boss": {
+        "en": ('Boss stats',
+               'HP, MP, attack, defence, agility and resistances of the bosses '
+               'drawn, each stat between x0.5 and x2 of its value, each '
+               'resistance one step away at most. The prologue fight and '
+               'Aquila and Corvus of the cutscenes never change'),
+        "fr": ('Statistiques des boss',
+               'PV, PM, attaque, défense, agilité et résistances des boss '
+               'tirés, chaque stat entre x0,5 et x2 de sa valeur, chaque '
+               'résistance à un cran près. Le combat du prologue et Aquila et '
+               'Corvus des cinématiques ne changent jamais'),
+        "de": ('Bosswerte',
+               'LP, MP, Angriff, Verteidigung, Beweglichkeit und Resistenzen '
+               'der Bosse gezogen, jeder Wert zwischen x0,5 und x2 seines '
+               'Werts, jede Resistenz höchstens eine Stufe daneben. Der '
+               'Prolog-Kampf und Aquila und Corvus der Zwischensequenzen '
+               'ändern sich nie'),
+        "es": ('Estadísticas de los jefes',
+               'PV, PM, ataque, defensa, agilidad y resistencias de los jefes '
+               'sorteados, cada estadística entre x0,5 y x2 de su valor, cada '
+               'resistencia a un nivel como mucho. El combate del prólogo y '
+               'Aquila y Corvus de las escenas nunca cambian'),
+        "it": ('Statistiche dei boss',
+               'PV, PM, attacco, difesa, agilità e resistenze dei boss '
+               'estratti, ogni statistica tra x0,5 e x2 del suo valore, ogni '
+               'resistenza a un livello al massimo. Il combattimento del '
+               'prologo e Aquila e Corvus dei filmati non cambiano mai')},
+    "stats_boss_chaos": {
+        "en": ('chaos boss stats',
+               'each stat drawn over the whole range of the bosses: HP '
+               '93-8500, MP 18-255, attack 30-900, defence 22-637, agility '
+               '11-375; resistances anywhere on their scale'),
+        "fr": ('stats des boss en chaos',
+               'chaque stat tirée sur toute la plage des boss : PV 93-8500, '
+               'PM 18-255, attaque 30-900, défense 22-637, agilité 11-375 ; '
+               "résistances n'importe où sur leur échelle"),
+        "de": ('Bosswerte im Chaos',
+               'jeder Wert über den ganzen Bereich der Bosse gezogen: LP '
+               '93-8500, MP 18-255, Angriff 30-900, Verteidigung 22-637, '
+               'Beweglichkeit 11-375; Resistenzen beliebig auf ihrer Skala'),
+        "es": ('estadísticas de jefes en caos',
+               'cada estadística sorteada en todo el rango de los jefes: PV '
+               '93-8500, PM 18-255, ataque 30-900, defensa 22-637, agilidad '
+               '11-375; resistencias en cualquier punto de su escala'),
+        "it": ('statistiche dei boss nel caos',
+               "ogni statistica estratta su tutto l'intervallo dei boss: PV "
+               '93-8500, PM 18-255, attacco 30-900, difesa 22-637, agilità '
+               '11-375; resistenze ovunque sulla loro scala')},
+    "stats_boss_combat": {
+        "en": ('boss stats drawn again at every battle',
+               'HP, MP, attack, defence and agility of a boss are drawn again '
+               'in their range at the start of every battle; resistances stay '
+               'those of the ROM'),
+        "fr": ('stats des boss retirées à chaque combat',
+               "PV, PM, attaque, défense et agilité d'un boss sont retirés "
+               'dans leur plage au début de chaque combat ; les résistances '
+               'restent celles de la ROM'),
+        "de": ('Bosswerte bei jedem Kampf neu gezogen',
+               'LP, MP, Angriff, Verteidigung und Beweglichkeit eines Bosses '
+               'werden zu Beginn jedes Kampfes neu gezogen; die Resistenzen '
+               'bleiben die der ROM'),
+        "es": ('estadísticas de jefes sorteadas en cada combate',
+               'PV, PM, ataque, defensa y agilidad de un jefe se vuelven a '
+               'sortear al empezar cada combate; las resistencias siguen '
+               'siendo las de la ROM'),
+        "it": ('statistiche dei boss estratte a ogni combattimento',
+               'PV, PM, attacco, difesa e agilità di un boss vengono '
+               "riestratti all'inizio di ogni combattimento; le resistenze "
+               'restano quelle della ROM')},
+    "points": {
+        "en": ('Sparkly spots',
+               'every sparkly spot gives another item, drawn from all items '
+               '(never equipment nor a key item)'),
+        "fr": ('Points brillants',
+               'chaque point brillant donne un autre objet, tiré parmi tous '
+               'les objets (jamais un équipement ni un objet important)'),
+        "de": ('Glitzernde Stellen',
+               'jede glitzernde Stelle gibt einen anderen Gegenstand, aus '
+               'allen Gegenständen gezogen (nie Ausrüstung oder '
+               'Schlüsselgegenstände)'),
+        "es": ('Puntos brillantes',
+               'cada punto brillante da otro objeto, sorteado entre todos los '
+               'objetos (nunca equipo ni objetos clave)'),
+        "it": ('Punti luccicanti',
+               'ogni punto luccicante dà un altro oggetto, estratto fra tutti '
+               'gli oggetti (mai equipaggiamento né oggetti chiave)')},
+    "points_par_rang": {
+        "en": ('close to the original',
+               'an item within one star of the original one'),
+        "fr": ("proches de l'origine",
+               "un objet à une étoile près de celui d'origine"),
+        "de": ('nah am Original',
+               'ein Gegenstand mit höchstens einem Stern Unterschied zum '
+               'ursprünglichen'),
+        "es": ('cercanos al original',
+               'un objeto a una estrella como mucho del original'),
+        "it": ("vicini all'originale",
+               "un oggetto a una stella al massimo da quello originale")},
     "alchimie": {
         "en": ('Alchemy ingredients',
                'every Krak Pot recipe keeps what it makes and how many of '
@@ -922,6 +1117,148 @@ T = {
         "de": 'Es ist keine Option ausgewählt.',
         "es": 'No hay ninguna opción seleccionada.',
         "it": 'Non è selezionata nessuna opzione.'},
+    "modifier_rom": {
+        "en": 'Change a randomized ROM...',
+        "fr": 'Modifier une ROM randomisée...',
+        "de": 'Randomisierte ROM ändern...',
+        "es": 'Modificar una ROM aleatorizada...',
+        "it": 'Modifica una ROM randomizzata...'},
+    "modifier_titre": {
+        "en": 'The randomized ROM to change (your save keeps working)',
+        "fr": 'La ROM randomisée à modifier (votre sauvegarde continue)',
+        "de": 'Die zu ändernde randomisierte ROM (dein Spielstand bleibt)',
+        "es": 'La ROM aleatorizada que modificar (tu partida sigue)',
+        "it": 'La ROM randomizzata da modificare (il salvataggio resta)'},
+    "modifier_vanilla_dabord": {
+        "en": 'First drop your original European ROM above: the new ROM is '
+              'built from it.',
+        "fr": "Déposez d'abord votre ROM d'origine (Europe) au-dessus : la "
+              "nouvelle ROM est construite à partir d'elle.",
+        "de": 'Lege zuerst oben dein europäisches Original-ROM ab: die neue '
+              'ROM wird daraus gebaut.',
+        "es": 'Primero deja arriba tu ROM original europea: la nueva ROM se '
+              'construye a partir de ella.',
+        "it": 'Prima trascina qui sopra la tua ROM originale europea: la '
+              'nuova ROM viene costruita da quella.'},
+    "modifier_sans_journal": {
+        "en": 'No options found for this ROM: its log %s is missing or was '
+              'made by an older version. Keep the log next to the ROM.',
+        "fr": "Aucune option trouvée pour cette ROM : son journal %s manque "
+              "ou vient d'une version plus ancienne. Gardez le journal à "
+              "côté de la ROM.",
+        "de": 'Keine Optionen für diese ROM gefunden: ihr Protokoll %s fehlt '
+              'oder stammt von einer älteren Version. Lass das Protokoll '
+              'neben der ROM.',
+        "es": 'No se encontraron opciones para esta ROM: falta su registro '
+              '%s o es de una versión anterior. Deja el registro junto a la '
+              'ROM.',
+        "it": 'Nessuna opzione trovata per questa ROM: il suo registro %s '
+              'manca o viene da una versione precedente. Tieni il registro '
+              'accanto alla ROM.'},
+    "modifier_config": {
+        "en": 'This ROM was made in Create your ROM: open its file %s in '
+              'that tab, change it, and build again.',
+        "fr": "Cette ROM vient de « Créer sa ROM » : ouvrez son fichier %s "
+              "dans cet onglet, modifiez-le et reconstruisez.",
+        "de": 'Diese ROM stammt aus „Eigene ROM erstellen": öffne ihre Datei '
+              '%s in diesem Reiter, ändere sie und baue neu.',
+        "es": 'Esta ROM viene de «Crear tu ROM»: abre su archivo %s en esa '
+              'pestaña, modifícalo y vuelve a construir.',
+        "it": 'Questa ROM viene da «Crea la tua ROM»: apri il suo file %s in '
+              'quella scheda, modificalo e ricostruisci.'},
+    "modifier_inconnus": {
+        "en": 'Options not shown in this window, left out: %s',
+        "fr": 'Options absentes de cette fenêtre, non reprises : %s',
+        "de": 'Optionen, die dieses Fenster nicht kennt, ausgelassen: %s',
+        "es": 'Opciones que esta ventana no muestra, omitidas: %s',
+        "it": 'Opzioni non presenti in questa finestra, escluse: %s'},
+    "modifier_pret": {
+        "en": 'Changing %s: its seed and options are ticked. Change what you '
+              'want and click Randomize: the ROM is replaced under the same '
+              'name (the old one is kept as %s), so your save keeps working. '
+              'What is already done in your game stays done.',
+        "fr": "Modification de %s : sa graine et ses options sont cochées. "
+              "Changez ce que vous voulez puis cliquez sur Randomiser : la ROM "
+              "est remplacée sous le même nom (l'ancienne est gardée en %s), "
+              "votre sauvegarde continue. Ce qui est déjà fait dans la partie "
+              "le reste.",
+        "de": 'Änderung von %s: Seed und Optionen sind angehakt. Ändere, was '
+              'du willst, und klicke auf Randomisieren: die ROM wird unter '
+              'demselben Namen ersetzt (die alte bleibt als %s), dein '
+              'Spielstand bleibt. Was im Spiel schon erledigt ist, bleibt.',
+        "es": 'Modificando %s: su semilla y sus opciones están marcadas. '
+              'Cambia lo que quieras y pulsa Aleatorizar: la ROM se sustituye '
+              'con el mismo nombre (la antigua se guarda como %s) y tu '
+              'partida sigue. Lo ya hecho en la partida se queda.',
+        "it": 'Modifica di %s: seme e opzioni sono spuntati. Cambia ciò che '
+              'vuoi e clicca su Randomizza: la ROM viene sostituita con lo '
+              "stesso nome (la vecchia resta come %s) e il salvataggio "
+              'continua. Ciò che è già fatto nella partita resta fatto.'},
+    "modifier_glisse": {
+        "en": 'This ROM is randomized: now drop your original European ROM '
+              '(its log no longer finds it), then the randomized one is '
+              'changed.',
+        "fr": "Cette ROM est randomisée : déposez maintenant votre ROM "
+              "d'origine (Europe), que son journal ne retrouve plus ; la ROM "
+              "randomisée sera modifiée ensuite.",
+        "de": 'Diese ROM ist randomisiert: lege jetzt dein europäisches '
+              'Original-ROM ab (ihr Protokoll findet es nicht mehr), danach '
+              'wird die randomisierte geändert.',
+        "es": 'Esta ROM está aleatorizada: deja ahora tu ROM original '
+              'europea (su registro ya no la encuentra) y después se '
+              'modificará la aleatorizada.',
+        "it": 'Questa ROM è randomizzata: trascina ora la tua ROM originale '
+              'europea (il suo registro non la trova più), poi quella '
+              'randomizzata verrà modificata.'},
+    "modifier_indice": {
+        "en": 'To change a randomized ROM, its log (..._journal.txt) must be '
+              'next to it, and it must have been made with this version of '
+              'the application.',
+        "fr": "Pour modifier une ROM randomisée, son journal "
+              "(..._journal.txt) doit être à côté d'elle, et elle doit avoir "
+              "été faite avec cette version de l'application.",
+        "de": 'Um eine randomisierte ROM zu ändern, muss ihr Protokoll '
+              '(..._journal.txt) daneben liegen und sie muss mit dieser '
+              'Version der Anwendung erstellt worden sein.',
+        "es": 'Para modificar una ROM aleatorizada, su registro '
+              '(..._journal.txt) debe estar a su lado y debe haberse creado '
+              'con esta versión de la aplicación.',
+        "it": 'Per modificare una ROM randomizzata, il suo registro '
+              '(..._journal.txt) deve stare accanto e deve essere stata '
+              'creata con questa versione dell\'applicazione.'},
+    "modifier_ancienne": {
+        "en": 'This ROM was made by an older version: its seed (%s) is taken '
+              'back, not its options. Tick the options you had chosen, '
+              'change what you want and click Randomize. Shops, chests and '
+              'other draws may differ from your ROM.',
+        "fr": "Cette ROM vient d'une version plus ancienne : sa graine (%s) "
+              "est reprise, pas ses options. Recochez les options que vous "
+              "aviez choisies, changez ce que vous voulez et cliquez sur "
+              "Randomiser. Boutiques, coffres et autres tirages peuvent "
+              "différer de votre ROM.",
+        "de": 'Diese ROM stammt aus einer älteren Version: ihr Seed (%s) wird '
+              'übernommen, nicht ihre Optionen. Hake die damals gewählten '
+              'Optionen an, ändere, was du willst, und klicke auf '
+              'Randomisieren. Läden, Truhen und andere Ziehungen können '
+              'abweichen.',
+        "es": 'Esta ROM viene de una versión anterior: se recupera su semilla '
+              '(%s), no sus opciones. Marca las opciones que habías elegido, '
+              'cambia lo que quieras y pulsa Aleatorizar. Tiendas, cofres y '
+              'otros sorteos pueden variar.',
+        "it": 'Questa ROM viene da una versione precedente: il seme (%s) viene '
+              'ripreso, non le opzioni. Spunta le opzioni che avevi scelto, '
+              'cambia ciò che vuoi e clicca su Randomizza. Negozi, forzieri e '
+              'altre estrazioni possono cambiare.'},
+    "modifier_fini": {
+        "en": '%s replaced (the old ROM: %s). Load your save as usual.',
+        "fr": "%s remplacée (l'ancienne ROM : %s). Chargez votre sauvegarde "
+              "comme d'habitude.",
+        "de": '%s ersetzt (die alte ROM: %s). Lade deinen Spielstand wie '
+              'gewohnt.',
+        "es": '%s sustituida (la ROM antigua: %s). Carga tu partida como '
+              'siempre.',
+        "it": '%s sostituita (la vecchia ROM: %s). Carica il salvataggio '
+              'come sempre.'},
     "existe_deja": {
         "en": '%s already exists.\nOverwrite it?',
         "fr": '%s existe déjà.\nLe remplacer ?',
@@ -973,19 +1310,24 @@ T = {
 # poses en tete de l'onglet des monstres, sous la case `monstres`.
 ONGLETS = (
     ("onglet_monstres", (("monstres", 0), ("groupes", 1), ("stats", 0),
+                         ("stats_chaos", 1), ("stats_combat", 1),
                          ("sorts_monstres", 0), ("sorts_monstres_ajout", 1),
                          ("techniques_monstres", 0),
-                         ("techniques_monstres_ajout", 1))),
+                         ("techniques_monstres_ajout", 1),
+                         ("actions_fixes", 1))),
     ("onglet_boss", (("boss", 0), ("garder_hexacorne", 1),
                      ("boss_familles_egales", 1), ("boss_histoire", 1),
                      ("boss_legacy_tous", 1), ("seuil_grottes", 1),
                      ("seuil_legendes", 1), ("boss_mixte", 1),
-                     ("boss_chaque_combat", 1), ("boss_terrain", 0))),
+                     ("boss_chaque_combat", 1), ("boss_terrain", 0),
+                     ("stats_boss", 0), ("stats_boss_chaos", 1),
+                     ("stats_boss_combat", 1))),
     ("onglet_objets", (("objets", 0), ("objets_chaos", 1),
                        ("rouges_libres", 1), ("equilibrer_conso", 1),
                        ("butin", 0), ("butin_libre", 1),
                        ("boutiques", 0), ("prix_libres", 1),
-                       ("boutiques_chaos", 1), ("alchimie", 0),
+                       ("boutiques_chaos", 1), ("points", 0),
+                       ("points_par_rang", 1), ("alchimie", 0),
                        ("medailles", 0), ("medailles_chaos", 1),
                        ("medailles_seuils_vanilla", 1))),
     ("onglet_equipe", (("sorts", 0), ("sorts_chaos", 1), ("aptitudes", 0),
@@ -1045,9 +1387,10 @@ APPARITIONS = ("aleatoire", "zone", "globale")
 # L'ONGLET « CREER SA ROM » (ZER-86) : l'affectation explicite, case par case.
 # Les categories dans l'ordre de la maquette validee le 19/10/2026 ; seules
 # celles de `config_rom.CATEGORIES` sont actives, les autres disent « bientot ».
-CATEGORIES_CREER = ("boss", "boutiques", "coffres", "grottes", "alchimie",
+CATEGORIES_CREER = ("boss", "boutiques", "coffres", "grottes", "points",
+                    "alchimie",
                     "capitaine", "arbres", "sorts", "vocations", "monstres",
-                    "butin", "actions")
+                    "butin", "stats", "actions")
 T.update({
     "onglet_creer": {
         "en": 'Create your ROM', "fr": 'Créer sa ROM',
@@ -1387,6 +1730,11 @@ T.update({
     # UNE TABLE A LA FOIS (joueur, 20/10/2026) : le selecteur et ses tables
     "creer_liste": {"en": 'Table:', "fr": 'Table :', "de": 'Tabelle:',
                     "es": 'Tabla:', "it": 'Tabella:'},
+    "creer_chercher": {"en": 'Search (Enter: next):',
+                       "fr": 'Chercher (Entrée : suivant) :',
+                       "de": 'Suchen (Eingabe: weiter):',
+                       "es": 'Buscar (Intro: siguiente):',
+                       "it": 'Cerca (Invio: successivo):'},
     "creer_grise": {
         "en": 'Random at every spawn: these tables do not apply.',
         "fr": 'Aléatoire à chaque apparition : ces tables ne s\'appliquent pas.',
@@ -1469,7 +1817,156 @@ T.update({
                          "it": 'Tecnica casuale'},
     "genre_technique": {"en": 'Ability', "fr": 'Technique', "de": 'Technik',
                         "es": 'Técnica', "it": 'Tecnica'},
+    # ZER-97 : les points brillants
+    "cat_points": {"en": 'Sparkly spots', "fr": 'Points brillants',
+                   "de": 'Glitzernde Stellen', "es": 'Puntos brillantes',
+                   "it": 'Punti luccicanti'},
+    "liste_cartes": {"en": 'Pool of each map (at each pickup)',
+                     "fr": 'Pool de chaque carte (au ramassage)',
+                     "de": 'Pool jeder Karte (beim Aufheben)',
+                     "es": 'Reserva de cada mapa (al recoger)',
+                     "it": 'Riserva di ogni mappa (alla raccolta)'},
+    "liste_terrain": {"en": 'Spots of the field maps',
+                      "fr": 'Points des cartes du terrain',
+                      "de": 'Stellen der Geländekarten',
+                      "es": 'Puntos de los mapas',
+                      "it": 'Punti delle mappe'},
+    "liste_speciales": {"en": 'Special zones 98/99 (8 tables, one per save)',
+                        "fr": 'Zones spéciales 98/99 (8 tables, une par partie)',
+                        "de": 'Sonderzonen 98/99 (8 Tabellen, eine pro Spielstand)',
+                        "es": 'Zonas especiales 98/99 (8 tablas, una por partida)',
+                        "it": 'Zone speciali 98/99 (8 tabelle, una per partita)'},
+    "reglage_ramassage": {"en": 'Draw', "fr": 'Tirage', "de": 'Ziehung',
+                          "es": 'Sorteo', "it": 'Estrazione'},
+    "champ_ramassage": {"en": 'At each pickup', "fr": 'À chaque ramassage',
+                        "de": 'Bei jedem Aufheben',
+                        "es": 'En cada recogida', "it": 'A ogni raccolta'},
+    # ZER-58 : les statistiques des monstres
+    "cat_stats": {"en": 'Monster stats', "fr": 'Statistiques des monstres',
+                  "de": 'Monsterwerte', "es": 'Estadísticas de los monstruos',
+                  "it": 'Statistiche dei mostri'},
+    "liste_valeurs": {"en": 'HP, MP, attack, defence, agility',
+                      "fr": 'PV, PM, attaque, défense, agilité',
+                      "de": 'LP, MP, Angriff, Verteidigung, Beweglichkeit',
+                      "es": 'PV, PM, ataque, defensa, agilidad',
+                      "it": 'PV, PM, attacco, difesa, agilità'},
+    "liste_elements": {"en": 'Element resistances',
+                       "fr": 'Résistances aux éléments',
+                       "de": 'Element-Resistenzen',
+                       "es": 'Resistencias a elementos',
+                       "it": 'Resistenze agli elementi'},
+    "liste_alterations": {"en": 'Status resistances',
+                          "fr": "Résistances aux altérations d'état",
+                          "de": 'Status-Resistenzen',
+                          "es": 'Resistencias a estados',
+                          "it": 'Resistenze agli status'},
+    "champ_pv": {"en": 'HP', "fr": 'PV', "de": 'LP', "es": 'PV', "it": 'PV'},
+    "champ_pm": {"en": 'MP', "fr": 'PM', "de": 'MP', "es": 'PM', "it": 'PM'},
+    "champ_attaque": {"en": 'Attack', "fr": 'Attaque', "de": 'Angriff',
+                      "es": 'Ataque', "it": 'Attacco'},
+    "champ_defense": {"en": 'Defence', "fr": 'Défense',
+                      "de": 'Verteidigung', "es": 'Defensa', "it": 'Difesa'},
+    "champ_agilite": {"en": 'Agility', "fr": 'Agilité',
+                      "de": 'Beweglichkeit', "es": 'Agilidad',
+                      "it": 'Agilità'},
+    "mode_stats_fixe": {"en": 'Fixed', "fr": 'Fixe', "de": 'Fest',
+                        "es": 'Fijo', "it": 'Fisso'},
+    "mode_stats_tire": {"en": 'Drawn in range', "fr": 'Tiré dans la plage',
+                        "de": 'Im Bereich gezogen',
+                        "es": 'Sorteado en el rango',
+                        "it": "Estratto nell'intervallo"},
+    "mode_stats_combat": {"en": 'Drawn at every battle',
+                          "fr": 'Tiré à chaque combat',
+                          "de": 'Bei jedem Kampf gezogen',
+                          "es": 'Sorteado en cada combate',
+                          "it": 'Estratto a ogni combattimento'},
+    "liste_plages": {"en": 'Ranges (drawn monsters)',
+                     "fr": 'Plages (monstres tirés)',
+                     "de": 'Bereiche (gezogene Monster)',
+                     "es": 'Rangos (monstruos sorteados)',
+                     "it": 'Intervalli (mostri estratti)'},
+    "creer_grise_stats": {
+        "en": 'Not used: a drawn monster takes its values from its ranges, '
+              'a fixed one ignores its ranges. Change its mode first.',
+        "fr": 'Ne sert pas : un monstre tiré prend ses valeurs dans ses '
+              'plages, un monstre fixe ignore ses plages. Changez d\'abord '
+              'son mode.',
+        "de": 'Nicht verwendet: Ein gezogenes Monster nimmt seine Werte aus '
+              'seinen Bereichen, ein festes ignoriert sie. Erst den Modus '
+              'ändern.',
+        "es": 'No se usa: un monstruo sorteado toma sus valores de sus '
+              'rangos, uno fijo ignora sus rangos. Cambia antes su modo.',
+        "it": "Non usato: un mostro estratto prende i valori dai suoi "
+              "intervalli, uno fisso li ignora. Cambia prima la sua modalità."},
+    "creer_grise_points": {
+        "en": 'Not used with this draw: at each pickup the pool counts, '
+              'otherwise the fixed items. Change the draw first.',
+        "fr": 'Ne sert pas avec ce tirage : au ramassage, c\'est le pool qui '
+              'compte, sinon les objets fixes. Changez d\'abord le tirage.',
+        "de": 'Bei dieser Ziehung nicht verwendet: beim Aufheben zählt der '
+              'Pool, sonst die festen Gegenstände. Erst die Ziehung ändern.',
+        "es": 'No se usa con este sorteo: al recoger cuenta la reserva, si '
+              'no los objetos fijos. Cambia antes el sorteo.',
+        "it": "Non usato con questa estrazione: alla raccolta conta la "
+              "riserva, altrimenti gli oggetti fissi. Cambia prima "
+              "l'estrazione."},
+    "aide_stats": {
+        "en": 'Mode: Fixed keeps the values of the line; Drawn in range draws '
+              'each stat between its min and max (Ranges list) when the ROM '
+              'is built. Element resistances: damage taken in % (0 none, 100 '
+              'normal, 200 double). Status resistances: in % as the game '
+              'stores them. Columns follow the order of the game file; which '
+              'element or status each one is has not been identified yet.',
+        "fr": "Mode : Fixe garde les valeurs de la ligne ; Tiré dans la plage "
+              "tire chaque stat entre son min et son max (liste Plages) à la "
+              "création de la ROM. Résistances aux éléments : dégâts subis en "
+              "% (0 aucun, 100 normal, 200 double). Altérations : en %, comme "
+              "le jeu les range. Les colonnes suivent l'ordre du fichier du "
+              "jeu ; quel élément ou quelle altération chacune désigne n'est "
+              "pas encore identifié.",
+        "de": 'Modus: Fest behält die Werte der Zeile; Im Bereich gezogen '
+              'zieht jeden Wert zwischen Min und Max (Liste Bereiche) beim '
+              'Erstellen der ROM. Element-Resistenzen: erlittener Schaden in % (0 keiner, 100 '
+              'normal, 200 doppelt). Status: in %, wie das Spiel sie '
+              'speichert. Die Spalten folgen der Reihenfolge der Spieldatei; '
+              'welches Element oder welcher Status jede ist, ist noch nicht '
+              'bestimmt.',
+        "es": 'Modo: Fijo guarda los valores de la línea; Sorteado en el rango '
+              'sortea cada estadística entre su mín. y su máx. (lista Rangos) '
+              'al crear la ROM. Resistencias a elementos: daño recibido en % (0 ninguno, 100 normal, 200 '
+              'doble). Estados: en %, tal como los guarda el juego. Las '
+              'columnas siguen el orden del archivo del juego; aún no se ha '
+              'identificado qué elemento o estado es cada una.',
+        "it": "Modalità: Fisso tiene i valori della riga; Estratto "
+              "nell'intervallo estrae ogni statistica tra min e max (lista "
+              "Intervalli) alla creazione della ROM. Resistenze agli elementi: danno subito in % (0 nessuno, 100 "
+              "normale, 200 doppio). Status: in %, come li salva il gioco. "
+              "Le colonne seguono l'ordine del file del gioco; quale "
+              "elemento o status sia ciascuna non è ancora identificato."},
 })
+# les colonnes des plages des stats (ZER-58)
+for _s, _n in (("pv", {"en": 'HP', "fr": 'PV', "de": 'LP', "es": 'PV',
+                       "it": 'PV'}),
+               ("pm", {"en": 'MP', "fr": 'PM', "de": 'MP', "es": 'PM',
+                       "it": 'PM'}),
+               ("attaque", {"en": 'Att.', "fr": 'Att.', "de": 'Angr.',
+                            "es": 'Atq.', "it": 'Att.'}),
+               ("defense", {"en": 'Def.', "fr": 'Déf.', "de": 'Vert.',
+                            "es": 'Def.', "it": 'Dif.'}),
+               ("agilite", {"en": 'Agi.', "fr": 'Agi.', "de": 'Bew.',
+                            "es": 'Agi.', "it": 'Agi.'})):
+    T["champ_%s_min" % _s] = {c: _n[c] + " min" for c in _n}
+    T["champ_%s_max" % _s] = {c: _n[c] + " max" for c in _n}
+# les colonnes des resistances : numerotees, faute de savoir laquelle est
+# quel element ou quelle alteration (ZER-58)
+for _k in range(1, 8):
+    T["champ_e%d" % _k] = {"en": 'Elem. %d' % _k, "fr": 'Élém. %d' % _k,
+                           "de": 'Elem. %d' % _k, "es": 'Elem. %d' % _k,
+                           "it": 'Elem. %d' % _k}
+for _k in range(1, 15):
+    T["champ_a%d" % _k] = {"en": 'Status %d' % _k, "fr": 'Altér. %d' % _k,
+                           "de": 'Status %d' % _k, "es": 'Estado %d' % _k,
+                           "it": 'Status %d' % _k}
 
 
 def texte(cle, langue, *args):

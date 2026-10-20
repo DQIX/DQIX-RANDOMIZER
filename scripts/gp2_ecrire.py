@@ -140,8 +140,11 @@ def bloc(brut, typ=1):
     return struct.pack("<I", typ | (len(brut) << 3)) + charge
 
 
-def reecrire(d, remplacements):
+def reecrire(d, remplacements, brut=False):
     """Rend une archive neuve. `remplacements` : {nom de membre: octets clairs}.
+    `brut` : membres SANS bloc GPC2 (u32 de controle), comme ceux
+    d'enemy.gp2 (des NARC poses tels quels, tailles_modeles) ; la taille de
+    l'index est alors celle du membre.
 
     Les membres absents de `remplacements` sont recopies OCTET POUR OCTET,
     bourrage compris : sans remplacement, la fonction rend exactement
@@ -170,7 +173,7 @@ def reecrire(d, remplacements):
         if depart % 4:
             raise AssertionError("membre desaligne")
         if nom in remplacements:
-            b = bloc(remplacements[nom])
+            b = remplacements[nom] if brut else bloc(remplacements[nom])
             corps += b
             corps += b"\x00" * (-len(b) % 4)
             neuf[i] = (depart // 4, len(b))
@@ -197,6 +200,59 @@ def reecrire(d, remplacements):
     if (len(out) - base) % 4:
         raise AssertionError("corps non multiple de 4")
     struct.pack_into("<I", out, OFF_TOTAL, (arc.total & 0xF0000000) | total)
+    return bytes(out)
+
+
+def reecrire_index(d, remplacements, brut=True):
+    """Comme `reecrire`, pour une archive dont l'INDEX EST COMPRESSE
+    (enemy.gp2 : type 2) : l'index est reconstruit et ecrit EN CLAIR (type
+    0, comme les archives d'objets), la table de noms recopiee telle quelle,
+    et l'en-tete recalcule (fileInfoLength, firstFileOffs, total). Les
+    membres absents de `remplacements` sont recopies octet pour octet."""
+    arc = gp2.GP2("<memoire>", donnees=d)
+    brut_index, _t, _n = gp2.lire_bloc(d, arc.header_len * 4,
+                                       arc.fileinfo_len * 4)
+    ordre = sorted(range(arc.nb), key=lambda i: arc.entrees[i][1] & 0xFFFFFF)
+    base = arc.first_file * 4
+    corps = bytearray()
+    neuf = {}
+    for rang, i in enumerate(ordre):
+        nom = arc.noms[rang] if rang < len(arc.noms) else None
+        pos = base + (arc.entrees[i][1] & 0xFFFFFF) * 4
+        fin = (base + (arc.entrees[ordre[rang + 1]][1] & 0xFFFFFF) * 4
+               if rang + 1 < len(ordre) else len(d))
+        depart = len(corps)
+        if nom in remplacements:
+            b = remplacements[nom] if brut else bloc(remplacements[nom])
+            corps += b
+            # l'ecart entre deux membres : la taille + 4 (gp2.py), bourrage
+            corps += b"\x00" * (4 + (-len(b) % 4))
+            neuf[i] = (depart // 4, len(b))
+        else:
+            corps += d[pos:fin]
+            neuf[i] = (depart // 4, arc.entrees[i][2])
+    index = bytearray(brut_index)
+    for i in range(arc.nb):
+        h, o, t = struct.unpack_from("<III", index, 12 * i)
+        offs_mot, taille = neuf[i]
+        struct.pack_into("<III", index, 12 * i, h,
+                         (o & 0xFF000000) | offs_mot,
+                         (t & 0xFF000000) | taille)
+    # INDEX EN CLAIR (type 0), comme celui des archives d'objets que le
+    # jeu relit deja : un index en type 1 rendait TOUS les modeles
+    # invisibles (joueur, v17z10, 20/10/2026)
+    b_index = bloc(bytes(index), 0)
+    b_index += b"\x00" * (-len(b_index) % 4)
+    noms = d[arc.fileinfo_len * 4:base]
+    debut_noms = arc.header_len * 4 + len(b_index)
+    premier = debut_noms + len(noms)
+    if premier % 4 or len(corps) % 4:
+        raise AssertionError("archive desalignee")
+    out = bytearray(d[:arc.header_len * 4]) + b_index + noms + corps
+    struct.pack_into("<H", out, 8, debut_noms // 4)
+    struct.pack_into("<H", out, 10, premier // 4)
+    struct.pack_into("<I", out, OFF_TOTAL,
+                     (arc.total & 0xF0000000) | (len(corps) // 4))
     return bytes(out)
 
 

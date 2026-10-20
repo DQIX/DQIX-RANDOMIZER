@@ -23,7 +23,9 @@ independamment. Plus chaotique, mais certaines especes n'apparaissent nulle part
 
 EN OPTION :
     --tirage-libre  tirage independant au lieu d'une permutation globale
-    --stats         randomise aussi les statistiques (data/prm/mon_btldata.nat)
+    --stats         tire aussi les statistiques des monstres, x0,5 a x2 de leur
+                    valeur (mon_moddata.nat ET mon_btldata.nat, ZER-58)
+    --stats-chaos   les memes, tirees sans regarder la valeur d'origine
     --boss          randomise aussi les 98 combats scriptes du scenario
 
 Usage :
@@ -37,7 +39,9 @@ PHILOSOPHIE : DUR PAR DEFAUT. Un randomizer est cense etre brutal. Par defaut
 la randomisation est donc COMPLETE, sans egard pour la courbe de difficulte :
 un monstre a 8000 HP peut apparaitre au premier combat, c'est le jeu.
 
-Le bornage de progression existe mais il est OPTIONNEL :
+Le bornage de progression existe mais il est OPTIONNEL. Les options qui
+suivent sont l'ANCIEN tirage des stats (`--stats --mode ...`), qui n'ecrivait
+que mon_btldata ; il est garde, et recopie desormais dans mon_moddata :
 
   - `--fenetre N` (mode shuffle) limite le deplacement d'un bloc de stats a N
     rangs dans l'ordre du bestiaire. La table est ordonnee suivant la
@@ -50,6 +54,7 @@ Le bornage de progression existe mais il est OPTIONNEL :
 Sans ces options, on obtient le comportement voulu : le chaos.
 """
 import argparse
+import json
 import os
 import random
 import shutil
@@ -270,13 +275,69 @@ def adopter_source(rom, controle=True):
         "  Le randomizer refuse plutot que de produire un jeu casse.")
 
 
+def stats_familles(a, combat=False):
+    """[(familles, chaos)] a tirer : monstres (--stats...) et boss
+    (--stats-boss...) ; une seule passe quand les deux ont le meme mode."""
+    import patch_stats as PS
+    m = a.stats_combat if combat else a.stats
+    b = a.stats_boss_combat if combat else a.stats_boss
+    if m and b and a.stats_chaos == a.stats_boss_chaos:
+        return [((PS.MONSTRES, PS.BOSS), a.stats_chaos)]
+    out = []
+    if m:
+        out.append(((PS.MONSTRES,), a.stats_chaos))
+    if b:
+        out.append(((PS.BOSS,), a.stats_boss_chaos))
+    return out
+
+
+def nom_familles(fam):
+    return ("monstres et des boss" if len(fam) == 2
+            else "monstres" if fam[0] else "boss")
+
+
+OPTIONS_JOURNAL = "options : "
+
+
+def options_relisibles(argv, rom):
+    """La ligne de commande sans la ROM source ni la sortie."""
+    out, saute = [], False
+    for x in argv:
+        if saute:
+            saute = False
+            continue
+        if x in ("-o", "--sortie"):
+            saute = True
+            continue
+        if x == rom:
+            continue
+        out.append(x)
+    return out
+
+
+def lire_options_journal(journal):
+    """Les options qu'un journal a enregistrees (liste), ou None."""
+    try:
+        with open(journal, encoding="utf-8") as f:
+            for ligne in f:
+                if ligne.startswith(OPTIONS_JOURNAL):
+                    return json.loads(ligne[len(OPTIONS_JOURNAL):])
+                if not ligne.strip():
+                    break
+    except (OSError, ValueError):
+        pass
+    return None
+
+
 def main():
     ap = argparse.ArgumentParser(
         description="Randomizer de monstres pour Dragon Quest IX (NDS)",
         formatter_class=argparse.RawDescriptionHelpFormatter, epilog=__doc__)
     ap.add_argument("rom", help="la ROM d'origine (jamais modifiee en place)")
     ap.add_argument("--seed", type=int, required=True, help="graine, pour la reproductibilite")
-    ap.add_argument("--mode", choices=sorted(MODES), default="shuffle")
+    # L'ANCIEN TIRAGE DES STATS : seulement si --mode est donne. Sans lui,
+    # --stats tire des valeurs (patch_stats, ZER-58).
+    ap.add_argument("--mode", choices=sorted(MODES), default=None)
     ap.add_argument("--fenetre", type=int, default=0,
                     help="mode shuffle : borne le deplacement d'un bloc de stats "
                          "a N rangs du bestiaire, pour adoucir la courbe de "
@@ -523,9 +584,41 @@ def main():
                          "grottes, terrain) ; ailleurs, le tirage fait a la "
                          "construction s'applique (ZER-60).")
     ap.add_argument("--stats", dest="stats", action="store_true", default=False,
-                    help="randomiser AUSSI les statistiques des monstres. "
-                         "Desactive par defaut : le randomizer ne touche qu'aux "
-                         "rencontres.")
+                    help="tirer AUSSI les statistiques des MONSTRES du "
+                         "bestiaire (les boss : --stats-boss) : PV, PM, "
+                         "attaque, defense, agilite entre "
+                         "x0,5 et x2 de leur valeur, chaque resistance a un "
+                         "cran pres. Ecrit mon_moddata (lu par le combat) et "
+                         "mon_btldata, identiques (ZER-58). Generateur a "
+                         "part : le reste de la ROM ne change pas.")
+    ap.add_argument("--stats-combat", dest="stats_combat", action="store_true",
+                    default=False,
+                    help="avec --stats (implique) : PV, PM, attaque, defense "
+                         "et agilite se RETIRENT A CHAQUE COMBAT dans leur "
+                         "plage (greffe dans l'ARM9, ZER-96) ; les "
+                         "resistances restent celles de la construction.")
+    ap.add_argument("--stats-chaos", dest="stats_chaos", action="store_true",
+                    default=False,
+                    help="avec --stats (implique) : chaque stat tiree sur "
+                         "toute sa plage (celle du bestiaire, ou des boss "
+                         "pour un boss), chaque resistance n'importe ou sur "
+                         "son echelle.")
+    # LES BOSS A PART (joueur, 20/10/2026 : « une option dans les monstres,
+    # une option dans les boss »), avec leurs propres sous-options.
+    ap.add_argument("--stats-boss", dest="stats_boss", action="store_true",
+                    default=False,
+                    help="les statistiques des BOSS (les fiches hors du "
+                         "bestiaire), comme --stats ; le combat du tutoriel, "
+                         "Aquila et Corvus des cinematiques et le mannequin "
+                         "restent intacts.")
+    ap.add_argument("--stats-boss-combat", dest="stats_boss_combat",
+                    action="store_true", default=False,
+                    help="avec --stats-boss (implique) : retirees a chaque "
+                         "combat, comme --stats-combat.")
+    ap.add_argument("--stats-boss-chaos", dest="stats_boss_chaos",
+                    action="store_true", default=False,
+                    help="avec --stats-boss (implique) : sur toute la plage "
+                         "des boss, comme --stats-chaos.")
     ap.add_argument("--objets", dest="objets", action="store_true",
                     default=True,
                     help="randomiser le CONTENU DES CONTENEURS : coffres "
@@ -696,6 +789,17 @@ def main():
                     help="avec --techniques-monstres (qu'il implique) : les "
                          "monstres SANS technique en recoivent une, sur un seul "
                          "de leurs six emplacements.")
+    ap.add_argument("--actions-fixes", dest="actions_fixes",
+                    action="store_true", default=False,
+                    help="avec --sorts-monstres et/ou --techniques-monstres : "
+                         "UN KIT FIXE PAR MONSTRE, tire a la construction "
+                         "(tous les gluants ont les memes sorts et techniques "
+                         "toute la partie) au lieu d'un tirage a chaque "
+                         "combat. Aucune greffe : les techniques du kit "
+                         "recoivent leur VRAIE animation, recopiee dans le "
+                         ".bact du modele de combat de chaque espece "
+                         "(enemy.gp2, scripts/patch_kits_animes.py) ; a "
+                         "defaut, un cas generique de default.bact.")
     ap.add_argument("--coffres-rouges-libres", dest="rang_rouges",
                     action="store_false", default=True,
                     help="avec --objets : un coffre rouge peut contenir "
@@ -783,6 +887,26 @@ def main():
                          "technique d'arc rangee dans l'arbre de l'epee ne "
                          "s'utilise qu'avec un arc). Sans cette option, elle "
                          "demande l'arme de l'arbre ou elle arrive (ZER-65).")
+    ap.add_argument("--points-brillants", dest="points", action="store_true",
+                    default=False,
+                    help="randomiser les OBJETS DES POINTS BRILLANTS : un "
+                         "objet tire A CHAQUE RAMASSAGE dans un pool de 16 "
+                         "objets courants par carte (les 143 repartis sur les "
+                         "cartes) (jamais un equipement ni "
+                         "un objet important), zones speciales 98/99 "
+                         "comprises (ZER-97, research 105). Generateur a "
+                         "part : le reste de la ROM ne change pas ; "
+                         "flditem.pac et izmitm.bin changent de taille.")
+    ap.add_argument("--points-brillants-fixes", dest="points_fixes",
+                    action="store_true", default=False,
+                    help="avec --points-brillants (implique) : un objet "
+                         "tire une fois pour toutes par groupe de points, a "
+                         "la construction (aucun code, aucune taille ne "
+                         "change).")
+    ap.add_argument("--points-brillants-par-rang", dest="points_par_rang",
+                    action="store_true", default=False,
+                    help="avec --points-brillants (implique) : un objet a "
+                         "une etoile pres de celui du jeu d'origine.")
     ap.add_argument("--alchimie", dest="alchimie", action="store_true",
                     default=False,
                     help="randomiser LES INGREDIENTS DES RECETTES de la "
@@ -826,10 +950,11 @@ def main():
                          "--vocations-embauche --vocation-depart "
                          "--butin-combat "
                          "--butin-combat-libre --alchimie --medailles "
-                         "--medailles-chaos. "
+                         "--medailles-chaos --points-brillants. "
                          "Tout ce qui peut etre tire l'est sans borne. "
-                         "N'INCLUT PAS --boss-terrain, --sorts-monstres ni "
-                         "--techniques-monstres, qui sont experimentaux.")
+                         "N'INCLUT PAS --boss-terrain (experimental), "
+                         "--sorts-monstres, --techniques-monstres ni les "
+                         "stats (au choix du joueur).")
     ap.add_argument("--inclure-speciaux", action="store_true",
                     help="toucher aussi les entrees de test et le mannequin d'entrainement")
     ap.add_argument("--config", dest="config", metavar="FICHIER",
@@ -886,10 +1011,18 @@ def main():
         a.butin = a.butin_libre = True
         a.alchimie = True
         a.medailles = a.medailles_chaos = True
-        # sorts et techniques des monstres : experimentaux, hors de
-        # --chaos-total (decision du joueur, 11/10/2026)
+        # les points brillants, comme le prereglage chaos (joueur, 20/10)
+        a.points = True
+        # sorts et techniques des monstres : hors de --chaos-total
+        # (decision du joueur, 11/10/2026)
     if a.medailles_chaos or a.medailles_seuils_vanilla:
         a.medailles = True
+    if a.stats_chaos or a.stats_combat:
+        a.stats = True
+    if a.stats_boss_chaos or a.stats_boss_combat:
+        a.stats_boss = True
+    if a.points_par_rang or a.points_fixes:
+        a.points = True
     if a.sans_rom and not a.exporter_config:
         raise SystemExit("--sans-rom ne sert qu'avec --exporter-config")
     config = None
@@ -952,6 +1085,11 @@ def main():
     if a.boss_chaque_combat and not a.blob:
         raise SystemExit("--boss-chaque-combat implique --blob : le tirage a "
                          "chaque combat vit dans le blob.")
+    if a.actions_fixes and not (a.sorts_monstres or a.sorts_monstres_ajout
+                                or a.techniques_monstres
+                                or a.techniques_monstres_ajout):
+        raise SystemExit("--actions-fixes : avec --sorts-monstres et/ou "
+                         "--techniques-monstres")
     if a.sorts_monstres_ajout:
         a.sorts_monstres = True
     if a.techniques_monstres_ajout:
@@ -975,12 +1113,15 @@ def main():
           f"({len(table) - len(ordre)} exclu(s))")
     detail = (f"fenetre={a.fenetre or 'aucune'}" if a.mode == "shuffle"
               else f"paliers={a.paliers}" if a.mode == "chaos"
-              else f"ampleur={a.ampleur}")
+              else f"ampleur={a.ampleur}" if a.mode == "scale"
+              else "stats=" + ("chaos" if a.stats_chaos else "x0,5-x2"))
     print(f"mode={a.mode} seed={a.seed} {detail} "
           f"resistances={'oui' if a.resistances else 'non'}")
 
-    if a.stats:
+    if a.stats and a.mode:
         MODES[a.mode](rng, table, ordre, a.resistances, a)
+    elif a.stats or a.stats_boss:
+        print("  statistiques : tirees a la reinjection (ZER-58)")
     else:
         print("  statistiques : INTACTES (ajouter --stats pour les randomiser)")
 
@@ -1194,15 +1335,22 @@ def main():
         assert all(0 <= x <= 255 for x in table[i].res_elem + table[i].res_etat)
 
     # journal
-    base = a.sortie or f"work/dq9_rand_{a.mode}_s{a.seed}.nds"
+    base = a.sortie or f"work/dq9_rand_{a.mode or 'std'}_s{a.seed}.nds"
     os.makedirs(os.path.dirname(base) or ".", exist_ok=True)
     journal = os.path.splitext(base)[0] + "_journal.txt"
     modifies = 0
     with open(journal, "w", encoding="utf-8") as jf:
         jf.write(f"Randomizer DQ9 - mode={a.mode} seed={a.seed} {detail} "
                  f"resistances={a.resistances}\n")
-        jf.write(f"ROM source : {a.rom}\n")
+        # chemin complet : « Modifier ma ROM » la retrouve d'ou qu'on lance
+        jf.write(f"ROM source : {os.path.abspath(a.rom)}\n")
+        # LES OPTIONS, RELISIBLES : « Modifier ma ROM » de la fenetre les
+        # reprend pour reconstruire la ROM d'une partie en cours avec une
+        # option changee (joueur, 20/10/2026).
+        jf.write(OPTIONS_JOURNAL + json.dumps(options_relisibles(
+            sys.argv[1:], a.rom)) + "\n")
         jf.write(f"rencontres={a.rencontres} boss={a.boss} stats={a.stats} "
+                 f"stats_boss={a.stats_boss} "
                  f"tirage_libre={a.tirage_libre}\n\n")
 
         # --- ce que le randomizer a fait aux rencontres ---
@@ -1247,7 +1395,7 @@ def main():
                     jf.write(f"     apres : {', '.join(ap2)}\n")
                 jf.write("\n")
 
-        if not a.stats:
+        if not (a.stats or a.stats_boss):
             jf.write("statistiques des monstres : INTACTES\n")
         entete = (f"  idx   id  {'monstre':<26s}       "
                   + "".join(f"{s:>9}" for s in STATS))
@@ -1260,13 +1408,13 @@ def main():
                          + "".join(f"{av[s]:9d}" for s in STATS) + "\n")
                 jf.write(f"{'':11s} {'':<26s} apres"
                          + "".join(f"{ap_[s]:9d}" for s in STATS) + "\n")
-    if a.stats:
+    if a.stats and a.mode:
         print(f"{modifies} monstre(s) modifie(s) aux statistiques")
     print(f"journal detaille : {journal}")
 
     # Rapport sur les statistiques : n'a de sens que si on y a touche.
     # C'est une INFORMATION, pas un objectif -- un randomizer est cense etre dur.
-    if a.stats:
+    if a.stats and a.mode:
         print("\nrepartition des HP par tranche de progression (information)")
         print(f"  {'tranche':<12} {'avant (min-med-max)':<28} {'apres (min-med-max)'}")
         for k, grp in enumerate(tranches(ordre, 8)):
@@ -1285,8 +1433,26 @@ def main():
         return
 
     print("\nreinjection et reconstruction de la ROM (environ 50 s)...")
-    if a.stats:
+    if a.stats and a.mode:
+        # l'ancien tirage n'ecrit que mon_btldata : on recopie dans
+        # mon_moddata, celui que le combat lit (ZER-58)
+        import patch_stats
         table.ecrire_dans_rom(rom)
+        patch_stats.synchroniser(rom)
+    elif a.stats or a.stats_boss:
+        # MONSTRES ET BOSS, DEUX OPTIONS (joueur, 20/10/2026). Meme mode pour
+        # les deux : UN tirage, celui d'avant la separation (memes ROMs).
+        import patch_stats as PS
+        noms_st = {i: getattr(table[i], "nom", None)
+                   for i in range(len(table))}
+        for fam, chaos_f in stats_familles(a):
+            with open(journal, "a", encoding="utf-8") as jf:
+                n_st = PS.patcher(rom, a.seed, chaos=chaos_f, journal=jf,
+                                  noms=noms_st, familles=fam)
+            print("  statistiques des %s : %d fiches tirees%s"
+                  % (nom_familles(fam), n_st,
+                     "  [CHAOS]" if chaos_f else "  [x0,5 a x2]"))
+        PS.verifier(rom)
     if rencontres is not None:
         rencontres.ecrire_dans_rom()
         # LA MUSIQUE SUIT LE BOSS (ZER-94, defaut sans option) : chaque
@@ -1556,14 +1722,39 @@ def main():
                    if a.sorts_monstres else None)
         m_tech = (("ajouter" if a.techniques_monstres_ajout else "remplacer")
                   if a.techniques_monstres else None)
-        print("actions des monstres tirees a chaque combat :")
-        # les techniques gardent leur VRAIE animation, une dizaine par combat
-        # (scripts/patch_animations.py, ZER-57)
-        patcher_actions(rom, sorts=m_sorts, techniques_mode=m_tech,
-                        seed=a.seed, animations=bool(m_tech))
-        if verifier_actions(rom) != (m_sorts, m_tech):
-            raise SystemExit("actions des monstres : la verification ne "
-                             "relit pas les modes demandes")
+        if a.actions_fixes:
+            # UN KIT FIXE PAR MONSTRE, tire ici : de la donnee seule
+            # (joueur, 20/10/2026)
+            from patch_actions import fixer, verifier_fixe
+            print("actions des monstres : un kit fixe par monstre :")
+            fixer(rom, sorts=m_sorts, techniques_mode=m_tech, seed=a.seed)
+            print("  %d especes changees" % verifier_fixe(rom))
+            # LES VRAIES ANIMATIONS, dans le modele de chaque espece
+            # (valide en jeu, v17z11/z12, 20/10/2026)
+            import patch_kits_animes
+            patch_kits_animes.poser(rom)
+            patch_kits_animes.verifier(rom)
+        else:
+            print("actions des monstres tirees a chaque combat :")
+            # les techniques gardent leur VRAIE animation, une dizaine par
+            # combat (scripts/patch_animations.py, ZER-57)
+            patcher_actions(rom, sorts=m_sorts, techniques_mode=m_tech,
+                            seed=a.seed, animations=bool(m_tech))
+            if verifier_actions(rom) != (m_sorts, m_tech):
+                raise SystemExit("actions des monstres : la verification ne "
+                                 "relit pas les modes demandes")
+    if a.stats_combat or a.stats_boss_combat:
+        # APRES LA GREFFE DES ACTIONS : le crochet de 0x02165A30 se chaine
+        # sur ce qui y est (ZER-96). Les plages dans mon_btldata +0x2C, le
+        # code dans trois fragments libres de l'ARM9.
+        import patch_stats as PS
+        for fam, chaos_f in stats_familles(a, combat=True):
+            n_c = PS.patcher_combat(rom, chaos=chaos_f, familles=fam)
+            print("  statistiques des %s : retirees a chaque combat%s "
+                  "(%d especes en tout)"
+                  % (nom_familles(fam),
+                     "  [CHAOS]" if chaos_f else "  [x0,5 a x2]", n_c))
+        PS.verifier(rom)
     if a.alchimie:
         # PUREMENT DE LA DONNEE : les ingredients reecrits en place dans les
         # cinq membres de recipe.gp2, puis l'archive recompressee (sa taille
@@ -1580,6 +1771,31 @@ def main():
         print(f"  {n_alc} recettes sur {c_alc['recettes']} recomposees, "
               f"{c_alc['paires']} variantes de grand succes alignees, "
               f"pool de {c_alc['pool']} objets")
+    if a.points:
+        # PUREMENT DE LA DONNEE : un u32 par groupe de points, reecrit en
+        # place dans flditem.pac et izmitm.bin ; generateur derive de la
+        # graine (ZER-97).
+        import patch_points
+        import ndspy.rom as _nr
+        from rom_vanilla import chemin_vanilla as _cv
+        print("objets des points brillants%s%s :"
+              % ("  [fixes]" if a.points_fixes else "  [a chaque ramassage]",
+                 "  [a une etoile pres]" if a.points_par_rang else
+                 "  [tout objet courant]"))
+        with open(journal, "a", encoding="utf-8") as jf:
+            n_g, n_t = patch_points.patcher(rom, a.seed,
+                                            par_rang=a.points_par_rang,
+                                            ramassage=not a.points_fixes,
+                                            langue=a.langue, journal=jf)
+        patch_points.verifier(rom, _nr.NintendoDSRom.fromFile(_cv()),
+                              par_rang=a.points_par_rang,
+                              ramassage=not a.points_fixes)
+        if a.points_fixes:
+            print(f"  {n_g} groupes du terrain sur 87, {n_t} cases des "
+                  f"zones speciales sur 128")
+        else:
+            print(f"  {n_g} cartes tirent au ramassage ; zones 98/99 : "
+                  f"{n_t} objets differents")
     if a.medailles:
         # DEUX TABLES EN DUR DANS L'OVERLAY 4 (le menu du Capitaine), que
         # rien d'autre ne touche. Generateur derive de la graine (ZER-55).
@@ -1614,7 +1830,8 @@ def main():
         try:
             import ndspy.rom as _nr
             faits = config_rom.appliquer(
-                rom, config, vanilla=_nr.NintendoDSRom.fromFile(a.rom))
+                rom, config, vanilla=_nr.NintendoDSRom.fromFile(a.rom),
+                graine=a.seed)
         except config_rom.ConfigInvalide as e:
             raise SystemExit("--config %s : %s" % (a.config, e))
         for cat, n in faits.items():

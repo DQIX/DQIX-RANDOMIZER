@@ -69,20 +69,24 @@ def _categories():
     import config_coffres
     import config_grottes
     import config_monstres
+    import config_points
     import config_sorts
+    import config_stats
     import config_vocations
     import patch_medailles
     return {"capitaine": patch_medailles, "boss": config_boss,
             "boutiques": config_boutiques, "coffres": config_coffres,
-            "grottes": config_grottes, "alchimie": config_alchimie,
+            "grottes": config_grottes, "points": config_points,
+            "alchimie": config_alchimie,
             "arbres": config_arbres, "sorts": config_sorts,
             "vocations": config_vocations, "monstres": config_monstres,
-            "butin": config_butin, "actions": config_actions}
+            "butin": config_butin, "stats": config_stats,
+            "actions": config_actions}
 
 
 CATEGORIES = ("capitaine", "boss", "boutiques", "coffres", "grottes",
-              "alchimie", "arbres", "sorts", "vocations", "monstres", "butin",
-              "actions")
+              "points", "alchimie", "arbres", "sorts", "vocations", "monstres", "butin",
+              "stats", "actions")
 
 
 def exporter(rom, langue="en", commande=""):
@@ -210,20 +214,23 @@ def vocations(rom, langue="en"):
     return config_vocations.noms(rom, langue)
 
 
-def appliquer(rom, cfg, vanilla=None):
+def appliquer(rom, cfg, vanilla=None, graine=0):
     """Ecrit chaque categorie presente. Rend {categorie: cases changees}.
 
     `vanilla` : la ROM d'origine. Certaines categories (arbres, vocations,
     prix des boutiques) reecrivent depuis ses octets : sans elle, elles
-    refusent ce qu'elles ne savent pas defaire."""
+    refusent ce qu'elles ne savent pas defaire. `graine` : celle de la
+    construction, pour les cases qui se tirent a la construction (le mode
+    tire des stats)."""
     out = {}
     verrous = cfg.get("verrous", True) is not False
     for nom, mod in _categories().items():
         if nom in cfg:
             if not isinstance(cfg[nom], dict):
                 raise ConfigInvalide("%s : objet attendu" % nom)
+            extra = {"graine": graine} if nom == "stats" else {}
             out[nom] = mod.appliquer(rom, cfg[nom], verrous=verrous,
-                                     vanilla=vanilla)
+                                     vanilla=vanilla, **extra)
     # LA FICHE DU BESTIAIRE suit le butin que la config laisse (ZER-95)
     import bestiaire
     bestiaire.accorder(rom, vanilla)

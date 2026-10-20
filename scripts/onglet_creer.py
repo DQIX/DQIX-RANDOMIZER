@@ -144,14 +144,32 @@ class OngletCreer(object):
             app._poser(b, cle)
             self.boutons_cat.append(b)
 
+        # CHERCHER UNE LIGNE (joueur, 20/10/2026 : 438 monstres dans les
+        # stats) : la frappe saute a la premiere ligne qui contient le texte
+        # (sans accents ni casse), Entree a la suivante.
+        ligne_c = ttk.Frame(droite)
+        ligne_c.pack(fill="x", pady=(6, 0))
+        lab = ttk.Label(ligne_c)
+        lab.pack(side="left", padx=(0, 4))
+        app._poser(lab, "creer_chercher")
+        self.cherche = tk.StringVar()
+        champ = ttk.Entry(ligne_c, textvariable=self.cherche, width=30)
+        champ.pack(side="left")
+        champ.bind("<KeyRelease-Return>", lambda _e: self.chercher(True))
+        champ.bind("<KeyRelease>", lambda e: e.keysym == "Return"
+                   or self.chercher(False))
+
         cadre_t = ttk.Frame(droite)
         cadre_t.pack(fill="both", expand=True, pady=(6, 0))
         self.table = ttk.Treeview(cadre_t, show="headings", height=10,
                                   selectmode="browse")
-        self.table.pack(side="left", fill="both", expand=True)
         asc = ttk.Scrollbar(cadre_t, command=self.table.yview)
+        hsc = ttk.Scrollbar(cadre_t, orient="horizontal",
+                            command=self.table.xview)
+        hsc.pack(side="bottom", fill="x")
+        self.table.pack(side="left", fill="both", expand=True)
         asc.pack(side="left", fill="y")
-        self.table.configure(yscrollcommand=asc.set)
+        self.table.configure(yscrollcommand=asc.set, xscrollcommand=hsc.set)
         self.table.tag_configure("figee", background=COULEUR_FIGEE)
         self.table.tag_configure("changee", background=COULEUR_CHANGEE)
         self.table.tag_configure("grise", foreground="#a0a0a0")
@@ -175,6 +193,33 @@ class OngletCreer(object):
         self.retraduire()
 
     # ------------------------------------------------------------ affichage
+
+    @staticmethod
+    def _plat(texte):
+        import unicodedata
+        t = unicodedata.normalize("NFKD", str(texte))
+        return "".join(c for c in t if not unicodedata.combining(c)).lower()
+
+    def chercher(self, suivant=False):
+        """Selectionne et montre la premiere ligne (apres la selection si
+        `suivant`) dont une colonne contient le texte cherche."""
+        txt = self._plat(self.cherche.get().strip())
+        lignes = self.table.get_children()
+        if not txt or not lignes:
+            return False
+        debut = 0
+        sel = self.table.selection()
+        if sel and sel[0] in lignes:
+            debut = lignes.index(sel[0]) + (1 if suivant else 0)
+        for k in range(len(lignes)):
+            it = lignes[(debut + k) % len(lignes)]
+            if any(txt in self._plat(v)
+                   for v in self.table.item(it, "values")):
+                self._fermer_editeur()
+                self.table.selection_set(it)
+                self.table.see(it)
+                return True
+        return False
 
     def _t(self, cle, *args):
         return self.app._t(cle, *args)
@@ -293,9 +338,11 @@ class OngletCreer(object):
         for c, genre in self._champs_vus:
             self.table.heading(c, text=self._t("champ_" + c))
             self.table.column(c, width=90 if genre in ("nombre", "booleen") else
-                              130 if genre in ("tirage", "source") else 260,
+                              130 if genre in ("tirage", "source",
+                                               "mode_stats") else 260,
                               stretch=genre not in ("nombre", "tirage",
-                                                    "source", "booleen"))
+                                                    "source", "booleen",
+                                                    "mode_stats"))
         self.table.delete(*self.table.get_children())
         if not self.cfg:
             return
@@ -320,9 +367,16 @@ class OngletCreer(object):
                         " · ".join(self._montrer(lv[c], g, lv, c)
                                         for c, g in self._champs_vus
                                         if g != "tirage" and c in lv)]
-                vals += [self._montrer(ligne[c], g, ligne, c) if c in ligne
+                # UNE CASE QUI NE SERT PAS (les valeurs d'un monstre aux
+                # stats tirees, ZER-58) : un tiret ; UNE LIGNE QUI NE SERT
+                # PAS (ses plages s'il est fixe) : grisee
+                vals += ["—" if c in ligne and f.get("case_grise") and
+                         f["case_grise"](section, table, k, c) else
+                         self._montrer(ligne[c], g, ligne, c) if c in ligne
                          else "" for c, g in self._champs_vus]
-                tags = (("grise",) if table in grises else
+                grisee = table in grises or bool(
+                    f.get("ligne_grise") and f["ligne_grise"](section, table, k))
+                tags = (("grise",) if grisee else
                         ("figee",) if figee else
                         ("changee",) if lv is None or any(
                             ligne.get(c) != lv.get(c) for c in champs)
@@ -345,6 +399,8 @@ class OngletCreer(object):
             return self._mode(v)
         if genre == "source":
             return self._t("source_" + v)
+        if genre == "mode_stats":
+            return self._t("mode_stats_" + v)
         if genre == "booleen":
             return self._t("booleen_oui" if v else "booleen_non")
         if genre in self.etiq:
@@ -627,6 +683,11 @@ class OngletCreer(object):
                                else a.sorts_chaos).get())
         if self.cat == "butin":
             return dict(libre=a.butin_libre.get())
+        if self.cat == "stats":
+            return dict(chaos=a.stats_chaos.get(),
+                        combat=a.stats_combat.get())
+        if self.cat == "points":
+            return dict(par_rang=a.points_par_rang.get())
         if self.cat == "monstres":
             # LE MODE CHOISI DANS L'ONGLET, pas celui de l'onglet Monstres
             # (joueur, 20/10/2026 : les deux sont separes)
@@ -783,8 +844,12 @@ class OngletCreer(object):
         champ, genre = self._champs_vus[col - 3]
         table, k = iid.split(":")
         k = int(k)
-        if table in self._tables_vues()[1]:
-            self._etat("creer_grise", couleur="#b00")
+        section = self.cfg[self.cat]
+        if table in self._tables_vues()[1] or (
+                f.get("ligne_grise") and f["ligne_grise"](section, table, k)
+        ) or (f.get("case_grise") and f["case_grise"](section, table, k,
+                                                      champ)):
+            self._etat(f.get("grise", "creer_grise"), couleur="#b00")
             return
         ligne = self.cfg[self.cat][table][k]
         if champ not in ligne:
@@ -876,6 +941,19 @@ class OngletCreer(object):
             e = ttk.Combobox(self.table, values=list(par_texte), height=4,
                              state="readonly")
             e.set(self._t("source_" + actuel))
+
+            def lu(_e=None):
+                valider(par_texte.get(e.get()))
+            e.bind("<<ComboboxSelected>>", lu)
+            e.bind("<Return>", lu)
+        elif genre == "mode_stats":
+            # les stats d'un monstre : fixes ou tirees (ZER-58)
+            import config_stats
+            par_texte = {self._t("mode_stats_" + c): c
+                         for c in config_stats.MODES}
+            e = ttk.Combobox(self.table, values=list(par_texte), height=4,
+                             state="readonly")
+            e.set(self._t("mode_stats_" + actuel))
 
             def lu(_e=None):
                 valider(par_texte.get(e.get()))
