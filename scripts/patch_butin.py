@@ -124,10 +124,14 @@ def decoder(base, donnees):
     return out
 
 
-def construire_table(rom, mode):
-    """En-tete (u16 nombre, u16 premier identifiant) puis les suites."""
+def construire_table(rom, mode, pool=None):
+    """En-tete (u16 nombre, u16 premier identifiant) puis les suites.
+    `pool` : les objets a tirer (objets.pool par defaut ; une liste de
+    « Creer sa ROM », ZER-93)."""
     import objets
-    pool = objets.pool(rom)
+    pool = sorted(set(objets.pool(rom) if pool is None else pool))
+    if not pool:
+        raise ValueError("butin : un pool vide ne se tire pas")
     etoiles = objets.raretes(rom, "en")
     base, donnees = encoder(pool, etoiles, mode == "rares")
     relu = decoder(base, donnees)
@@ -214,14 +218,14 @@ def _desas(data, base, adr):
     return ("%s %s" % (ins.mnemonic, ins.op_str)) if ins else "?"
 
 
-def patcher(rom, mode="rares", bavard=True):
+def patcher(rom, mode="rares", bavard=True, pool=None):
     """Pose la greffe et sa table derriere le BSS de l'overlay 23.
     `mode` : `rares` ou `libre`. Rend le nombre d'objets du pool."""
     import ndspy.code
     from patch_hasard import assembler
     if mode not in ("rares", "libre"):
         raise ValueError(mode)
-    table = construire_table(rom, mode)
+    table = construire_table(rom, mode, pool)
     ovl = rom.loadArm9Overlays()
     o = ovl[OVL]
     base = o.ramAddress
@@ -264,29 +268,49 @@ def patcher(rom, mode="rares", bavard=True):
     return n
 
 
-def verifier(rom):
-    """Relit la ROM : les deux sites visent la greffe, et la table decode
-    exactement le pool. Rend le mode lu."""
+ADR_GREFFE = 0x021FFF40         # derriere le BSS de l'overlay 23
+
+
+def lire(rom):
+    """(mode, pool) de la greffe posee dans `rom`, ou None sans greffe.
+    Leve si la greffe est la mais que ses octets ne sont pas les notres.
+
+    LE MODE SE LIT DANS LES DRAPEAUX de la table : `rares` les pose sur les
+    suites 4-5 etoiles, `libre` jamais. Un pool sans objet 4-5 etoiles rend
+    les memes octets dans les deux modes : on le dit `rares`, le defaut."""
     import objets
     o = rom.loadArm9Overlays()[OVL]
-    base = o.ramAddress
-    adr = 0x021FFF40
+    base, adr = o.ramAddress, ADR_GREFFE
     if o.bssSize != 0 or base + o.ramSize <= adr:
-        raise AssertionError("overlay 23 : greffe absente")
+        return None
     for site, cible in ((SITE_RARE, adr), (SITE_COMMUN, adr + 8)):
         lu = _desas(o.data, base, site)
         if lu != "bl #%#x" % cible:
             raise AssertionError("overlay 23 : %#010x lit %r" % (site, lu))
     bloc = bytes(o.data[adr - base:])
-    for mode in ("rares", "libre"):
-        table = construire_table(rom, mode)
-        if bloc == greffe(adr, mode, table):
-            break
-    else:
-        raise AssertionError("overlay 23 : greffe ou table inattendue")
+    n_code = len(greffe(adr, "libre", b""))
+    table = bloc[n_code:]
     n, premier = struct.unpack_from("<HH", table, 0)
     relu = decoder(premier, table[4:])
-    if len(relu) != n or {i for i, _t in relu} != set(objets.pool(rom)):
+    pool = [i for i, _t in relu]
+    mode = ("rares" if any(t for _i, t in relu) or not any(
+        objets.raretes(rom, "en").get(i, 0) >= 4 for i in pool) else "libre")
+    if len(relu) != n or bloc != greffe(adr, mode, construire_table(
+            rom, mode, pool)):
+        raise AssertionError("overlay 23 : greffe ou table inattendue")
+    return mode, pool
+
+
+def verifier(rom, pool=None):
+    """Relit la ROM : les deux sites visent la greffe, et la table decode
+    exactement le pool (objets.pool, ou `pool`). Rend le mode lu."""
+    import objets
+    lu = lire(rom)
+    if lu is None:
+        raise AssertionError("overlay 23 : greffe absente")
+    mode, relu = lu
+    attendu = set(objets.pool(rom) if pool is None else pool)
+    if set(relu) != attendu:
         raise AssertionError("table du butin : ne decode pas le pool")
     return mode
 

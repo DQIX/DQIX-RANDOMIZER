@@ -172,13 +172,9 @@ def patcher(rom, rng, journal=None, chaos=False, langue="en"):
         if journal is not None:
             journal.write(ligne + chr(10))
 
-    fid, t = _lire(rom)
-    taille_avant = len(t.data)
-    noms = sorts.noms_actions(rom)
     affiches = _libelles_affiches(rom, langue)
     tous = lignes(rom)
     place = {i: (f[CHAMP_ARBRE], f[CHAMP_COUT]) for i, f in tous}
-    charge = {i: [f[k] for k in CHAMPS_CHARGE] for i, f in tous}
 
     # LE RANG DE PUISSANCE VIENT DU JEU : le cout en points de competence que
     # le vanilla demandait pour ce palier. Le palier a 0 point (la recompense
@@ -244,6 +240,33 @@ def patcher(rom, rng, journal=None, chaos=False, langue="en"):
             for arrivee, depart in zip(l, sac):
                 perm[arrivee] = depart
 
+    ecrire_permutation(rom, perm, comptes, note, langue)
+    note("")
+    return comptes
+
+
+def ecrire_permutation(rom, perm, comptes=None, note=None, langue="en"):
+    """Pose la permutation {ligne d'arrivee: ligne de depart} des charges
+    sur une ROM dont skilltable, sklname et str_gskl sont VANILLA (les
+    libelles se deplacent d'apres ceux du vanilla). `perm` couvre les 286
+    lignes. Ecrit ce que `patcher` ecrit, octet pour octet : c'est par ici
+    que passent le tirage et l'affectation explicite (config_arbres)."""
+    if note is None:
+        def note(_ligne=""):
+            pass
+    if comptes is None:
+        comptes = dict(arbres=0, paliers=0, aptitudes=0, bonus=0)
+    fid, t = _lire(rom)
+    taille_avant = len(t.data)
+    noms = sorts.noms_actions(rom)
+    affiches = _libelles_affiches(rom, langue)
+    tous = lignes(rom)
+    place = {i: (f[CHAMP_ARBRE], f[CHAMP_COUT]) for i, f in tous}
+    charge = {i: [f[k] for k in CHAMPS_CHARGE] for i, f in tous}
+
+    def rang(cout):
+        return 1000 if cout == 0 else cout
+
     par_arbre = collections.defaultdict(list)
     for i, _f in tous:
         par_arbre[place[i][0]].append(i)
@@ -274,7 +297,6 @@ def patcher(rom, rng, journal=None, chaos=False, langue="en"):
     comptes["libelles"] = _deplacer_libelles(rom, place, perm, note)
     comptes["armes_nommees"] = _nommer_armes(rom, place, perm, note)
     comptes["messages_armes"] = _messages_armes(rom, place, perm, note)
-    note("")
     return comptes
 
 
@@ -305,7 +327,7 @@ def _lisible(nom):
     return nom
 
 
-def _libelles_affiches(rom, langue):
+def _libelles_affiches(rom, langue, lisible=None):
     """Rend {(arbre, cout): libelle}, tel que le menu du jeu l'affichera.
 
     La table est lue AVANT le deplacement, donc chaque couple (arbre, cout)
@@ -329,7 +351,8 @@ def _libelles_affiches(rom, langue):
             fin = membre.find(bytes(1), o)
             if o < fin:
                 out[(r.fields[CHAMP_NOM_ARBRE], r.fields[CHAMP_NOM_COUT])] = (
-                    _lisible(membre[o:fin].decode("utf-8", "replace")))
+                    (lisible or _lisible)(
+                        membre[o:fin].decode("utf-8", "replace")))
     return out
 
 

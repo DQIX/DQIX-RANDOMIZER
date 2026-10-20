@@ -80,6 +80,36 @@ ORDRE_FAMILLES = ("item", "weapon", "shield", "head", "torso", "arms",
 INTOUCHABLES = {30}
 RARES = {33, 35, 37}
 
+# LES OBJETS DE QUETE EN BOUTIQUE (ZER-77), dans TOUS les modes, comme une
+# regle de quete et non une option : la quete d'apres-jeu du Leviathan / de
+# l'Express Celeste les demande, et sans eux on la cherche des heures (retour
+# d'un joueur, 13/10/2026). {boutique: objets} ; chaque objet prend un
+# emplacement de SA famille dans l'etal, le reste de l'etal est tire.
+#   20408 baton du deluge   (watermaul wand)   Finefleur et Ouadi, armes
+#   13329 robe flottante    (flowing dress)    Dracocardis et Kilimagmaro, armures
+#   21294 bouclier d'argent (silver shield)    Ablithia armures 2 -- une
+#         boutique du rare, a 800 % : le bouclier (2 etoiles) y garde sa
+#         place ; sa revente reste celle du jeu (15 250) et son prix d'achat
+#         est ecrit EN CLAIR, divise par le pourcentage, pour s'y afficher a
+#         son prix d'origine (`PRIX_QUETE`, decision du joueur du 13/10/2026).
+#         A ce prix d'achat il ne doit sortir dans aucun autre etal.
+QUETE = {13: (20408,), 17: (20408,), 25: (13329,), 28: (13329,),
+         35: (21294,)}
+PRIX_QUETE = {21294: 30500}       # prix affiche voulu dans la boutique du rare
+
+
+def prix_quete(rom):
+    """{objet: (vente, achat en clair)} pour les objets de PRIX_QUETE vendus
+    dans une boutique du rare : la revente de la ROM, et l'achat qui affiche
+    PRIX_QUETE une fois le pourcentage de l'etal applique."""
+    vente = B.prix_catalogue(rom)
+    out = {}
+    for b, objs in QUETE.items():
+        for o in objs:
+            if o in PRIX_QUETE and b in RARES:
+                out[o] = (vente[o], -(-PRIX_QUETE[o] * 100 // PCT_RARE[b]))
+    return out
+
 # LA RARETE, decidee par le joueur le 18 septembre apres essai : les 4 et 5
 # etoiles ne doivent se trouver QUE dans les trois boutiques du rare. Les
 # trente-trois autres etals s'arretent a 3 etoiles.
@@ -315,6 +345,13 @@ def patcher(rom, rng, langue="en", journal=None, chaos=False,
         if journal is not None:
             journal.write(ligne + "\n")
 
+    # LE PRIX D'ACHAT DES OBJETS DE QUETE DU RARE, avant tout le reste :
+    # le tirage lit les prix. Sans prix fabriques, la boutique reste a 100 %
+    # et l'objet garde son prix.
+    reduits = prix_quete(rom) if prix_fabriques else {}
+    if reduits:
+        import patch_prix
+        patch_prix.retarifer(rom, reduits)
     d, etals = B.lire(rom)
     cat = objets.catalogue(rom)
     achat = B.prix_achat(rom)
@@ -388,9 +425,22 @@ def patcher(rom, rng, langue="en", journal=None, chaos=False,
                 return False
             return not avec_plancher or p >= plafond // PLANCHER_RATIO
 
-        deja, tires = set(), []
-        for ident in e["objets"]:
+        # LES EPINGLES DE QUETE prennent chacune le premier emplacement de
+        # leur famille ; elles entrent dans `deja`, donc le tirage ne les
+        # double pas.
+        epingles = {}
+        for q in QUETE.get(e["id"], ()):
+            k = next(k for k, o in enumerate(e["objets"])
+                     if o and k not in epingles
+                     and B._cat_objet(cat[o]) == B._cat_objet(cat[q]))
+            epingles[k] = q
+        deja, tires = set(epingles.values()) | set(reduits), []
+        for k, ident in enumerate(e["objets"]):
             if not ident:
+                continue
+            if k in epingles:
+                tires.append(epingles[k])
+                comptes["quete"] = comptes.get("quete", 0) + 1
                 continue
             fam = B._cat_objet(cat[ident]) if ident in cat else None
             if not chaos and (fam is None or fam not in tirage):
@@ -534,6 +584,18 @@ def verifier(rom, chaos=False, prix_fabriques=True):
                 raise AssertionError(
                     "boutique %d : %d a %d po en classe 2, la boutique "
                     "afficherait Invendable" % (e["id"], article, affiche))
+        for q in QUETE.get(e["id"], ()):
+            if q not in e["objets"]:
+                raise AssertionError("boutique %d : objet de quete %d absent"
+                                     % (e["id"], q))
+            if q in PRIX_QUETE and (B.prix_catalogue(rom)[q]
+                                    != B.prix_catalogue(_rom_vanilla())[q]):
+                raise AssertionError("objet de quete %d : revente modifiee" % q)
+            if q in PRIX_QUETE and ce_rare and abs(
+                    achat.get(q, 0) * e["pct"] // 100 - PRIX_QUETE[q]) > 50:
+                raise AssertionError("boutique %d : %d affiche %d au lieu de "
+                                     "%d" % (e["id"], q, achat.get(q, 0)
+                                             * e["pct"] // 100, PRIX_QUETE[q]))
         for neuf, avant in zip(e["objets"], ref["objets"]):
             if not avant:
                 continue
@@ -548,6 +610,12 @@ def verifier(rom, chaos=False, prix_fabriques=True):
                                      % (e["id"], neuf))
             if not prix_fabriques:
                 continue
+            if neuf in QUETE.get(e["id"], ()):
+                continue
+            if neuf in PRIX_QUETE and prix_fabriques and e["id"] not in RARES:
+                raise AssertionError("boutique %d : %d a prix d'achat de quete "
+                                     "hors de sa boutique du rare"
+                                     % (e["id"], neuf))
             if e["id"] in RARES and etoiles.get(neuf, 0) < ETOILES_RARE_MIN:
                 raise AssertionError("boutique %d du rare : %d n'a que %d "
                                      "etoiles" % (e["id"], neuf,

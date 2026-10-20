@@ -826,6 +826,10 @@ too. A high cursor is therefore normal and proves nothing. A guard was written
 on top of this theory and removed the same day: it would have killed variety
 for no reason. The wrong colours stay unexplained.
 
+**Settled on 14 October 2026, §101**: not a full palette VRAM but overlapping
+palettes — graft C let on-demand monsters allocate wherever the cursor stood, and the
+field effect system leaves it at `0x39B0`, above the text and the party. Graft C is removed.
+
 ### Built: never show a model we do not have
 
 The remedy written down on 15 September and left unbuilt — "ask for the drawn

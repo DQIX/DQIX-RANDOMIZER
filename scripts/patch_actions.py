@@ -46,8 +46,10 @@ CE QUE FAIT CE PATCH.
     de mon_moddata (0x02165AEC, especes de la zone seulement), qui ecrase le
     premier tirage, on retire. Dans les deux cas le masque est lu dans la
     copie de combat (+0x82).
-  * La greffe fait la copie, tire un sort (0x09..0x3E sauf 0x1D)
-    ou une technique (table de 1 024 bits) pour chaque emplacement marque, et
+  * La greffe fait la copie, tire un sort ou une technique pour chaque
+    emplacement marque -- UNE table de 1 024 bits porte les deux pools
+    (sorts 0x09..0x3E sauf 0x1D, techniques >= 0x3F), UNE routine les tire
+    (ZER-93 : le pool des sorts devient editable, « Creer sa ROM ») -- et
     fixe les PM : max(PM d'origine, 3 x cout de l'action tiree la plus chere),
     plafond 255 ; « tous les PM » (Explosion magique...) ne compte pas.
 
@@ -59,7 +61,7 @@ courts ; la greffe loge dans la place gagnee :
 
     0x02165AB0  52 instr.  -> 20 (champs de fiche+0x0C) + la table de bits
     0x021556D4  50 instr.  -> 15 + la greffe (tirage, PM)
-    0x021557C0  53 instr.  -> 19 + les deux fonctions de tirage
+    0x021557C0  53 instr.  -> 19 + la routine de tirage (8 o libres)
 
 `verifier_equivalence()` prouve les trois reecritures par emulation.
 """
@@ -89,6 +91,9 @@ TIRAGES = 0x0215580C
 
 SORT_PREMIER, SORT_DERNIER = 0x09, 0x3E
 SORTS_EXCLUS = (0x1D,)           # le seul trou de la plage
+# Bornes de la routine de tirage (le minimum rejete est borne >> 4)
+BORNE_SORTS, BORNE_TECH = SORT_DERNIER + 1, 0x3F0
+assert BORNE_SORTS >> 4 <= SORT_PREMIER and BORNE_TECH >> 4 == BORNE_SORTS
 # Doublons de sorts propres aux monstres (research §92.2)
 SORTS_MONSTRES = (0xF6, 0xF7, 0x12A) + tuple(range(0x1C7, 0x1D5))
 FACTEUR_PM = 3
@@ -161,6 +166,12 @@ def sorts():
     """Les identifiants de sorts tirables, dans l'ordre."""
     return [i for i in range(SORT_PREMIER, SORT_DERNIER + 1)
             if i not in SORTS_EXCLUS]
+
+
+def sorts_tirables():
+    """Le pool des sorts par defaut : toute la plage (alias de sorts(),
+    que `patcher` masque par son argument du meme nom)."""
+    return sorts()
 
 
 def est_sort(action):
@@ -364,29 +375,32 @@ def _greffe_lignes():
 
 
 def _tirages_lignes():
+    # UNE SEULE ROUTINE (ZER-93) : sorts et techniques sont dans la MEME
+    # table de bits. r0 = la borne B ; on tire dans [0, B[, on rejette ce qui
+    # est sous B >> 4, puis tout identifiant dont le bit est a 0. Sorts :
+    # B = 0x3F (0..0x3E ; les bits 0..8 et 0x1D ne sont jamais poses) ;
+    # techniques : B = 0x3F0, minimum 0x3F (les sorts ne sortent pas).
     return [
-        "tire_sort:",                       # r0 = un sort, 0x1D exclu
-        "push {r4, lr}",
-        "ts:",
-        "mov r0, #%d" % (SORT_DERNIER - SORT_PREMIER + 1),
-        "bl #%d" % RAND_BELOW,
-        "add r0, r0, #%d" % SORT_PREMIER,
-        "cmp r0, #%d" % SORTS_EXCLUS[0],
-        "beq #{@ts}",
-        "pop {r4, pc}",
-        "tire_tech:",                       # r0 = une action dont le bit est a 1
-        "push {r4, lr}",
+        "tire_sort:",
+        "mov r0, #%d" % BORNE_SORTS,
+        "b #{@tire}",
+        "tire_tech:",
+        "mov r0, #%d" % BORNE_TECH,
+        "tire:",
+        "push {r3, r4, r5, lr}",
+        "mov r5, r0",
         "ldr r4, [pc, #{L0}]",
         "tt:",
-        "mov r0, #0x400",
+        "mov r0, r5",
         "bl #%d" % RAND_BELOW,
-        "lsr r1, r0, #3",
-        "ldrb r1, [r4, r1]",
+        "cmp r0, r5, lsr #4",
+        "blo #{@tt}",
+        "ldrb r1, [r4, r0, lsr #3]",
         "and r2, r0, #7",
         "lsr r1, r1, r2",
         "tst r1, #1",
         "beq #{@tt}",
-        "pop {r4, pc}",
+        "pop {r3, r4, r5, pc}",
         # SECOND SITE (0x02165A30, a la place de `bl 0x02012FF4`) : la copie
         # de combat vient d'etre construite pour toutes les especes
         # presentes ; on tire pour chacune (la copie sur elle-meme de la
@@ -685,26 +699,32 @@ def _fid(rom, chemin):
 
 # --------------------------------------------------------------------------
 
-def patcher(rom, sorts=None, techniques_mode=None, seed=0, bavard=True,
-            mode=None, animations=False):
-    """Pose les trois blocs de l'overlay 0, marque `mon_moddata` et, pour les
-    techniques, allonge les deux cas generiques de default.bact.
-    `sorts`, `techniques_mode` : None, `remplacer`, `ajouter` ou `tous`.
-    (`mode` : ancien nom de `sorts`.) Rend le bilan."""
+def poser_code(rom, pool_sorts, cas, animations=True, bavard=True,
+               techs_table=()):
+    """Pose les blocs de l'overlay 0, la table de tirage = `pool_sorts` +
+    les techniques de `cas` ({cas generique: [ids]}, vide : aucune), et la
+    mise en scene des techniques : les vraies animations (variantes rnd/)
+    ou, sans elles, les cas generiques allonges de default.bact. Ne touche
+    ni aux actions ni aux masques. Rend un bilan. `techs_table` : des
+    techniques mises dans la table SANS mise en scene (config sans
+    emplacement de technique : elles ne sont jamais tirees).
+
+    LA REPARTITION EN VARIANTES NE DEPEND QUE DU POOL (ZER-93) : la meme
+    config donne la meme ROM, quelle que soit la graine qui l'a tiree."""
     import ndspy.code
     import ndspy.narc
-    if mode is not None:
-        sorts = mode
-    if sorts is None and techniques_mode is None:
-        raise ValueError("ni sorts ni techniques")
-    fm, fb = _fid(rom, MOD), _fid(rom, BTL)
-    mod, btl = bytearray(rom.files[fm]), bytearray(rom.files[fb])
-    cas = techniques(rom, bytes(mod))
-    pool = sorted(a for l in cas.values() for a in l) if techniques_mode else []
+    techs = sorted(a for l in cas.values() for a in l)
+    if techs and techs_table:
+        raise ValueError("techs_table : seulement sans mise en scene")
+    if any(not est_sort(a) or a in SORTS_MONSTRES for a in pool_sorts):
+        raise ValueError("pool des sorts : %s" % sorted(pool_sorts))
+    if any(a < BORNE_SORTS or a >= BORNE_TECH for a in techs + list(techs_table)):
+        raise ValueError("pool des techniques hors de [0x3F, 0x3F0[")
     ovl = rom.loadArm9Overlays()
     o = ovl[OVL]
     d = bytearray(o.data)
-    for adr, avant, apres in blocs(pool):
+    for adr, avant, apres in blocs(sorted(set(pool_sorts) | set(techs)
+                                          | set(techs_table))):
         i = adr - o.ramAddress
         if bytes(d[i:i + len(avant)]) != avant:
             raise SystemExit("overlay 0 : bloc 0x%08X inattendu (deja "
@@ -714,17 +734,18 @@ def patcher(rom, sorts=None, techniques_mode=None, seed=0, bavard=True,
     o.data = bytes(d)
     rom.files[o.fileID] = o.save(compress=True)
     rom.arm9OverlayTable = ndspy.code.saveOverlayTable(ovl)
-    bilan = marquer(mod, btl, sorts, techniques_mode, pool,
-                    random.Random("actions-%s" % seed))
-    rom.files[fm], rom.files[fb] = bytes(mod), bytes(btl)
-    if techniques_mode and animations:
+    bilan = {}
+    if techs and animations:
         # LES VRAIES ANIMATIONS (patch_animations) : le combat lit une
         # variante rnd/aNN.nsarc a la place d'actdef.nsarc ; default.bact
-        # d'origine reste intact (il sert de base aux variantes).
+        # d'origine reste intact (il sert de base aux variantes). Chaque
+        # variante porte sa table de tirage : les sorts y sont aussi.
         import patch_animations
-        bilan["variantes"] = patch_animations.patcher(rom, cas, seed=seed,
-                                                      bavard=bavard)
-    elif techniques_mode:
+        import zlib
+        bilan["variantes"] = patch_animations.patcher(
+            rom, cas, seed="pool-%08x" % zlib.crc32(table_bits(techs)),
+            bavard=bavard, sorts=pool_sorts)
+    elif techs:
         fa = rom.filenames.idOf(ACTDEF)
         narc = ndspy.narc.NARC(rom.files[fa])
         narc.files[0] = allonger_default(bytes(narc.files[0]), cas)
@@ -734,6 +755,28 @@ def patcher(rom, sorts=None, techniques_mode=None, seed=0, bavard=True,
                              "au-dela de ~%d" % (bilan["commandes"],
                                                  COMMANDES_MAX))
         rom.files[fa] = narc.save()
+    return bilan
+
+
+def patcher(rom, sorts=None, techniques_mode=None, seed=0, bavard=True,
+            mode=None, animations=False):
+    """Pose les trois blocs de l'overlay 0, marque `mon_moddata` et, pour les
+    techniques, allonge les deux cas generiques de default.bact.
+    `sorts`, `techniques_mode` : None, `remplacer`, `ajouter` ou `tous`.
+    (`mode` : ancien nom de `sorts`.) Rend le bilan."""
+    if mode is not None:
+        sorts = mode
+    if sorts is None and techniques_mode is None:
+        raise ValueError("ni sorts ni techniques")
+    fm, fb = _fid(rom, MOD), _fid(rom, BTL)
+    mod, btl = bytearray(rom.files[fm]), bytearray(rom.files[fb])
+    cas = techniques(rom, bytes(mod))
+    pool = sorted(a for l in cas.values() for a in l) if techniques_mode else []
+    bilan = poser_code(rom, sorts_tirables(), cas if techniques_mode else {},
+                       animations=animations, bavard=bavard)
+    bilan.update(marquer(mod, btl, sorts, techniques_mode, pool,
+                         random.Random("actions-%s" % seed)))
+    rom.files[fm], rom.files[fb] = bytes(mod), bytes(btl)
     bilan["pool"] = len(pool)
     if bavard:
         if sorts:
@@ -763,6 +806,88 @@ def patcher(rom, sorts=None, techniques_mode=None, seed=0, bavard=True,
     return bilan
 
 
+def lire(rom):
+    """Ce que la ROM porte, pour « Creer sa ROM » (config_actions) :
+    {"actions": [6 ids] par fiche (mon_moddata), "masques": [(sorts,
+    techniques)] par fiche (mon_btldata +0x82/+0x83), "code": la greffe est
+    posee, "sorts" / "techniques": les identifiants de la table de tirage
+    (vides sans greffe)}."""
+    mod = bytes(rom.files[_fid(rom, MOD)])
+    btl = bytes(rom.files[_fid(rom, BTL)])
+    n = struct.unpack_from("<I", mod, 0)[0]
+    out = {"actions": [list(struct.unpack_from(
+               "<6H", mod, ENTETE + i * MOD_TAILLE + MOD_ACTIONS))
+               for i in range(n)],
+           "masques": [(btl[ENTETE + i * BTL_TAILLE + BTL_MASQUE],
+                        btl[ENTETE + i * BTL_TAILLE + BTL_MASQUE_T])
+                       for i in range(n)],
+           "code": False, "sorts": [], "techniques": []}
+    o = rom.loadArm9Overlays()[OVL]
+    i = BLOC - o.ramAddress
+    if bytes(o.data[i:i + len(ORIGINE)]) == ORIGINE:
+        return out
+    t = TABLE - o.ramAddress
+    table = bytes(o.data[t:t + 128])
+    pool = [a for a in range(0x400) if table[a >> 3] >> (a & 7) & 1]
+    for adr, _avant, apres in blocs(pool):
+        j = adr - o.ramAddress
+        if bytes(o.data[j:j + len(apres)]) != apres:
+            raise AssertionError("overlay 0 : bloc 0x%08X inattendu" % adr)
+    out.update(code=True, sorts=[a for a in pool if a < BORNE_SORTS],
+               techniques=[a for a in pool if a >= BORNE_SORTS])
+    return out
+
+
+def retirer(rom, vanilla=None):
+    """Defait `poser_code` : les blocs de l'overlay 0 reprennent leurs
+    octets d'origine, les variantes (ou default.bact allonge) s'en vont.
+    Un fichier dont le CONTENU redevient celui de `vanilla` reprend ses
+    OCTETS (la recompression ne les rend pas). Les masques et les actions
+    ne bougent pas."""
+    import ndspy.code
+    import ndspy.codeCompression as cc
+    import patch_animations
+    lu = lire(rom)
+    if not lu["code"]:
+        return
+    if patch_animations.present(rom):
+        patch_animations.retirer(rom)
+    elif lu["techniques"]:
+        import ndspy.narc
+        fa = rom.filenames.idOf(ACTDEF)
+        n = struct.unpack_from("<I", ndspy.narc.NARC(
+            bytes(rom.files[fa])).files[0], 0)[0]
+        if n != patch_animations.COMMANDES_ORIGINE:     # default.bact allonge
+            if vanilla is None:
+                raise SystemExit("default.bact allonge : la ROM d'origine "
+                                 "est necessaire pour le rendre")
+            rom.files[fa] = bytes(vanilla.files[fa])
+    ovl = rom.loadArm9Overlays()
+    o = ovl[OVL]
+    d = bytearray(o.data)
+    for adr, avant, apres in blocs(lu["sorts"] + lu["techniques"]):
+        i = adr - o.ramAddress
+        assert bytes(d[i:i + len(apres)]) == apres
+        d[i:i + len(avant)] = avant
+    o.data = bytes(d)
+    rom.files[o.fileID] = o.save(compress=True)
+    rom.arm9OverlayTable = ndspy.code.saveOverlayTable(ovl)
+    if vanilla is None:
+        return
+    ovl = rom.loadArm9Overlays()
+    van = vanilla.loadArm9Overlays()
+    for k in (OVL, 17):
+        if bytes(ovl[k].data) == bytes(van[k].data):
+            rom.files[van[k].fileID] = bytes(vanilla.files[van[k].fileID])
+            ovl[k] = van[k]
+    rom.arm9OverlayTable = ndspy.code.saveOverlayTable(ovl)
+    a, b = (bytearray(cc.decompress(bytes(x.arm9))) for x in (rom, vanilla))
+    for x in (a, b):                     # le pied de compression
+        struct.pack_into("<I", x, patch_animations.COMPRESSED_END, 0)
+    if a == b:
+        rom.arm9 = bytes(vanilla.arm9)
+
+
 def verifier(rom):
     """Relit la ROM : les trois blocs sont les notres, les masques ne visent
     que des especes eligibles et, hors `tous`, que des emplacements du bon
@@ -778,13 +903,13 @@ def verifier(rom):
         i = adr - o.ramAddress
         if bytes(o.data[i:i + len(apres)]) != apres:
             raise AssertionError("overlay 0 : bloc 0x%08X inattendu" % adr)
-    pool_set = set(pool)
+    pool_set = {a for a in pool if a >= BORNE_SORTS}     # les techniques
     import patch_animations
     if patch_animations.present(rom):
         # vraies animations : la table de tirage est celle de la variante du
         # combat ; la table posee ici (pool complet) = l'union des variantes
-        patch_animations.verifier(rom, pool_set)
-    elif pool:
+        patch_animations.verifier(rom, set(pool))
+    elif pool_set:
         cas = actions_default(bytes(ndspy.narc.NARC(
             rom.files[rom.filenames.idOf(ACTDEF)]).files[0]))
         if not pool_set <= cas:
@@ -882,7 +1007,9 @@ def verifier_equivalence(essais=1500):
                                    UC_ARM_REG_PC, UC_ARM_REG_LR)
     rng = random.Random(57)
     pool = sorted(rng.sample(range(0x3F, 0x380), 150))
-    bl = blocs(pool)
+    # un pool de sorts reduit : le tirage ne rend que ceux de la table
+    pool_s = sorted(rng.sample(sorts(), 20))
+    bl = blocs(pool_s + pool)
     # blocs 2 et 3 : aucun registre vivant apres le bloc 2 ; apres le bloc 3,
     # r0, r2, r3, r4 et ip (r12) le sont (r1 est reecrit juste apres).
     _equivalence_bloc(B2, ORIGINE2, bl[1][2][:len(bloc2_compact())] +
@@ -896,7 +1023,7 @@ def verifier_equivalence(essais=1500):
     BASE, FICHES_ACT = 0x02108E10, 0x02320000
     couts = {a: rng.choice([0, 1, 2, 3, 5, 8, 16, 24, 28, 90, 255])
              for a in range(0x400)}
-    table = set(pool)
+    table, table_s = set(pool), set(pool_s)
 
     def lance(apres, copie, s, acts, masque, masque_t, tirages):
         mu = _uc()
@@ -948,7 +1075,6 @@ def verifier_equivalence(essais=1500):
         assert mu.reg_read(UC_ARM_REG_R6) == FICHE
         return bytes(mu.mem_read(COPIE, 0x84))
 
-    n_sorts = SORT_DERNIER - SORT_PREMIER + 1
     for e in range(essais):
         copie = bytearray(rng.getrandbits(8) for _ in range(0x84))
         pm0 = rng.choice([0, 3, 12, 40, 200, 255, rng.randrange(0x10000)])
@@ -960,7 +1086,7 @@ def verifier_equivalence(essais=1500):
         mt = rng.choice([0, 0x3F, rng.randrange(64)])
         # tirages : pour les sorts, parfois le trou 0x1D ; pour les
         # techniques, des identifiants hors table avant d'en trouver un
-        tirages = [rng.randrange(0x400) for _ in range(4000)]
+        tirages = [rng.randrange(0x400) for _ in range(20000)]
         ref = lance(False, copie, s, acts, 0, 0, [])
         neuf = lance(True, copie, s, acts, ms, mt, tirages)
         for o in range(0x84):
@@ -971,13 +1097,13 @@ def verifier_equivalence(essais=1500):
         for k in range(6):
             if mt >> k & 1:
                 while True:
-                    a = file_t.pop(0) % 0x400
-                    if a in table:
+                    a = file_t.pop(0) % BORNE_TECH
+                    if a >= BORNE_SORTS and a in table:
                         break
             elif ms >> k & 1:
                 while True:
-                    a = file_t.pop(0) % n_sorts + SORT_PREMIER
-                    if a not in SORTS_EXCLUS:
+                    a = file_t.pop(0) % BORNE_SORTS
+                    if a in table_s:
                         break
             else:
                 attendu.append(acts[k])
@@ -1018,7 +1144,7 @@ def verifier_equivalence(essais=1500):
         mu.reg_write(UC_ARM_REG_R7, 0x9ABC)
         mu.reg_write(UC_ARM_REG_SP, PILE)
         mu.reg_write(UC_ARM_REG_LR, 0)
-        tirages = [rng.randrange(0x400) for _ in range(6000)]
+        tirages = [rng.randrange(0x400) for _ in range(40000)]
         file_t = list(tirages)
         vu = []
 
@@ -1063,7 +1189,7 @@ def verifier_equivalence(essais=1500):
                 if mt >> j & 1:
                     assert tires[j] in table, (e, k, j, tires[j])
                 elif ms >> j & 1:
-                    assert tires[j] in set(sorts()), (e, k, j, tires[j])
+                    assert tires[j] in table_s, (e, k, j, tires[j])
                 else:
                     assert tires[j] == acts[j]
                 if (ms | mt) >> j & 1 and couts[tires[j]] != 255:

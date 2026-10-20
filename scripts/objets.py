@@ -231,6 +231,29 @@ def nettoyer(nom):
     return nom
 
 
+# LES ACCENTS, POUR LA FENETRE SEULEMENT (ZER-86) : `<'e>` -> e + accent aigu,
+# etc. Les 33 balises vues dans les cinq langues d'itemname (relevees le
+# 19/10/2026).
+_DIACRITIQUE = {"'": "́", "`": "̀", "^": "̂", ":": "̈",
+                "~": "̃"}
+_SPECIAUX = {"<oe>": "œ", "<ss>": "ß", "<,c>": "ç",
+             "<,>": ",", "<1>": "'", "<6>": "'", "<9>": "'",
+             "<66>": "“", "<99>": "”"}
+
+
+def avec_accents(nom):
+    """Le nom tel que le jeu l'affiche, accents compris."""
+    import re
+    import unicodedata
+    for b, v in _SPECIAUX.items():
+        nom = nom.replace(b, v)
+    nom = re.sub(r"<([`'^:~])([A-Za-z])>",
+                 lambda m: unicodedata.normalize("NFC", m.group(2) + _DIACRITIQUE[m.group(1)]),
+                 nom)
+    # flexions resolues par le moteur a l'affichage (allemand : [gs], [ges])
+    return re.sub(r"\[[^\]]{1,16}\]", "", nom).strip()
+
+
 def _membre_archive(rom, chemin, vise):
     fid = rom.filenames.idOf(chemin)
     if fid is None:
@@ -244,8 +267,10 @@ def _membre_archive(rom, chemin, vise):
     raise ValueError("membre introuvable : " + vise)
 
 
-def noms(rom, langue="en"):
-    """Rend {identifiant: nom} lus dans `itemname.gp2`."""
+def noms(rom, langue="en", accents=False):
+    """Rend {identifiant: nom} lus dans `itemname.gp2`. `accents` : tels que
+    le jeu les affiche (pour la fenetre), sinon sans accents (console)."""
+    propre = avec_accents if accents else nettoyer
     d = _membre_archive(rom, "data/prm/itemname.gp2",
                         "itemname_%s.nat" % langue)
     n = struct.unpack_from("<H", d, 0)[0] & 0xFFF
@@ -257,7 +282,7 @@ def noms(rom, langue="en"):
 
     def chaine(k):
         o = pool_debut + struct.unpack_from("<I", d, 4 + k * 16)[0]
-        return nettoyer(d[o:d.index(b"\x00", o)].decode("utf-8", "replace"))
+        return propre(d[o:d.index(b"\x00", o)].decode("utf-8", "replace"))
 
     out = {}
     k = 0

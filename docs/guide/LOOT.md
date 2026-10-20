@@ -165,7 +165,10 @@ They are unchanged.
   event, not by the chest system, so the randomizer does not see it.
 - **Ambushes.** Rank 4 and 5 blue chests (and their twins) still hide a cannibox or
   a mimic 10 % of the time.
-- **Treasure maps and grottos.** Their chests use their own system.
+- **Grotto chests** (treasure maps) were left alone until 1.6, apart from their
+  gold. Since 1.7 their own loot list (ranks 1 to 10) is randomized like the blue
+  chests: same odds of item, gold, ambush, each rank keeping a star band close to
+  the original.
 - **Quest rewards, shops, sparkly spots.**
 
 ## 7. Release files

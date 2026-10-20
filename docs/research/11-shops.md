@@ -315,3 +315,30 @@ wrong conclusion from the right observation, and the mistake is kept visible her
 items that displayed 0 had been read as proof of a format limit, when they only proved
 that one of the four price codes misbehaves.
 
+### 83.13 Three quest items pinned to their shops (ZER-77, 13 October 2026)
+
+A player reported that the post-game quest for the Starflight Express asks for a
+**flowing dress**, a **watermaul wand** and a **silver shield**, and that hunting them
+in a randomized game "could take very very long". `scripts/boutiques.py` on the vanilla
+ROM gives where the game sells them:
+
+| item | id | vanilla price | shops (id, place from 83.5) |
+|---|---|---|---|
+| watermaul wand | 20408 | 4,700 | 13 Finefleur weapons, 17 Ouadi weapons |
+| flowing dress | 13329 | 18,000 | 25 Dracocardis armour, 28 Kilimagmaro armour |
+| silver shield | 21294 | 30,500 | 35 Ablithia (Stornway) armour 2 |
+
+`patch_boutiques.QUETE` pins each one to a slot of its own family in those shops, in
+every mode; the rest of the stall is drawn as usual.
+
+The silver shield is the awkward one: shop 35 is one of the three rare shops (4-5 stars
+only, 800 %), and at 800 % its 30,500 would display as 244,000, above what price class 2
+can show ("Unsellable", 83.11). The player chose to keep it there with its vanilla resale
+value. `patch_prix.retarifer` keeps the sell price (15,250) and writes the buy field as an
+**explicit price**, 3,813, so the stall shows **30,504**. This is the path the three
+vanilla weapons with a positive buy field use (83.10); the September failure with explicit
+prices wrote to the wrong archives, so it says nothing against it — but it is the first
+time we rely on it for an armour. **Checked in play on 13 October**: 30,504 shown, resold
+for 15,250. The shield is kept out of every
+other stall, where it would cost 3,813. Without fabricated prices the rare shops stay at
+100 % and the shield keeps its vanilla prices.

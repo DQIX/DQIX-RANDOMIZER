@@ -92,21 +92,7 @@ def arbres_d_origine(rom_vanilla):
 def patcher(rom, rom_vanilla, bavard=True):
     """Marque l'arbre d'origine des aptitudes et pose les deux leviers.
     Rend le nombre d'aptitudes marquees."""
-    origine = arbres_d_origine(rom_vanilla)
-    fid = rom.filenames.idOf(CHEMIN)
-    t = PrmTable(bytes(rom.files[fid]))
-    n = deplacees = 0
-    for i, r in enumerate(t.records):
-        if len(r.fields) != 9 or not r.fields[CHAMP_ACTION]:
-            continue
-        cat = r.fields[CHAMP_CATEGORIE]
-        if cat >> 5:
-            raise SystemExit("lien arme : champ 8 = %d, plus de cinq bits" % cat)
-        arbre = origine[r.fields[CHAMP_PALIER]]
-        t.set_field(i, CHAMP_CATEGORIE, cat | (arbre << 5))
-        n += 1
-        deplacees += arbre != r.fields[CHAMP_ARBRE]
-    rom.files[fid] = bytes(t.data)
+    n, deplacees = marquer(rom, rom_vanilla)
 
     arm9 = bytearray(cc.decompress(bytes(rom.arm9)))
     _poser(arm9, BASE_ARM9, ARM9_SITES)
@@ -124,6 +110,35 @@ def patcher(rom, rom_vanilla, bavard=True):
         print("  lien technique-arme : %d aptitudes gardent l'arme de leur "
               "arbre d'origine (%d hors de leur arbre)" % (n, deplacees))
     return n
+
+
+def pose(rom):
+    """Vrai si les leviers de code sont poses (le constructeur lit dix bits)."""
+    arm9 = cc.decompress(bytes(rom.arm9))
+    adr, _avant, apres = ARM9_SITES[0]
+    return _desas(arm9[adr - BASE_ARM9:adr - BASE_ARM9 + 4], adr) == apres
+
+
+def marquer(rom, rom_vanilla):
+    """La partie donnees : l'arbre d'origine de chaque aptitude dans les bits
+    5-9 de son champ 8, d'apres son palier. Rend (marquees, hors de leur
+    arbre). A refaire apres toute reecriture des arbres (config_arbres)."""
+    origine = arbres_d_origine(rom_vanilla)
+    fid = rom.filenames.idOf(CHEMIN)
+    t = PrmTable(bytes(rom.files[fid]))
+    n = deplacees = 0
+    for i, r in enumerate(t.records):
+        if len(r.fields) != 9 or not r.fields[CHAMP_ACTION]:
+            continue
+        cat = r.fields[CHAMP_CATEGORIE]
+        if cat >> 5:
+            raise SystemExit("lien arme : champ 8 = %d, plus de cinq bits" % cat)
+        arbre = origine[r.fields[CHAMP_PALIER]]
+        t.set_field(i, CHAMP_CATEGORIE, cat | (arbre << 5))
+        n += 1
+        deplacees += arbre != r.fields[CHAMP_ARBRE]
+    rom.files[fid] = bytes(t.data)
+    return n, deplacees
 
 
 def verifier(rom, rom_vanilla):

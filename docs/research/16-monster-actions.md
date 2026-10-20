@@ -60,6 +60,18 @@ category in the high 6 bits (0 for most monster techniques, non-zero for
 Frizz, Kaswoosh…), then the action's data. `actdt_a` holds a further 63
 records (heals among them) in the same layout.
 
+**Measured precisely on 19/10/2026 (ZER-91, `sorts.noms_localises`):** read
+from the start of the member, record `i` is at `2 + 60·i`; its action id is
+the low 10 bits of the u16 at `+6`, and the name is a u16 at `+2`, relative
+to `pool + 2` where `pool = 2 + 60·n` (so the "u32 name offset at +0" above
+holds for records counted from file offset 4). The action id is the second
+field of the `spelltable` 0x66 record **as is** — without the off-by-one of
+`actname.nat`. Witness: 346 of the 358 English names equal `actname`'s, the
+12 others differ only by the `<1>` apostrophe tag. This is where the game's
+**localised** spell names live (`actname.nat` is English only): all 61
+learnable spells are named in the five languages (Omniheal = Omnisoin (fr),
+Megaheilung (de), Omnicuración (es), Omnicura (it)).
+
 ### 91.3 Presentation lives in each model's `.bact`
 
 Every battle model `<code>.mon` in `data/pack_lv5/enemy.gp2` is a NARC of three
@@ -455,3 +467,34 @@ field savestate keeps the monster actions of the ROM that made it (the zone
 copy, `0x022F2D3E` for the slime): actions must be written in RAM after
 loading, and the bench validated on one ability that passes and one that
 freezes.
+
+### 94.8 One draw table for spells and abilities (ZER-93, 20 October 2026)
+
+For « Create your ROM » the spell pool had to become editable, but overlay 0
+has no free space: block 3 (`0x021557C0`) was full, 212 / 212 bytes, with
+two draw functions (spells: a fixed range `0x09..0x3E` minus `0x1D`;
+abilities: the 1,024-bit table). Spell ids never reach the table (abilities
+are `>= 0x3F`), so the spells now live in the **same table**, and one routine
+draws both:
+
+```
+tire_sort:  mov r0, #0x3F    ; b tire          ids 0..0x3E
+tire_tech:  mov r0, #0x3F0                     ids 0x3F..0x3EF
+tire:       r5 = r0 ; loop: r0 = rand_below(r5)
+            reject r0 < r5 >> 4                (0x3F for abilities)
+            reject bit r0 of the table == 0    (ldrb r1, [table, r0, lsr #3])
+```
+
+Spells: bits 0..8 and `0x1D` are never set, so the bit test alone rejects
+them. 17 words instead of 19, block 3 now 204 / 212. Both draws stay
+uniform over their pool (rejection sampling). Proof: `patch_actions.py
+--emuler` (1,500 random slot sets with a 20-spell pool; a routine without
+the minimum check is caught). An empty pool with a slot drawn from it would
+loop forever: `config_actions` refuses it.
+
+**The real-animation variants copy their own table over this one at the
+start of every battle** (§94.7), so each variant table carries the spell
+pool too (`patch_animations.patcher(sorts=...)`), and every variant holds at
+least one ability. The split into variants now depends only on the ability
+pool (its CRC is the shuffle seed), so the same configuration gives the
+same ROM whatever seed drew it.

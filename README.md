@@ -1,6 +1,6 @@
 # Dragon Quest IX Randomizer
 
-Version 1.6
+Version 1.7
 
 A randomizer for **Dragon Quest IX: Sentinels of the Starry Skies** (Nintendo DS).
 Drop your ROM on the application, pick what to shuffle, and play a new game:
@@ -20,7 +20,8 @@ other monsters, other bosses, other loot, other shops, other spells.
    **[latest release](https://github.com/DQIX/DQIX-RANDOMIZER/releases/latest)**
    and double-click it. Nothing to install. Drop your ROM on the window, choose
    a preset, click **Randomize**. About 25 seconds later,
-   `DQIX-Randomizer-seed<seed>.nds` is written next to your ROM.
+   `DQIX-Randomizer-seed<seed>.nds` is written next to your ROM, in a folder
+   of the same name.
 3. **Play** that file in an emulator, from a **new game**. Tested with melonDS
    (through BizHawk) and DeSmuME; with DeSmuME, turn off the Dynamic
    Recompiler.
@@ -30,8 +31,8 @@ and the options, and a friend plays exactly your run.
 
 ## What can be randomized
 
-The window has four tabs. Every option is a checkbox; the two presets tick a
-sensible set for you.
+The window has four tabs of options, plus **Create your ROM** (below). Every
+option is a checkbox; the two presets tick a sensible set for you.
 
 **Monsters**
 * **Field monsters**, in one of three modes:
@@ -52,15 +53,31 @@ sensible set for you.
 * **Story bosses**: every scripted boss fight is against another boss. Options:
   keep the first boss (Hexagoon, fought alone); story, grotto and legacy bosses
   as often as each other; story bosses only; bosses *or* ordinary monsters; a
-  new boss at every attempt.
-* **Bosses on the field** (experimental): some bosses wander the map.
+  new boss at every attempt. Legacy bosses come at their first level only, so
+  they do not crowd out the others; an option brings back all three levels.
+  Two lists choose from which story boss on grotto bosses and legacy bosses
+  can turn up in story fights (from the start, from a given boss, or never).
+  The battle music follows the boss you get.
+* **Bosses on the field** (experimental): some bosses wander the map and
+  chase you.
 
 **Items & shops**
-* **Chests, pots, barrels, cupboards and monster drops** can hold any of the
-  game's regular items, and every one of them can be found. Gold amounts are
-  redrawn too.
+* **Chests (grotto chests included), pots, barrels, cupboards and monster
+  drops** can hold any of the game's regular items, and every one of them can
+  be found. Gold amounts are redrawn too. By default any item can come from
+  any container; untick *rare items everywhere* to make rarity follow the
+  container's rank, and tick *balance equipment and consumables* for about a
+  third of herbs, potions and seeds.
 * **New drops every battle**: what a monster drops is drawn again each time.
-* **Shops** sell a new stock, fixed for the whole run.
+  The bestiary shows the drops of your ROM.
+* **Shops** sell a new stock, fixed for the whole run. The flowing dress, the
+  watermaul wand and the silver shield stay in their original shops, at their
+  original price: a post-game quest asks for them.
+* **Alchemy ingredients**: every Krak Pot recipe makes the same item from
+  other ingredients, in the same quantities (in both presets).
+* **Cap'n Max Meddlin's rewards** (in both presets): his ten milestones and his shop
+  give other items, and need a quarter of the mini medals, since medals are
+  rare once the loot is randomized.
 
 **Party**
 * **Spells** each vocation learns as it levels up.
@@ -69,6 +86,21 @@ sensible set for you.
   technique keeps needing its original weapon.
 * **Vocations**: all twelve open at the abbey from the start, random vocation
   for recruits and for the hero, or (as a challenge) vocations locked.
+
+**Create your ROM**
+* Decide every case yourself: each boss fight, each shop's stock, chests,
+  pots and grottos, alchemy, Cap'n Max Meddlin', skill trees, vocation
+  spells, vocations, field monsters per area or for the whole game, battle
+  drops, and each monster's six actions (fixed, or a spell or ability drawn
+  at every battle, from a pool you choose).
+* Start from the original game, from your options or from a file; re-roll
+  one category; a case you change by hand stays pinned. Save it all in a
+  file to share: the same file always gives the same ROM.
+* Anything goes, even unbalanced. Only what would make the game
+  unfinishable is locked, and the locks can be lifted.
+* The button follows the tab you are on: from **Create your ROM** it builds
+  your custom ROM (the options of the other tabs do not count); from the
+  other tabs, it uses their options.
 
 How it works, for players: [monsters](docs/guide/MONSTERS.md) -
 [loot](docs/guide/LOOT.md) - [shops](docs/guide/SHOPS.md) -
@@ -79,10 +111,12 @@ How it works, for players: [monsters](docs/guide/MONSTERS.md) -
 
 | | **Balanced** | **Total chaos** |
 |---|---|---|
-| Loot | rare items come from rare places; consumables keep a fair share | anything anywhere, legendary gear in the first barrel |
+| Loot | anything anywhere, legendary gear in the first barrel (since 1.7, in both presets) | same |
 | Shops | each shop keeps its specialty and its price range | anything in any shop, at any price |
 | Spells and skills | weak spells early, strong ones late; skills stay in their tree | no order; skills move between trees |
 | Bosses | untouched | every boss fight against another boss |
+| Alchemy | new ingredients for every recipe, same quantities | same |
+| Cap'n Max Meddlin' | rewards within one star of the original, a quarter of the medals | any item, a quarter of the medals |
 
 "Balanced" is still a randomizer, and it is still hard: the game's difficulty
 is not rebalanced.
@@ -109,8 +143,6 @@ is not rebalanced.
 * Tested from a fresh game start only, and on emulators only.
 * In *random at every spawn* mode, when the model memory is full, a new monster
   waits until another one leaves before it appears.
-* Sometimes a battle's command window turns light blue, or a monster shows the
-  wrong colours. The cause has not been found yet.
 * An emulator savestate only works with the exact ROM it was made on.
 
 ## Building from source

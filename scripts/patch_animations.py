@@ -417,13 +417,17 @@ def repartir(rom, rattache=None, par_variante=PAR_VARIANTE, seed=0):
     return [(g[0], g[2]) for g in groupes], len(reels), len(sans)
 
 
-def patcher(rom, rattache=None, seed=0, bavard=True):
-    """Pose tout. A appeler APRES patch_actions.patcher (techniques)."""
+def patcher(rom, rattache=None, seed=0, bavard=True, sorts=None):
+    """Pose tout (appele par patch_actions.poser_code). `sorts` : le pool
+    des sorts, que chaque table de variante porte aussi (la table recopiee
+    au debut du combat sert aux deux tirages, ZER-93) ; defaut : tous."""
     import ndspy.code
     import ndspy.codeCompression as cc
     import ndspy.fnt
     import ndspy.narc
     import patch_actions as pa
+    if sorts is None:
+        sorts = pa.sorts()
     variantes, nr, ns = repartir(rom, rattache, seed=seed)
     fa = rom.filenames.idOf(pa.ACTDEF)
     narc = ndspy.narc.NARC(rom.files[fa])
@@ -437,7 +441,11 @@ def patcher(rom, rattache=None, seed=0, bavard=True):
     for reels, generiques in variantes:
         ids = [a for a, _b, _c in reels] + [a for l in generiques.values()
                                               for a in l]
-        d, n = construire_variante(base, reels, generiques, pa.table_bits(ids))
+        if not ids:
+            raise SystemExit("variante sans technique : le tirage d'une "
+                             "technique n'y finirait pas")
+        d, n = construire_variante(base, reels, generiques,
+                                   pa.table_bits(ids + list(sorts)))
         if n > BUDGET:
             raise SystemExit("variante a %d commandes ajoutees (budget %d)"
                              % (n, BUDGET))
@@ -499,10 +507,62 @@ def present(rom):
     return any(n == DOSSIER for n, _f in rom.filenames.folders)
 
 
+def retirer(rom):
+    """Defait `patcher` (ZER-93, « Creer sa ROM » qui change le pool) : le
+    dossier rnd/ et ses fichiers (les derniers de la table), le constructeur
+    ARM9, les deux crochets de l'overlay 0 et le tas de l'overlay 17. L'ARM9
+    reste decompresse ; patch_actions.retirer rend les octets vanilla
+    quand le contenu l'est redevenu."""
+    import ndspy.code
+    import ndspy.codeCompression as cc
+    import patch_actions as pa
+    rangs = [i for i, (n, _f) in enumerate(rom.filenames.folders)
+             if n == DOSSIER]
+    if len(rangs) != 1:
+        raise SystemExit("dossier %s/ absent" % DOSSIER)
+    dossier = rom.filenames.folders[rangs[0]][1]
+    k, premier = len(dossier.files), dossier.firstID
+    if premier + k != len(rom.files):
+        raise SystemExit("%s/ n'est pas en fin de table : on ne le retire "
+                         "pas (les identifiants suivants bougeraient)"
+                         % DOSSIER)
+    arm9 = bytearray(cc.decompress(bytes(rom.arm9)))
+    code, etq = bloc_arm9(k, pa.TABLE)
+    o = BLOC - BASE_ARM9
+    if bytes(arm9[o:o + len(code)]) != code:
+        raise SystemExit("ARM9 : bloc des animations inattendu")
+    arm9[o:o + len(ORIGINE_BLOC)] = ORIGINE_BLOC
+    rom.arm9 = bytes(arm9)
+    ovl = rom.loadArm9Overlays()
+    o0 = ovl[pa.OVL]
+    d0 = bytearray(o0.data)
+    for site, orig, cible in ((SITE_CHEMIN, ORIG_CHEMIN, etq["choisir"]),
+                              (SITE_COMPILE, ORIG_COMPILE, etq["copier"])):
+        i = site - o0.ramAddress
+        if struct.unpack_from("<I", d0, i)[0] != bl(site, cible):
+            raise SystemExit("overlay 0 : crochet 0x%08X absent" % site)
+        struct.pack_into("<I", d0, i, orig)
+    o0.data = bytes(d0)
+    rom.files[o0.fileID] = o0.save(compress=True)
+    o17 = ovl[17]
+    d17 = bytearray(o17.data)
+    i = LITTERAL_TAS - o17.ramAddress
+    if struct.unpack_from("<I", d17, i)[0] != TAS_ORIGINE + TAS_PLUS:
+        raise SystemExit("overlay 17 : tas du combat non agrandi")
+    struct.pack_into("<I", d17, i, TAS_ORIGINE)
+    o17.data = bytes(d17)
+    rom.files[o17.fileID] = o17.save(compress=True)
+    rom.arm9OverlayTable = ndspy.code.saveOverlayTable(ovl)
+    del rom.files[premier:]
+    del rom.filenames.folders[rangs[0]]
+    return k
+
+
 def verifier(rom, pool):
     """Relit la ROM : le bloc ARM9, les deux crochets, le tas agrandi, et les
-    variantes -- chacune met en scene toutes les actions de sa table, et
-    l'union des tables est le pool de patch_actions."""
+    variantes -- chacune met en scene toutes les techniques de sa table et
+    porte les sorts de l'overlay 0, et l'union des techniques est celle du
+    pool de patch_actions (`pool` : la table de l'overlay, sorts compris)."""
     import ndspy.codeCompression as cc
     import ndspy.narc
     import patch_actions as pa
@@ -522,11 +582,19 @@ def verifier(rom, pool):
     if struct.unpack_from("<I", d17, LITTERAL_TAS - ovl[17].ramAddress)[0]             != TAS_ORIGINE + TAS_PLUS:
         raise AssertionError("overlay 17 : tas du combat non agrandi")
     union = set()
+    sorts_ov = {a for a in pool if a < pa.BORNE_SORTS}
     for i in range(k):
         fid = dossier.firstID + i
         d = bytes(ndspy.narc.NARC(rom.files[fid]).files[0])
         table = d[-128:]
         ids = {a for a in range(0x400) if table[a >> 3] >> (a & 7) & 1}
+        # les sorts de la table (ZER-93) : les memes que ceux de l'overlay
+        if {a for a in ids if a < pa.BORNE_SORTS} != sorts_ov:
+            raise AssertionError("variante %d : sorts differents de ceux "
+                                 "de l'overlay 0" % i)
+        ids = {a for a in ids if a >= pa.BORNE_SORTS}
+        if not ids:
+            raise AssertionError("variante %d : aucune technique" % i)
         manque = ids - pa.actions_default(d[:-128])
         if manque:
             raise AssertionError("variante %d : sans mise en scene %s"
@@ -535,7 +603,7 @@ def verifier(rom, pool):
         if n > BUDGET:
             raise AssertionError("variante %d : %d commandes" % (i, n))
         union |= ids
-    if union != set(pool):
+    if union != set(pool) - sorts_ov:
         raise AssertionError("variantes : %d actions, pool %d"
                              % (len(union), len(pool)))
     return k

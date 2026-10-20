@@ -341,6 +341,58 @@ def _patcher_table(rom, voulus, note):
     return len(neuf) - len(d)
 
 
+def retarifer(rom, prix):
+    """Reecrit les deux prix d'objets deja tarifes, {identifiant: (vente,
+    achat)} : `achat` est le champ brut, un prix EN CLAIR s'il est positif.
+
+    POUR LE BOUCLIER D'ARGENT (ZER-77) : objet de quete vendu dans une
+    boutique du rare a 800 %. Sa revente reste celle du jeu, et son prix
+    d'achat est ecrit en clair, divise par le pourcentage, pour qu'il s'y
+    affiche a son prix d'origine. LE PRIX EN CLAIR est le chemin des trois
+    armes du jeu qui en portent un (83.10) ; l'echec de septembre ecrivait
+    dans les mauvaises archives. Les dix archives, comme `patcher`.
+    """
+    import boutiques as B
+    cat = objets.catalogue(rom)
+    actuels = B._prix(rom)
+    # la table que le jeu lit : chaque fiche reperee par sa signature actuelle
+    fid = rom.filenames.idOf(CHEMIN_TABLE)
+    d = bytes(rom.files[fid])
+    arc = gp2.GP2(CHEMIN_TABLE, donnees=d)
+    clairs = {}
+    for nom in arc.noms:
+        membre = bytearray(objets._membre_archive(rom, CHEMIN_TABLE, nom))
+        for ident, (vente, achat) in prix.items():
+            sig = (ident,) + actuels[ident]
+            places = [off for off in range(0, len(membre) - 6, 2)
+                      if struct.unpack_from("<HHh", membre, off) == sig]
+            if len(places) != 1:
+                raise AssertionError("objet %d : %d fiches dans %s, une seule "
+                                     "attendue" % (ident, len(places), nom))
+            struct.pack_into("<Hh", membre, places[0] + 2, vente, achat)
+        clairs[nom] = bytes(membre)
+    rom.files[fid] = gp2_ecrire.reecrire(d, clairs)
+    # les archives par categorie, pour que le catalogue reste coherent
+    for c in sorted({cat[i][0] for i in prix}):
+        chemin = objets.CHEMIN % c
+        fid = rom.filenames.idOf(chemin)
+        d = bytes(rom.files[fid])
+        arc = gp2.GP2(chemin, donnees=d)
+        clairs = {}
+        for nom in arc.noms:
+            lg = nom.split("_")[-1].split(".")[0]
+            membre = bytearray(objets._membre(rom, c, lg))
+            n = struct.unpack_from("<H", membre, 0)[0] & 0xFFF
+            for k in range(n):
+                b = objets.TETE + objets.ENREG * k
+                ident = struct.unpack_from("<H", membre, b + objets.OFF_ID)[0]
+                if ident in prix:
+                    struct.pack_into("<Hh", membre, b + OFF_VENTE,
+                                     *prix[ident])
+            clairs[nom] = bytes(membre)
+        rom.files[fid] = gp2_ecrire.reecrire(d, clairs)
+
+
 def verifier(rom, langue="en"):
     """Controle apres coup : plus aucun objet tarifable ne reste a zero, et les
     objets deja tarifes en vanilla n'ont pas bouge."""

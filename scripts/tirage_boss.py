@@ -68,41 +68,134 @@ class Pioche(object):
         return self.paquet.pop()
 
 
+class PiocheBornee(object):
+    """Une Pioche dont chaque tirage n'accepte qu'une partie du pool (ZER-80).
+
+    On prend la carte acceptable la plus haute du paquet ; s'il n'y en a plus,
+    un paquet neuf passe DESSOUS, pour que les cartes restantes sortent avant
+    d'etre redistribuees : chaque cible sort au moins une fois si le nombre
+    de tirages le permet."""
+
+    def __init__(self, rng, pool):
+        self.rng = rng
+        self.pool = sorted(set(pool))
+        self.paquet = []
+
+    def _chercher(self, accepte):
+        for i in range(len(self.paquet) - 1, -1, -1):
+            if accepte(self.paquet[i]):
+                return i
+        return None
+
+    def possible(self, accepte):
+        return any(accepte(t) for t in self.pool)
+
+    def __call__(self, accepte):
+        i = self._chercher(accepte)
+        if i is None:
+            frais = list(self.pool)
+            self.rng.shuffle(frais)
+            self.paquet[:0] = frais
+            i = self._chercher(accepte)
+        if i is None:
+            raise ValueError("aucune cible acceptable")
+        return self.paquet.pop(i)
+
+
+def ordre_contraint(sources, cibles, accepte):
+    """Les sources les plus contraintes d'abord ; a egalite, par espece."""
+    uniques = sorted(set(cibles))
+    return sorted(sources, key=lambda s: (sum(1 for t in uniques
+                                              if accepte(s, t)), s))
+
+
+def tirer_borne(rng, sources, cibles, accepte):
+    """Un tirage ou chaque source n'accepte qu'une partie des cibles (ZER-80).
+    `accepte(source, cible)` -> bool. Rend {source: cible}."""
+    pioche = PiocheBornee(rng, cibles)
+    return {s: pioche(lambda t, s=s: accepte(s, t))
+            for s in ordre_contraint(sources, cibles, accepte)}
+
+
+def bornes_actives(seuils):
+    """Vrai si un seuil de ZER-80 restreint quelque chose."""
+    return bool(seuils) and any(s != CB.DEBUT for s in seuils.values())
+
+
 def demande(a):
     """Vrai si l'une des options de ce module est demandee."""
     return bool(a.boss_familles_egales or a.boss_histoire or a.boss_mixte
                 or a.boss_chaque_combat)
 
 
-def familles(pool_boss, histoire, egales):
+def familles(pool_boss, histoire, egales, noms=False):
     """Les familles de boss du perimetre, dans l'ordre histoire, grottes,
-    legendes ; une seule famille sans --boss-familles-egales."""
+    legendes ; une seule famille sans --boss-familles-egales. Avec `noms`,
+    des couples (nom, especes) ; la famille unique s'appelle None."""
     pool = set(pool_boss)
     if histoire:
         pool &= CB.HISTOIRE
     if not egales:
-        return [sorted(pool)]
-    out = [sorted(pool & CB.FAMILLES[f])
+        return [(None, sorted(pool))] if noms else [sorted(pool)]
+    out = [(f, sorted(pool & CB.FAMILLES[f]))
            for f in ("histoire", "grottes", "legendes")]
-    return [f for f in out if f]
+    out = [(f, e) for f, e in out if e]
+    return out if noms else [e for _f, e in out]
 
 
 def plan(rng, pool_boss, monstres, records, histoire=False, egales=False,
-         mixte=False, chaque_combat=False):
+         mixte=False, chaque_combat=False, exclus=frozenset(), seuils=None):
     """Rend (correspondance, table ou None).
 
     `pool_boss` : les vrais boss tirables (garde et prologue deja retires) ;
     `monstres` : les especes du bestiaire que --boss-mixte peut mettre a la
     place d'un boss ; `records` : les enregistrements VANILLA
-    d'eventbattle.bin (PrmTable.records), pour les masques.
+    d'eventbattle.bin (PrmTable.records), pour les masques ;
+    `exclus` : des boss qui restent des COMBATS (sources) mais ne sont
+    jamais tires (cibles) -- les niveaux 2 et 3 des legendes (ZER-76) ;
+    `seuils` : a partir de quel boss d'histoire les grottes et les legendes
+    arrivent (ZER-80, `categories_boss.familles_permises`). Sans seuil
+    actif, le chemin d'avant, graine pour graine.
     """
-    fams = familles(pool_boss, histoire, egales)
-    sources = sorted(set().union(*fams))
-    if not (egales or mixte):
+    fams_src = familles(pool_boss, histoire, egales)
+    sources = sorted(set().union(*fams_src))
+    nommees = [(n, f) for n, f in
+               ((n, [e for e in g if e not in exclus])
+                for n, g in familles(pool_boss, histoire, egales, noms=True))
+               if f]
+    fams = [f for _n, f in nommees]
+    borne = bornes_actives(seuils) and not histoire
+    if borne:
+        def permises(s):
+            return CB.familles_permises(s, seuils)
+    if borne and not (egales or mixte):
+        corresp = tirer_borne(
+            rng, sources, fams[0],
+            lambda s, t: CB.categorie(t) in permises(s))
+    elif borne:
+        # LES FAMILLES (ou la famille unique) PUIS UN BOSS, comme plus bas,
+        # mais un combat ne choisit que parmi ce que ses seuils permettent.
+        pioches = [(n, PiocheBornee(rng, f)) for n, f in nommees]
+        if mixte:
+            pioches.append(("monstres", PiocheBornee(rng, monstres)))
+        tous = [t for _n, f in nommees for t in f]
+        corresp = {}
+        for s in ordre_contraint(sources, tous,
+                                 lambda s, t: CB.categorie(t) in permises(s)):
+            def ok(t, s=s):
+                return CB.categorie(t) is None or CB.categorie(t) in permises(s)
+            choix = [p for _n, p in pioches if p.possible(ok)]
+            corresp[s] = choix[rng.randrange(len(choix))](ok)
+    elif not (egales or mixte) and not set(sources) & set(exclus):
         # une permutation, comme --boss, mais sur le perimetre choisi
         cibles = list(sources)
         rng.shuffle(cibles)
         corresp = dict(zip(sources, cibles))
+    elif not (egales or mixte):
+        # MOINS DE CIBLES QUE DE COMBATS : un paquet qu'on epuise avant de le
+        # rebattre, pour que chaque boss tirable sorte au moins une fois.
+        pioche = Pioche(rng, fams[0])
+        corresp = {s: pioche() for s in sources}
     else:
         pioches = [Pioche(rng, f) for f in fams]
         if mixte:
@@ -120,6 +213,12 @@ def plan(rng, pool_boss, monstres, records, histoire=False, egales=False,
         if not (chaque_combat or antre):
             continue
         for k, j in enumerate((1, 3, 5)):
+            # UN COMBAT BORNE PAR UN SEUIL (ZER-80) N'EST PAS RETIRE AU
+            # COMBAT : la greffe tire dans toutes les familles, elle ne
+            # connait pas l'avancement du scenario. Le tirage fait a la
+            # construction, qui respecte le seuil, s'applique.
+            if borne and len(permises(r.fields[j])) < 3:
+                continue
             if r.fields[j] in corresp and (chaque_combat or k == 0):
                 masques[evt] |= 1 << k
     if not any(masques):

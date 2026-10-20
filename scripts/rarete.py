@@ -23,6 +23,15 @@ LES REGLES, decidees par le joueur (17 septembre) :
     rangs 14-19           2-3 etoiles
     rang 20               3-5 etoiles (le rang maximum, seul a 5 etoiles)
 
+  coffres des grottos, selon le rang (1 a 10), calques sur les etoiles
+  des objets vanilla de chaque rang (ZER-41, 14 octobre)
+    rangs 1-2             0-1 etoile
+    rangs 3-4             0-2 etoiles
+    rangs 5-6             1-3 etoiles
+    rang 7                2-3 etoiles
+    rangs 8-9             2-4 etoiles
+    rang 10               3-5 etoiles (le rang maximum, seul a 5 etoiles)
+
   coffres rouges          la rarete de l'objet vanilla, plus ou moins une
                           etoile (22 septembre). Un coffre rouge est POSE dans
                           une zone : celui de la Morteresse doit rester un
@@ -46,6 +55,10 @@ DROP = {0: {0, 1}, 1: {0, 1}, 2: {0, 1}, 3: {2, 3}, 4: {2, 3}, 5: {4},
         6: {4, 5}, 7: set(TOUTES)}
 BLEU = {1: {0, 1, 2}, 2: {0, 1, 2}, 3: {2, 3}, 6: {2, 3}, 4: {3, 4},
         7: {3, 4}, 5: {3, 4, 5}, 8: {3, 4, 5}}
+# Vanilla, par rang : 1-2 que du 0-1 etoile ; 3-4 jusqu'a 2 ; 5-6 de 0 a 3 ;
+# 7 surtout 2 ; 8-9 de 1 a 4 ; 10 surtout 4 (douze objets sur vingt).
+GROTTE = {1: {0, 1}, 2: {0, 1}, 3: {0, 1, 2}, 4: {0, 1, 2}, 5: {1, 2, 3},
+          6: {1, 2, 3}, 7: {2, 3}, 8: {2, 3, 4}, 9: {2, 3, 4}, 10: {3, 4, 5}}
 
 
 def rouge(etoile):

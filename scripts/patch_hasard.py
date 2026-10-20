@@ -436,6 +436,18 @@ def tailles_par_code():
     return out
 
 
+def tailles_par_identifiant():
+    """Rend {IDENTIFIANT: taille du modele de terrain}, la cle des tables de
+    rencontres. `tailles_par_code` est indexe par RANG (comme les noms et
+    `MONSTRES`) ; lu par identifiant, il donnait au-dela du rang 63 la taille
+    d'un autre monstre (id 330 : 61 368 octets au lieu de 20 024), et le mode
+    zone de la 1.6 depassait le poids vanilla de +31 a +64 Ko sur une centaine
+    de cartes (ZER-93, `work/zer93/mesure_bug_tailles.py`)."""
+    from montable import ids_par_index
+    ids = ids_par_index(chemin_vanilla())
+    return {ids[r]: n for r, n in tailles_par_code().items() if r < len(ids)}
+
+
 def especes_tirables(plafond=0, boss=False):
     """Rend la liste des identifiants que le tirage peut sortir.
 
@@ -538,6 +550,11 @@ def construire_bitmap(terrain, tailles, hors=(), noms=None, plafond=PLAFOND_MODE
     candidats = sorted(MONSTRES)
     if boss:
         candidats = sorted(set(candidats) | {i for i in tailles if i not in MONSTRES})
+        # ROM DE TEST SEULEMENT (ZER-83, 19/10/2026) : des boss et rien d'autre
+        # sur le terrain, pour voir lesquels marchent. Ni option ni case :
+        # une variable d'environnement de developpement.
+        if os.environ.get("DQ9_TERRAIN_BOSS_SEULS") == "1":
+            candidats = [i for i in candidats if i not in MONSTRES]
     for i in candidats:
         if i >= BORNE or (i not in garde and not (boss and i not in MONSTRES)):
             continue

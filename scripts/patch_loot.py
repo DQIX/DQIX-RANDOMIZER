@@ -13,13 +13,18 @@ CE QUI EST TOUCHE, et rien d'autre :
      le complement est du vide, et on le preserve, sinon chaque pot du jeu
      deviendrait une garantie de butin.
 
-  3. Les COFFRES ROUGES, un par un, dans les 265 scripts de zone. Leur contenu
+  3. `randTD.bin` -- celle des COFFRES DES GROTTOS, rangs 1 a 10 (ZER-41,
+     decision du joueur du 14/10/2026 : comme les autres coffres, actif par
+     defaut). Meme traitement ; le jeu la charge dans le meme tampon de 0x400
+     octets (`0x0201B2A8`) et la tire avec le meme `Sample` (`0x0207C19C`),
+     donc les deux plafonds ci-dessous valent aussi pour elle.
+
+  4. Les COFFRES ROUGES, un par un, dans les 265 scripts de zone. Leur contenu
      n'est pas tire au sort par le jeu : il est ecrit en dur dans le script. On
      le remplace donc une fois pour toutes a la construction de la ROM.
 
 CE QUI N'EST PAS TOUCHE :
 
-  - `randTD.bin`, la table des GROTTOS (rangs 1 a 10). Decision du joueur.
   - les coffres rouges dont le contenu vanilla est un objet IMPORTANT. Il n'y
     en a qu'un dans tout le jeu, la Magic key de C02M07, et la partie est
     infinissable sans elle. La regle est generale, pas une exception codee en
@@ -29,7 +34,7 @@ CE QUI N'EST PAS TOUCHE :
     (ZER-21), la table qui associe le type d'embuscade a une espece n'est pas
     encore localisee.
 
-4. Les DROPS DES MONSTRES : dans `data/prm/mon_btldata.nat`, chaque monstre
+5. Les DROPS DES MONSTRES : dans `data/prm/mon_btldata.nat`, chaque monstre
      porte un objet commun en +0x04 et un objet rare en +0x06. Chaque
      emplacement non vide recoit un objet du pool ; un emplacement vide le
      reste, et les taux de drop ne bougent pas. Les objets de quete lootes sur
@@ -77,11 +82,20 @@ PART_CONSOMMABLES_BLEUS = {1: 0.40, 2: 0.40, 3: 0.30, 6: 0.30,
                            4: 0.25, 7: 0.25, 5: 0.20, 8: 0.20}
 
 
+# LES GROTTOS (ZER-41) : en vanilla, 60 a 87 % du poids de leurs objets sont
+# des consommables (graines, ingredients). Meme logique que les coffres bleus,
+# plus genereuse en bas.
+PART_CONSOMMABLES_GROTTOS = {1: 0.40, 2: 0.40, 3: 0.40, 4: 0.40, 5: 0.30,
+                             6: 0.30, 7: 0.30, 8: 0.25, 9: 0.25, 10: 0.25}
+
+
 def part_consommables(table, rang):
     """Quelle fraction des lignes de ce rang revient aux consommables."""
     import treasure as _T
     if table == _T.TABLE_COFFRES_BLEUS:
         return PART_CONSOMMABLES_BLEUS.get(rang, 0.30)
+    if table == _T.TABLE_GROTTOS:
+        return PART_CONSOMMABLES_GROTTOS.get(rang, 0.30)
     if rang <= 7:
         return 0.40
     if rang <= 13:
@@ -291,13 +305,13 @@ def patcher(rom, rng, langue="en", journal=None,
     rng_or = random.Random(str(rng.getstate())) if montants_or else None
     emplacements = []   # (cle, etoiles acceptees)
 
-    # ---- recensement 1 et 2 : les deux tables -------------------------------
+    # ---- recensement 1 et 2 : les trois tables ------------------------------
     # Les tables sont RECONSTRUITES : pour que les 1090 objets du pool puissent
     # sortir, chaque rang recoit plus de lignes que la vanilla (repartir()).
     # Les pourcentages d'or, d'embuscade et de vide sont conserves au point pres.
     lignes_tables = {}
     if tables:
-        for table in (T.TABLE_COFFRES_BLEUS, T.TABLE_POTS):
+        for table in T.TABLES:
             deb, _fin = membres[table]
             vanilla = [o for _off, o in T.outcomes(bytes(arc), deb)]
             lignes_tables[table] = (len(vanilla), None)
@@ -311,10 +325,14 @@ def patcher(rom, rng, langue="en", journal=None,
             lignes_tables[table] = (lignes_tables[table][0], lignes)
             for k, o in enumerate(lignes):
                 if o["loot"] == T.TYPE_OBJET:
-                    ens = rarete.TOUTES if chaos else (
-                        rarete.BLEU.get(o["rang"], rarete.TOUTES)
-                        if table == T.TABLE_COFFRES_BLEUS
-                        else rarete.pot(o["rang"]))
+                    if chaos:
+                        ens = rarete.TOUTES
+                    elif table == T.TABLE_COFFRES_BLEUS:
+                        ens = rarete.BLEU.get(o["rang"], rarete.TOUTES)
+                    elif table == T.TABLE_GROTTOS:
+                        ens = rarete.GROTTE.get(o["rang"], rarete.TOUTES)
+                    else:
+                        ens = rarete.pot(o["rang"])
                     emplacements.append((("t", table, k), ens))
 
     # ---- recensement 3 : les coffres rouges ---------------------------------
@@ -445,6 +463,52 @@ def patcher(rom, rng, langue="en", journal=None,
         comptes["consommables_amenes"] = echanges
         note("%d consommable(s) amenes des drops vers les tables" % echanges)
 
+        # DEUXIEME TEMPS : COMPLETER AVEC DES DOUBLONS (ZER-41). Avec les
+        # grottos, les tables ont 162 lignes de plus et seulement 143
+        # consommables a se partager : mesure faite, les pots tombaient de
+        # 33 % a 19-26 %. Les places au-dela de la couverture recoivent un
+        # objet au hasard, donc des doublons d'equipement ; dans un rang sous
+        # sa part, on remplace un tel doublon (un objet place AILLEURS aussi,
+        # la couverture ne bouge pas) par un consommable que la place
+        # accepte. Un consommable peut alors sortir de plusieurs rangs, comme
+        # une herbe en vanilla.
+        poses = collections.Counter(affecte.values())
+        conso_par_etoile = collections.defaultdict(list)
+        for o in permis:
+            if est_conso(o):
+                conso_par_etoile[etoiles.get(o, 0)].append(o)
+        complete = 0
+        for table, (_n, lignes) in sorted(lignes_tables.items()):
+            par_r = collections.defaultdict(list)
+            for k, o in enumerate(lignes or []):
+                cle = ("t", table, k)
+                if o["loot"] == T.TYPE_OBJET and cle in affecte:
+                    par_r[o["rang"]].append((o["pct"], cle))
+            for rang, lot in sorted(par_r.items()):
+                total = sum(p for p, _c in lot) or 1
+                vise = part_consommables(table, rang) * total
+                cumul = sum(p for p, c in lot if est_conso(affecte[c]))
+                candidats = [(p, c) for p, c in lot
+                             if not est_conso(affecte[c])]
+                rng.shuffle(candidats)
+                for p, cle in candidats:
+                    if cumul >= vise:
+                        break
+                    if poses[affecte[cle]] < 2:
+                        continue
+                    choix = [o for e in sorted(ens_par_cle.get(cle, rarete.TOUTES))
+                             for o in conso_par_etoile.get(e, ())]
+                    if not choix:
+                        continue
+                    poses[affecte[cle]] -= 1
+                    affecte[cle] = rng.choice(choix)
+                    poses[affecte[cle]] += 1
+                    cumul += p
+                    complete += 1
+        comptes["consommables_completes"] = complete
+        note("%d doublon(s) d'equipement remplaces par un consommable"
+             % complete)
+
         par_rang = collections.defaultdict(list)
         for table, (_n, lignes) in lignes_tables.items():
             for k, o in enumerate(lignes or []):
@@ -535,23 +599,13 @@ def patcher(rom, rng, langue="en", journal=None,
                  (zone, c["unique"], nom(c["item"]), nom(neuf)))
         note()
 
-    # ---- ecriture : l'or des coffres rouges et des grottos -------------------
-    # Les grottos (randTD) ne sont touches QUE pour l'or : leurs objets et leurs
-    # embuscades restent vanilla. Un coffre rouge decrit par deux zones (meme
-    # uniqueID) garde un seul montant.
+    # ---- ecriture : l'or des coffres rouges -----------------------------------
+    # L'or des trois tables est tire avec leurs lignes, plus haut. Un coffre
+    # rouge decrit par deux zones (meme uniqueID) garde un seul montant.
     if rng_or:
         note("-" * 78)
-        note("OR DES COFFRES ROUGES ET DES GROTTOS (ZER-59)")
+        note("OR DES COFFRES ROUGES (ZER-59)")
         note("-" * 78)
-        deb_td, _f = membres[T.TABLE_GROTTOS]
-        for off, o in T.outcomes(bytes(arc), deb_td):
-            if o["loot"] == T.TYPE_OR:
-                neuf = tirer_or(rng_or, T.TABLE_GROTTOS)
-                T.ecrire_u32(arc, off, T.encoder_outcome(
-                    o["pct"], neuf, T.TYPE_OR, o["rang"]))
-                comptes["or_tire"] += 1
-                note("  grotto rang %-2d %3d %%  %5d or (vanilla %d)"
-                     % (o["rang"], o["pct"], neuf, o["id"]))
         if coffres_rouges:
             montant = {}
             for zone, (d0, _d1) in sorted(_lot_zones(membres).items()):
@@ -612,8 +666,9 @@ def verifier(rom):
     membres = T.membres_narc(arc)
 
     # aucun objet important ne doit sortir d'une table de tirage, et les deux
-    # plafonds du moteur sont respectes
-    for nom in (T.TABLE_COFFRES_BLEUS, T.TABLE_POTS):
+    # plafonds du moteur sont respectes (les grottos aussi : meme tampon, meme
+    # Sample, ZER-41)
+    for nom in T.TABLES:
         deb = membres[nom][0]
         rangs = {}
         for _off, o in T.outcomes(arc, deb):
@@ -635,12 +690,15 @@ def verifier(rom):
             if total > 100:
                 raise AssertionError("%s rang %d : somme %d %%"
                                      % (nom, rang, total))
-    # randTD (grottos) doit etre intacte : on verifie qu'elle porte toujours
-    # ses trois types d'embuscade et ses dix rangs
+    # les grottos tirent un rang de 1 a 10 (ActiveGrottoClass::
+    # RandomizeChestRank) : chacun doit garder sa liste, et ses embuscades
     deb = membres[T.TABLE_GROTTOS][0]
     lot = [o for _o, o in T.outcomes(arc, deb)]
-    if len({o["rang"] for o in lot}) != 10:
-        raise AssertionError("randTD.bin : les grottos ont ete touches")
+    if {o["rang"] for o in lot} != set(range(1, 11)):
+        raise AssertionError("randTD.bin : rangs %s, il en faut 1 a 10"
+                             % sorted({o["rang"] for o in lot}))
+    if sorted(o["id"] for o in lot if o["loot"] == T.TYPE_EMBUSCADE) !=             [38, 39, 39, 39, 39, 40, 40, 40]:
+        raise AssertionError("randTD.bin : embuscades modifiees")
 
     # la Magic key doit encore etre dans un coffre rouge
     cles = 0

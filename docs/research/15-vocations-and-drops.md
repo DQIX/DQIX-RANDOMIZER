@@ -239,3 +239,38 @@ kill with six RNG states gives six items (velvet cape 13205, futhark staff
 20400, « trident de Gracos » 20510, trident 20509, stratotoga 13022 — a 4★ that
 passed the 1-in-8 filter —, traveller's gloves 15010), and the battle message
 names them (« Il renferme une cape de velours ! », « … une stratotoge ! »).
+
+### 90.3 The bestiary reads its own copy: `mons_info2.nat` (ZER-95, 19 October 2026)
+
+The "Dropped items" line of a bestiary page does **not** read
+`mon_btldata.nat`. Measured on the player's savestate, the cruelcumber page
+open (`scripts/lua/bestiaire_objet.lua`): the page showed « Herbe curative »
+(22004) while the ROM gave the species the cosmic sword (20029). A RAM scan
+found `03 00 00 00 39 00 05 00 f4 55 f7 55` — exp 3, species 57, gold 5,
+items 22004 / 22007 — and that exact pattern lives in exactly one ROM file:
+**`data/prm/mons_info2.nat`**, which no randomizer step had ever touched.
+Every build since 1.2 that changed drops showed the vanilla items there.
+
+Format: 8-byte header (u16 count = 438), then **438 records of 48 bytes in
+the order of `mon_btldata`** (checked: all 438 species and both items match
+on the vanilla ROM), then other data:
+
+    +0  u32 exp    +4  u16 species    +6  u16 gold
+    +8  u16 common item               +10 u16 rare item
+
+The save only remembers *which slot* was obtained; the name comes from this
+file. `scripts/bestiaire.py` applies the player's rule: drops fixed per
+species → the page gets the items of `mon_btldata`; drops drawn at every
+battle (overlay 23 graft) → the page stays vanilla. The vanilla ROM maps to
+itself. **Confirmed in game** (v17p, v17r): the page showed the cosmic sword,
+then the mini medal once obtained.
+
+### 90.4 Where the field rate classes come from: `mon_moddata.nat` +0x30/+0x31
+
+The "field entry" of §90.1 (`r6`, overlay 0 `0x02165B90..0x02165BAC`) is the
+`mon_moddata.nat` record (4-byte header, 438 × 64 bytes):
+`+0x28` exp (u32), `+0x2C` gold (u16), **`+0x30` common class, `+0x31` rare
+class** (§81 table: 0 = always … 6 = 1/256, 7 = never), followed by the six
+actions at `+0x32`. Cruelcumber: 1 and 5 (1/8, 1/128), exp 3, gold 5.
+**Confirmed in game** (v17r, test ROM): rare class set to 0, every
+cruelcumber dropped its rare item.

@@ -78,7 +78,7 @@ IC_INVALIDE = 0x020C833C
 # --- les sites a reecrire a l'execution (overlay 17, sauf le dernier) ---
 SITE_VIDE = 0x021A28CC
 SITE_TABLEAU = 0x021A28E0         # dimensionnement du tableau de fiches
-SITE_VRAM = 0x021A2900
+SITE_VRAM = 0x021A2900          # plus greffe depuis ZER-40 (retour au repere garde)
 SITE_DEPART = 0x021A295C          # `mov sb, #0`
 SITE_ESPECE = 0x021A2974
 SITE_BOUCLE = 0x021A2ACC          # borne de boucle
@@ -130,6 +130,14 @@ SITE_MODELE_ALLOC = 0x02075678    # `bl Allocate` du lecteur de fichier
 # tirer a cette recherche donne un boss par visite.
 SITE_ANTRE = 0x020740B8
 EVT_DEMANDE = 0x020F0D2C
+# LA MUSIQUE SUIT LE BOSS TIRE (ZER-94). Le meme analyseur ecrit la musique
+# du combat (champ 7) APRES les trois especes, par `strh r0, [r1, #0xe]` :
+# la greffe d'antre ne peut donc pas la poser elle-meme, elle serait
+# ecrasee. Une seconde greffe, sur ce `strh`, relit les especes tirees et
+# prend la musique du premier boss (musique_boss, la regle de la
+# construction). Posee seulement quand le blob tire des boss.
+SITE_MUSIQUE = 0x020740F0
+ORIGINE_MUSIQUE = 0xE1C100BE      # strh r0, [r1, #0xe]
 # LES GROUPES DE COMBAT (ZER-67). Au contact d'un symbole, `GenerateCompanionByBT`
 # (0x0209AFE4, ARM9) cherche l'espece touchee parmi les MENEUSES de la zone
 # dans `encbtl` (0x0209B8E4 : six zones de 0x4C octets, six meneuses de 8
@@ -275,12 +283,20 @@ def table_fiches(boss=False):
         for e, k in numero.items():
             index[e] = k
     table = bytearray(FICHE_PAS * FICHE_N)
+    fiches = {r.fields[0]: r.fields for r in PrmTable(brut).records
+              if len(r.fields) == 7}
+    dons = donneurs_comportement(fiches) if boss else {}
     for r in PrmTable(brut).records:
         if len(r.fields) != 7:
             continue
         esp = r.fields[0]
         if esp not in numero:
             continue
+        if esp in dons:
+            # le COMPORTEMENT d'un ordinaire (champs 2 et 3), le reste du boss
+            f = list(r.fields)
+            f[2], f[3] = fiches[dons[esp]][2], fiches[dons[esp]][3]
+            r = type("F", (), {"fields": f})
         b = r.fields[4]                     # la taille, en flottant
         if (b << 1) & 0xFFFFFFFF:
             taille = ((b & 0x7FFFFF) | 0x800000) >> (138 - ((b >> 23) & 0xFF))
@@ -291,6 +307,44 @@ def table_fiches(boss=False):
                          r.fields[6] & 0xFFFF, r.fields[3],
                          (taille & 0xFFFF) | ((r.fields[5] & 0xFFFF) << 16))
     return bytes(index) + bytes(table)
+
+
+def donneurs_comportement(fiches):
+    """{boss: ordinaire} : le monstre dont chaque boss du terrain prend le
+    COMPORTEMENT de terrain (champs 2 et 3 de `fld_mondata.bin`), ZER-83.
+
+    POURQUOI. Les 16 boss tirables au terrain portent champ 2 = 0 et les
+    bits bas du champ 3 a 0 : le reglage d'un symbole d'antre immobile.
+    Joueur (v17h, 19/10) : « animation idle mais ne se deplacent pas ».
+    Leur `.bact` de terrain est celui de leur variante ordinaire, octet
+    pour octet : l'animation de marche est la, le comportement manque.
+
+    LE DONNEUR CHASSE : champ 2 = 99 et octet haut du champ 3 = 0x3c. En
+    v17u, Mac Leo avait le comportement de l'abyssaure (00000209) et ne
+    chassait pas ; v17v (donneurs chasseurs) validee par le joueur le 20/10.
+    L'ordinaire au meme modele d'abord (Atlas z034c <- cyclope z034a),
+    sinon celui dont le modele de terrain a la taille la plus proche."""
+    import monnames
+    from montable import ids_par_index
+    from patch_hasard import especes_tirables, tailles_par_identifiant
+    from rom_vanilla import chemin_vanilla
+    ids = ids_par_index(chemin_vanilla())
+    noms = monnames.charger(chemin_vanilla(), "fr")
+    mod = {ids[r]: l.get("modele") or "" for r, l in enumerate(noms)
+           if r < len(ids) and isinstance(l, dict)}
+    ta = tailles_par_identifiant()
+    ordinaires = set(especes_tirables())
+    chasseurs = [i for i in sorted(ordinaires) if i in fiches
+                 and fiches[i][3] & 0xFFFF and fiches[i][3] >> 16 == 0x3C
+                 and fiches[i][2] == 99]
+    out = {}
+    for b in sorted(set(especes_tirables(boss=True)) - ordinaires):
+        if b not in fiches or fiches[b][3] & 0xFFFF:
+            continue
+        meme = [o for o in chasseurs if mod.get(o, "")[:-1] == mod.get(b, "")[:-1]]
+        out[b] = (meme or sorted(chasseurs, key=lambda o: abs(
+            ta.get(o, 0) - ta.get(b, 0))))[0]
+    return out
 
 
 ENR_DEBUT = 40                    # premier enregistrement de fld_mondata.bin
@@ -305,6 +359,7 @@ CAPTURE = ZONE_LIBRE + 0xEC    # quadruplet {conteneur, tas, donnees, taille}
 SITE_BATIR = 0x0206EE90           # l'entree du constructeur : voir patch_amorce
 DEBUT_AMORCE = 0x02073FE0         # le tireur et l'amorce, dans l'ARM9
 PLAGE_AMORCE = 0xE0               # jusqu'a 0x020740C0 : couvre SITE_ANTRE
+PLAGE_AMORCE_MUSIQUE = 0x120      # jusqu'a 0x02074100 : et SITE_MUSIQUE
 DEBUT_SITES3 = 0x0206EE80         # le quatorzieme : l'entree du constructeur
 PLAGE_SITES3 = 0x40
 DEBUT_SITES2 = 0x02075600         # le treizieme site vit dans l'ARM9, loin
@@ -320,12 +375,12 @@ PLAGE_SITES = 0x1000              # jusqu'a 0x021A2ACC, avec de la marge
 
 # LES DOUZE SITES, dans l'ordre ou la table les portera. Liste nommee pour que
 # l'appelant puisse en lire les mots d'origine dans l'overlay sans les redecrire.
-SITES_PATCHES = (SITE_VIDE, SITE_TABLEAU, SITE_VRAM, SITE_DEPART, SITE_ESPECE,
+SITES_PATCHES = (SITE_VIDE, SITE_TABLEAU, SITE_DEPART, SITE_ESPECE,
                  SITE_BOUCLE, SITE_MODELE, SITE_PORTIER1_SPAWN,
                  SITE_PORTIER1_PRECH, SITE_PORTIER2_SPAWN, SITE_PORTIER2_RELU,
                  SITE_PORTIER2_PRECH, SITE_MODELE_ALLOC, SITE_TABLEAU_ALLOC,
                  SITE_TIRAGE_TIC, SITE_TIRAGE_REPLI, SITE_ANTRE,
-                 SITE_GROUPE, SITE_PORTIER1_SIFFLET)
+                 SITE_GROUPE, SITE_PORTIER1_SIFFLET, SITE_MUSIQUE)
 
 EMPLACEMENTS = 12
 PLAFOND = 5
@@ -442,6 +497,12 @@ def construire(plafond=PLAFOND, site_declencheur=0, originaux=None,
     # UNE ENTREE DE PLUS dans la table des sites pour la greffe des groupes.
     # Une autre pour la recherche de fiche du Sifflet (ZER-68).
     entrees = TABLE_ENTREES + (1 if groupes else 0) + (1 if sifflet else 0)
+    # LA MUSIQUE DU BOSS TIRE (ZER-94), avec tout tirage de boss : une
+    # entree de plus, et la plage de cache de l'amorce allongee jusqu'a son
+    # site. Sans boss, le blob reste octet pour octet celui d'avant.
+    musique = bool(antres or tirage)
+    entrees += 1 if musique else 0
+    plage_amorce = PLAGE_AMORCE_MUSIQUE if musique else PLAGE_AMORCE
 
     # --- les donnees, reservees par des instructions inoffensives jamais
     # --- executees, et reecrites apres l'assemblage
@@ -466,6 +527,11 @@ def construire(plafond=PLAFOND, site_declencheur=0, originaux=None,
         raise SystemExit("construire : `antres` et `tirage` s'excluent")
     if tirage:
         lignes += ["boss_t:"] + ["mov r0, r0"] * ((len(tirage) + 3) // 4)
+    # LA MUSIQUE DE CHAQUE BOSS (musique_boss.table_blob : u16, zero final).
+    if musique:
+        import musique_boss
+        t_musique = musique_boss.table_blob()
+        lignes += ["musiques:"] + ["mov r0, r0"] * ((len(t_musique) + 3) // 4)
     # PLUS DE LISTE D'ESPECES ICI. Elle servait a la greffe de montage, qui ne
     # s'executait jamais (l'overlay du jeu efface sa pose a chaque carte) et qui
     # a ete remplacee par la creation de fiche au chargement d'un modele. Ses
@@ -547,10 +613,10 @@ def construire(plafond=PLAFOND, site_declencheur=0, originaux=None,
         # a servir l'ancienne instruction depuis son cache (la taille du tampon
         # de lecture restait a 4 Kio, 14 septembre).
         "ldr r0, [pc, #%s]" % lit(DEBUT_AMORCE),
-        "mov r1, #%d" % PLAGE_AMORCE,
+        "mov r1, #%d" % plage_amorce,
     ] + appel(DC_FLUSH) + [
         "ldr r0, [pc, #%s]" % lit(DEBUT_AMORCE),
-        "mov r1, #%d" % PLAGE_AMORCE,
+        "mov r1, #%d" % plage_amorce,
     ] + appel(IC_INVALIDE) + [
         # Rendre l'adresse du talon de source DANS r1, et non dans r0 : l'amorce
         # restitue son contexte par un `pop {r0, ...}` et saute par `bx r1`, ce
@@ -636,10 +702,10 @@ def construire(plafond=PLAFOND, site_declencheur=0, originaux=None,
         # a servir l'ancienne instruction depuis son cache (la taille du tampon
         # de lecture restait a 4 Kio, 14 septembre).
         "ldr r0, [pc, #%s]" % lit(DEBUT_AMORCE),
-        "mov r1, #%d" % PLAGE_AMORCE,
+        "mov r1, #%d" % plage_amorce,
     ] + appel(DC_FLUSH) + [
         "ldr r0, [pc, #%s]" % lit(DEBUT_AMORCE),
-        "mov r1, #%d" % PLAGE_AMORCE,
+        "mov r1, #%d" % plage_amorce,
     ] + appel(IC_INVALIDE) + [
         "pop {r4, r5, pc}",
     ]
@@ -789,15 +855,16 @@ def construire(plafond=PLAFOND, site_declencheur=0, originaux=None,
         "bx lr",
     ]
 
-    # --- greffe C : saut du rollback du watermark VRAM en mode demande ---
-    lignes += [
-        "greffe_c:",
-        "sub r1, pc, #{@@H:mots}",
-        "sub r1, r1, #{@@L:mots}",
-        "ldr r1, [r1]",
-        "cmp r1, #0",
-        "bxne lr",
-    ] + saut(ROLLBACK_VRAM)
+    # --- greffe C RETIREE (ZER-40, 14/10/2026) ---
+    # Elle sautait le retour du prechargeur a son repere (`0x021A2900 bl
+    # 0x0207DFA0`) en mode demande, de peur de jeter les textures des autres
+    # modeles. MESURE (`scripts/lua/pal_joueur.lua`, partie du joueur) : le
+    # prechargeur repose ce repere A LA FIN de chaque chargement
+    # (`0x021A2AE8`), et lui seul s'en sert ; y revenir range donc le modele
+    # neuf juste sous le precedent. Sans ce retour, le modele s'allouait au
+    # curseur du moment -- que le systeme d'effets du terrain (0x02043F70)
+    # remonte a 0x39B0, au-dessus du texte et de l'equipement de l'equipe :
+    # couleurs du monstre sur l'armure du heros et sur le texte. research §101.
 
     # --- greffe D : l'index de depart de la boucle ---
     lignes += [
@@ -1097,6 +1164,42 @@ def construire(plafond=PLAFOND, site_declencheur=0, originaux=None,
         "strh r0, [r1, #2]",
         "bx lr",
     ]
+
+    # --- greffe musique : la musique du premier boss de la fiche (ZER-94) ---
+    #
+    # Remplace `strh r0, [r1, #0xe]` en 0x020740F0 et le refait. r0 = la
+    # musique lue, r1 = la fiche, dont les especes (+2, +4, +6) sont deja
+    # celles du tirage. Apres ce site l'analyseur recharge r0 a r3 : ils
+    # sont libres, comme ip ; r4 a r6 lui appartiennent (r4 est rendu).
+    if musique:
+        lignes += [
+            "greffe_musique:",
+            "push {r4, lr}",
+            "mov r4, #0",
+            "gm_empl:",
+            "add r2, r1, r4, lsl #1",
+            "ldrh r2, [r2, #2]",            # l'espece de l'emplacement
+            "sub r3, pc, #{@@H:musiques}",
+            "sub r3, r3, #{@@L:musiques}",
+            "gm_cherche:",
+            "ldrh ip, [r3], #2",
+            "cmp ip, #0",
+            "beq #{@gm_suivant}",           # pas un boss
+            "mov lr, ip, lsl #22",
+            "cmp r2, lr, lsr #22",
+            "bne #{@gm_cherche}",
+            "mov ip, ip, lsr #10",
+            "add r0, ip, #%d" % musique_boss.MUSIQUE_BASE,
+            "b #{@gm_fin}",
+            "gm_suivant:",
+            "add r4, r4, #1",
+            "cmp r4, #3",
+            "blt #{@gm_empl}",
+            "gm_fin:",                      # aucun boss : la musique lue
+            "pop {r4, lr}",
+            "strh r0, [r1, #0xe]",
+            "bx lr",
+        ]
 
     # --- le portier 1 : le conteneur de la carte, sinon la table source ---
     lignes += [
@@ -1718,6 +1821,10 @@ def construire(plafond=PLAFOND, site_declencheur=0, originaux=None,
         t = bytes(tirage) + bytes(-len(tirage) % 4)
         for k in range(0, len(t), 4):
             ecrire(etiq["boss_t"] + k, struct.unpack_from("<I", t, k)[0])
+    if musique:
+        t = t_musique + bytes(-len(t_musique) % 4)
+        for k in range(0, len(t), 4):
+            ecrire(etiq["musiques"] + k, struct.unpack_from("<I", t, k)[0])
     for k in range(SRC_N):
         ecrire(etiq["src"] + 4 * k, 0)
     for k in range(NOEUD_N):
@@ -1727,7 +1834,6 @@ def construire(plafond=PLAFOND, site_declencheur=0, originaux=None,
     paires = [
         (SITE_VIDE, etiq["greffe_a"]),
         (SITE_TABLEAU, etiq["greffe_borne"]),
-        (SITE_VRAM, etiq["greffe_c"]),
         (SITE_DEPART, etiq["greffe_d"]),
         (SITE_ESPECE, etiq["greffe_e"]),
         (SITE_BOUCLE, etiq["greffe_borne"]),
@@ -1742,11 +1848,15 @@ def construire(plafond=PLAFOND, site_declencheur=0, originaux=None,
         (SITE_TIRAGE_TIC, etiq["tirage_unique"]),
         (SITE_TIRAGE_REPLI, etiq["tirage_unique"]),
     ] + ([(SITE_ANTRE, etiq["greffe_antre"])] if antres or tirage else [])
+    paires += [(SITE_MUSIQUE, etiq["greffe_musique"])] if musique else []
     paires += [(SITE_GROUPE, etiq["greffe_groupe"])] if groupes else []
     paires += [(SITE_PORTIER1_SIFFLET, etiq["portier1"])] if sifflet else []
     if sifflet and originaux[SITE_PORTIER1_SIFFLET] != ORIGINE_PORTIER1_SIFFLET:
         raise SystemExit(f"{SITE_PORTIER1_SIFFLET:#010x} : attendu `bl "
                          f"0x0206F500`, lu {originaux[SITE_PORTIER1_SIFFLET]:#010x}")
+    if musique and originaux[SITE_MUSIQUE] != ORIGINE_MUSIQUE:
+        raise SystemExit(f"{SITE_MUSIQUE:#010x} : attendu `strh r0, [r1, "
+                         f"#0xe]`, lu {originaux[SITE_MUSIQUE]:#010x}")
     if groupes and originaux[SITE_GROUPE] != ORIGINE_GROUPE:
         raise SystemExit(f"{SITE_GROUPE:#010x} : attendu `cmp sl, #0`, lu "
                          f"{originaux[SITE_GROUPE]:#010x}")

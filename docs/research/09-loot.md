@@ -24,8 +24,8 @@ gives the code; every format below was reread on the real bytes of the EU ROM.
 `randTTT`: *tsubo, taru, tansu* — pot, barrel, chest of drawers. `randTD` is not loaded
 by `LootableContainer::LoadZoneContainers`, which only reads the first two; the string
 `randTD` only appears in the ARM9, and its ten ranks are exactly those of
-`ActiveGrottoClass::RandomizeChestRank`. So it is the grotto table, and it is out of
-scope.
+`ActiveGrottoClass::RandomizeChestRank`. So it is the grotto table. It was out of
+scope until 1.7 (gold only since 1.6); see §81.4.
 
 ### 79.2 The format: a generic Nitro script
 
@@ -359,7 +359,7 @@ barrels and wardrobes (player's decision, 26/09/2026). The chances of gold do
 not move. The draw uses its own RNG, seeded from the state of the main one
 without consuming it: items, drops and shops come out exactly as without it
 (checked: 1 493 table lines and containers identical apart from gold).
-Grottos are touched for gold only. Matrix check `or_tire`.
+Until 1.7, grottos were touched for gold only (see §81.4). Matrix check `or_tire`.
 
 ### 81.3 Ambushes: replacing the species id does not work (ZER-21, tested 11/10/2026)
 
@@ -370,3 +370,40 @@ Tried for 1.6: every blue-chest and grotto ambush line given another bestiary
 species (test ROM: five ambush lines at 20 % per rank). **Failed in game**,
 so the option was withdrawn; the chest code must handle the three ids itself,
 which is still to be found. Details on ZER-21.
+
+### 81.4 Grotto chests: `randTD.bin` randomized like the other tables (ZER-41, 1.7)
+
+**The loader.** The only reference to the string `randTD.bin` (`0x020E6E00`) is
+the literal at `0x0201B588`, in the grotto floor setup `0x0201AFE0`. That
+function builds an allocator over a **0x400-byte stack buffer** (`0x0201B2A8`:
+`r1 = sp+0x1B8, r2 = 0x400`), finds `randTD.bin` in the archive (`0x02075354`),
+loads it with the same `LootDistribution::LoadFromScript` (`0x0207C0D4`) and
+draws each chest with the same `Sample` (`0x0207C19C`) as the zone loader. So
+the two ceilings of §80.6 hold: 242 outcomes per table, 32 per rank. The rank
+of a chest (1 to 10) comes from `RandomizeChestRank`, from the floor's monster
+rank, and is not stored in the table.
+
+**Vanilla content, per rank** (162 lines): every rank adds up to 100 %
+(a grotto chest is never empty); 8 ambush lines (rank 3 cannibox 38, ranks
+4-7 mimic 39, ranks 8-10 pandora's box 40); gold 125 to 3 000 G on ranks 1-4
+and 7-9. Items are mostly **consumables**: 61 to 87 % of the item weight of each
+rank (89 % over the whole table). Stars climb with the rank: ranks 1-2 only
+0-1 star, rank 4 up to 2, ranks 5-6 up to 3, rank 7 mostly 2, rank 8 up to
+4 and rank 9 up to 3, rank 10 twelve 4-star items out of twenty.
+
+**What 1.7 does.** `randTD` goes through the same path as `randTBox` and
+`randTTT` (`patch_loot.repartir`): more lines (162 → 242), the item part of each
+rank split in equal lines, gold and ambush lines and their percentages kept,
+gold amounts redrawn (1 to 10 000 G). Star band per rank (`rarete.GROTTE`):
+1-2 {0,1}, 3-4 {0,1,2}, 5-6 {1,2,3}, 7 {2,3}, 8-9 {2,3,4}, 10 {3,4,5}.
+
+**Consumables.** With 162 more table lines and only 143 consumables in the
+pool, the consumable share dropped (measured, seeds 1-5): pots from 33 % to
+19-26 %, grottos to 22-30 %. Fixed by a top-up step: in a rank under its target
+(`part_consommables`), an equipment line whose item is placed elsewhere too
+(a duplicate, so coverage is untouched) receives a consumable the slot accepts.
+After it: blue chests 34-38 %, pots 30-33 % (as before), grottos 31-38 % over
+the table. A few grotto ranks stay near 20 %: their lines hold items placed
+nowhere else, which cannot be replaced without losing one from the game.
+Matrix check `grottos` (lines, items outside vanilla, star band, gold, ambush
+and per-rank weight unchanged); `patch_loot.verifier` now checks the three tables.

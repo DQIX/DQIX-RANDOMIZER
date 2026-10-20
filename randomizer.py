@@ -479,6 +479,30 @@ def main():
                          "cette option, les boss legendaires (45 especes, "
                          "trois niveaux chacun) prennent la moitie des combats "
                          "d'histoire, et l'histoire un tiers (ZER-70).")
+    ap.add_argument("--boss-legacy-tous", dest="boss_legacy_tous",
+                    action="store_true",
+                    help="avec --boss : garder les TROIS niveaux de chaque "
+                         "boss legendaire parmi les remplacants (comportement "
+                         "d'avant la 1.7). Par defaut, seul le premier niveau "
+                         "est tire : chaque legende pese une fois au lieu de "
+                         "trois (ZER-76). Les combats de niveau 2 et 3 restent "
+                         "randomises dans les deux cas.")
+    # A PARTIR DE QUEL BOSS ARRIVENT LES GROTTES ET LES LEGENDES (ZER-80,
+    # demande du joueur du 13/10/2026) : un combat d'histoire place AVANT le
+    # seuil ne recoit pas de boss de cette famille. Valeurs : l'espece d'un
+    # boss d'histoire (categories_boss.ORDRE_HISTOIRE), debut, jamais.
+    ap.add_argument("--boss-grottes-des", dest="seuil_grottes",
+                    default="debut", metavar="BOSS",
+                    help="avec --boss : les boss de GROTTE ne remplacent un "
+                         "boss d'histoire qu'a partir de ce boss (inclus) : "
+                         "l'espece d'un boss d'histoire (300 = hexacorne, "
+                         "320 = Corvus II...), 'debut' (le defaut, aucune "
+                         "borne) ou 'jamais'. Les combats des grottes et des "
+                         "legendes ne sont pas bornes (ZER-80).")
+    ap.add_argument("--boss-legendes-des", dest="seuil_legendes",
+                    default="debut", metavar="BOSS",
+                    help="avec --boss : idem pour les boss LEGENDAIRES "
+                         "(legacy), reglage independant (ZER-80).")
     ap.add_argument("--boss-histoire", dest="boss_histoire",
                     action="store_true",
                     help="avec --boss (implique) : ne tirer QUE les boss de "
@@ -509,7 +533,8 @@ def main():
                          "treasure.nsarc) et coffres rouges (scripts de zone). "
                          "Les objets importants ne sont jamais tires, et le "
                          "coffre de la Magic key garde son contenu. Les "
-                         "grottos ne sont pas touches. ACTIF PAR DEFAUT depuis "
+                         "coffres des grottos aussi, depuis la 1.7 (ZER-41). "
+                         "ACTIF PAR DEFAUT depuis "
                          "la 1.2 ; --sans-objets pour ne randomiser que les "
                          "monstres, comme la 1.1.")
     ap.add_argument("--sans-objets", dest="objets", action="store_false",
@@ -556,11 +581,23 @@ def main():
                          "sait pas designer -- il en reste 16, ceux que le jeu "
                          "emploie lui-meme comme symboles d'antre. La table "
                          "des fiches du blob grandit en consequence.")
+    # PAR DEFAUT DEPUIS LA 1.7 (decision du joueur, 14/10/2026 : << ca fait
+    # plus sens avec l'esprit randomizer >>) : les rangs ne bornent plus la
+    # rarete, dans TOUS les conteneurs -- coffres bleus, pots, grottos,
+    # coffres rouges, drops. --objets-par-rang rend la borne.
     ap.add_argument("--objets-chaos", dest="objets_chaos", action="store_true",
+                    default=True,
                     help="avec --objets : IGNORER LES RANGS. N'importe quel "
-                         "objet dans n'importe quel conteneur, l'equipement "
-                         "legendaire compris, des le premier tonneau. Par "
-                         "defaut les objets rares viennent des endroits rares.")
+                         "objet dans n'importe quel conteneur (grottos et "
+                         "coffres rouges compris), l'equipement legendaire "
+                         "des le premier tonneau. ACTIF PAR DEFAUT depuis la "
+                         "1.7.")
+    ap.add_argument("--objets-par-rang", dest="objets_chaos",
+                    action="store_false", default=True,
+                    help="avec --objets : chaque conteneur suit la rarete de "
+                         "son rang (coffres bleus, pots, grottos), un coffre "
+                         "rouge celle de son objet vanilla a une etoile pres, "
+                         "un drop sa chance. Le defaut jusqu'a la 1.6.")
     ap.add_argument("--boutiques-chaos", dest="boutiques_chaos",
                     action="store_true",
                     help="avec --boutiques : IGNORER LES FAMILLES ET LA "
@@ -668,9 +705,21 @@ def main():
                          "parce qu'un coffre rouge est POSE dans une zone : "
                          "sans cette borne la Morteresse donne une veste "
                          "d'entrainement, constate en jeu.")
+    # LA PART DES CONSOMMABLES DEVIENT UNE OPTION (1.7, decision du joueur du
+    # 14/10/2026) : par defaut, le tirage respecte les objets du jeu tels
+    # qu'ils sont dans le pool ; --objets-consommables equilibre.
+    ap.add_argument("--objets-consommables", dest="consommables",
+                    action="store_true", default=False,
+                    help="avec --objets : EQUILIBRER equipement et "
+                         "consommables -- reserver aux consommables une part "
+                         "de chaque rang (environ un tiers du poids des "
+                         "coffres bleus, pots et grottos). Sans elle, un "
+                         "tirage brut : le pool compte six equipements pour "
+                         "un consommable (ZER-28). Le defaut jusqu'a la 1.6.")
     ap.add_argument("--objets-sans-consommables", dest="consommables",
-                    action="store_false", default=True,
-                    help="avec --objets : NE PAS reserver de part aux "
+                    action="store_false", default=False,
+                    help="(le defaut depuis la 1.7) avec --objets : NE PAS "
+                         "reserver de part aux "
                          "consommables, c'est-a-dire le comportement de la "
                          "1.3. Le pool compte 944 equipements pour 144 "
                          "consommables, donc neuf lignes sur dix rendent de "
@@ -734,6 +783,41 @@ def main():
                          "technique d'arc rangee dans l'arbre de l'epee ne "
                          "s'utilise qu'avec un arc). Sans cette option, elle "
                          "demande l'arme de l'arbre ou elle arrive (ZER-65).")
+    ap.add_argument("--alchimie", dest="alchimie", action="store_true",
+                    default=False,
+                    help="randomiser LES INGREDIENTS DES RECETTES de la "
+                         "Marmite (data/bin/recipe.gp2, 470 recettes, "
+                         "ZER-53) : chaque recette garde son produit et la "
+                         "quantite de chaque ingredient, mais ses ingredients "
+                         "sont tires dans tout le pool d'objets (sans les "
+                         "objets importants ni ceux retires du tirage). Les "
+                         "variantes de grand succes gardent les ingredients "
+                         "de leur base ; deux recettes n'ont jamais les memes "
+                         "ingredients. Generateur a part : le reste de la ROM "
+                         "ne change pas. Dans les deux prereglages de "
+                         "l'application et dans --chaos-total (valide en jeu "
+                         "le 14/10/2026).")
+    ap.add_argument("--medailles", dest="medailles", action="store_true",
+                    default=False,
+                    help="randomiser LES RECOMPENSES DU CAPITAINE ZAC AMEDAI "
+                         "(mini medailles, ZER-55) : les 10 paliers et sa "
+                         "boutique (overlay 4). Chaque objet est remplace par "
+                         "un objet a une etoile pres ; la clef de voleur reste "
+                         "au premier palier. Les mini medailles restant rares "
+                         "dans le loot randomise, les NOMBRES DE MEDAILLES "
+                         "sont DIVISES PAR 4 (paliers 1 a 20, boutique 1 a 5). "
+                         "Generateur a part : le reste de la ROM ne change "
+                         "pas. Dans les deux prereglages et dans "
+                         "--chaos-total (valide en jeu le 15/10/2026).")
+    ap.add_argument("--medailles-chaos", dest="medailles_chaos",
+                    action="store_true", default=False,
+                    help="avec --medailles (implique) : n'importe quel objet "
+                         "du pool, sans bande d'etoiles.")
+    ap.add_argument("--medailles-seuils-vanilla", dest="medailles_seuils_vanilla",
+                    action="store_true", default=False,
+                    help="avec --medailles (implique) : garder les nombres de "
+                         "medailles du jeu (paliers 4 a 80, boutique 3 a 20) "
+                         "au lieu de les diviser par 4.")
     ap.add_argument("--chaos-total", dest="chaos_total", action="store_true",
                     help="raccourci : --boss --sorts --sorts-chaos "
                          "--aptitudes --aptitudes-chaos --objets-chaos "
@@ -741,12 +825,29 @@ def main():
                          "--boss-garder-premier --vocations "
                          "--vocations-embauche --vocation-depart "
                          "--butin-combat "
-                         "--butin-combat-libre. "
+                         "--butin-combat-libre --alchimie --medailles "
+                         "--medailles-chaos. "
                          "Tout ce qui peut etre tire l'est sans borne. "
                          "N'INCLUT PAS --boss-terrain, --sorts-monstres ni "
                          "--techniques-monstres, qui sont experimentaux.")
     ap.add_argument("--inclure-speciaux", action="store_true",
                     help="toucher aussi les entrees de test et le mannequin d'entrainement")
+    ap.add_argument("--config", dest="config", metavar="FICHIER",
+                    help="ecrire dans la ROM l'affectation explicite de ce "
+                         "fichier (onglet << Creer sa ROM >>, ZER-81), APRES "
+                         "les tirages : chaque categorie du fichier remplace "
+                         "ce que les options ont tire, les autres restent. "
+                         "Aucune regle d'equilibrage ; seul ce qui empeche "
+                         "de finir le jeu est refuse.")
+    ap.add_argument("--exporter-config", dest="exporter_config",
+                    metavar="FICHIER",
+                    help="ecrire la configuration complete de la ROM produite "
+                         "(chaque case, identifiant et nom), a rouvrir avec "
+                         "--config ou dans l'onglet << Creer sa ROM >>")
+    ap.add_argument("--sans-rom", dest="sans_rom", action="store_true",
+                    help="avec --exporter-config : faire tout le tirage, "
+                         "ecrire la configuration, mais pas la ROM (bouton "
+                         "<< Tout tirer >> de l'onglet << Creer sa ROM >>)")
     ap.add_argument("-o", "--sortie", help="chemin de la ROM produite")
     ap.add_argument("--patch", action="store_true",
                     help="produire aussi un patch xdelta3 de la ROM d'origine "
@@ -783,8 +884,35 @@ def main():
         a.aptitudes = a.aptitudes_chaos = True
         a.vocations = a.vocations_embauche = a.vocation_depart = True
         a.butin = a.butin_libre = True
+        a.alchimie = True
+        a.medailles = a.medailles_chaos = True
         # sorts et techniques des monstres : experimentaux, hors de
         # --chaos-total (decision du joueur, 11/10/2026)
+    if a.medailles_chaos or a.medailles_seuils_vanilla:
+        a.medailles = True
+    if a.sans_rom and not a.exporter_config:
+        raise SystemExit("--sans-rom ne sert qu'avec --exporter-config")
+    config = None
+    if a.config:
+        # lu des maintenant : un fichier refuse ne coute pas une construction
+        import config_rom
+        try:
+            config = config_rom.lire(a.config)
+        except config_rom.ConfigInvalide as e:
+            raise SystemExit("--config %s : %s" % (a.config, e))
+        # LE MODE DES MONSTRES D'UNE CONFIG (ZER-93) decide du blob, assemble
+        # bien avant que la config s'applique : il remplace --apparitions.
+        if "monstres" in config:
+            import config_monstres
+            try:
+                a.apparitions = config_monstres.apparitions(config["monstres"])
+            except config_rom.ConfigInvalide as e:
+                raise SystemExit("--config %s : %s" % (a.config, e))
+            # le blob vit dans le patch de code : `--sans-hasard` le retirait
+            # sans un mot, et les boss « visite » devenaient fixes (matrice,
+            # cfg_i2, 20/10)
+            if a.apparitions == "aleatoire":
+                a.hasard = True
     if a.butin_libre:
         a.butin = True
     if a.aptitudes_arme_origine:
@@ -804,6 +932,23 @@ def main():
     import tirage_boss
     if tirage_boss.demande(a):
         a.boss = True
+    import categories_boss as _CB
+    for _cle in ("seuil_grottes", "seuil_legendes"):
+        _v = str(getattr(a, _cle)).strip().lower()
+        if _v not in (_CB.DEBUT, _CB.JAMAIS):
+            try:
+                _v = int(_v)
+            except ValueError:
+                _v = None
+            if _v not in _CB.ORDRE_HISTOIRE:
+                raise SystemExit("--boss-%s-des : %r n'est pas un boss "
+                                 "d'histoire (%s), ni debut, ni jamais"
+                                 % ("grottes" if _cle == "seuil_grottes"
+                                    else "legendes", getattr(a, _cle),
+                                    " ".join(map(str, _CB.ORDRE_HISTOIRE))))
+        setattr(a, _cle, _v)
+    a.seuils_boss = {"grottes": a.seuil_grottes,
+                     "legendes": a.seuil_legendes}
     if a.boss_chaque_combat and not a.blob:
         raise SystemExit("--boss-chaque-combat implique --blob : le tirage a "
                          "chaque combat vit dans le blob.")
@@ -888,6 +1033,20 @@ def main():
             rng.shuffle(cibles)
             return dict(zip(pool, cibles))
 
+        def tirer(sources, cibles):
+            """Une permutation si les deux listes sont les memes (graine
+            pour graine, la ROM d'avant) ; sinon un paquet de cibles epuise
+            avant d'etre rebattu, pour que chacune sorte au moins une fois."""
+            if set(sources) == set(cibles):
+                return permuter(sources)
+            out, paquet = {}, []
+            for s in sources:
+                if not paquet:
+                    paquet = list(cibles)
+                    rng.shuffle(paquet)
+                out[s] = paquet.pop()
+            return out
+
         def permuter_terrain():
             """La permutation des especes de terrain. En mode global sans
             blob (ZER-73), bornee par le tas des modeles de chaque carte."""
@@ -895,11 +1054,11 @@ def main():
                 return permuter(pool_terrain)
             import rencontres_zone
             from enctables import FICHIERS_RENCONTRES
-            from patch_hasard import tailles_par_code
+            from patch_hasard import tailles_par_identifiant
             par_carte, _ac = rencontres_zone.especes_par_carte(
                 TablesRencontres(rom, FICHIERS_RENCONTRES), ids_valides)
             p, bandes, pire = rencontres_zone.permutation_globale(
-                rng, pool_terrain, tailles_par_code(), par_carte)
+                rng, pool_terrain, tailles_par_identifiant(), par_carte)
             print(f"  mode global : permutation en {bandes} bande(s) de taille "
                   f"de modele, pire carte {pire / 1024:+.0f} Ko sur le vanilla")
             return p
@@ -933,6 +1092,12 @@ def main():
         pool_vrais_boss = [i for i in pool_vrais_boss if i not in garde]
         pool_scriptes_ordinaires = [i for i in pool_scriptes_ordinaires
                                     if i not in garde]
+        # LES NIVEAUX 2 ET 3 DES LEGENDES (ZER-76) restent des combats, mais ne
+        # sont plus tires : un boss legendaire pesait trois fois dans le pool.
+        import categories_boss
+        exclus_cibles = (frozenset() if a.boss_legacy_tous or not a.boss
+                         else categories_boss.LEGENDES_HAUTES)
+        cibles_boss = [i for i in pool_vrais_boss if i not in exclus_cibles]
         print("  laisses en place : combat du prologue (%s), Aquila et "
               "Corvus des cinematiques (%s)%s"
               % (", ".join(str(i) for i in PROLOGUE),
@@ -952,7 +1117,8 @@ def main():
                 rng, pool_vrais_boss, monstres,
                 PrmTable(lire_rom("data/event/eventbattle.bin", a.rom)).records,
                 histoire=a.boss_histoire, egales=a.boss_familles_egales,
-                mixte=a.boss_mixte, chaque_combat=a.boss_chaque_combat)
+                mixte=a.boss_mixte, chaque_combat=a.boss_chaque_combat,
+                exclus=exclus_cibles, seuils=a.seuils_boss)
             corresp.update(c_boss)
             corresp.update(permuter(pool_scriptes_ordinaires))
             print("  boss (1.6) : %d combats de boss tires%s%s%s%s"
@@ -963,12 +1129,25 @@ def main():
                      ", a chaque combat" if a.boss_chaque_combat else ""))
         else:
             if a.boss:
-                pool_antres = list(pool_vrais_boss)
+                pool_antres = list(cibles_boss)
             corresp = permuter_terrain()
-            corresp.update(permuter(pool_vrais_boss))
+            if a.boss and tirage_boss.bornes_actives(a.seuils_boss):
+                # ZER-80 : les combats d'histoire avant un seuil ne recoivent
+                # pas la famille bornee ; le reste comme `tirer`.
+                corresp.update(tirage_boss.tirer_borne(
+                    rng, pool_vrais_boss, cibles_boss,
+                    lambda s, t: categories_boss.categorie(t)
+                    in categories_boss.familles_permises(s, a.seuils_boss)))
+            else:
+                corresp.update(tirer(pool_vrais_boss, cibles_boss))
             corresp.update(permuter(pool_scriptes_ordinaires))
+        if a.boss and tirage_boss.bornes_actives(a.seuils_boss):
+            print("  seuils (ZER-80) : grottes des %s, legendes des %s ; les "
+                  "combats des grottes et des legendes ne sont pas bornes"
+                  % (a.seuil_grottes, a.seuil_legendes))
         print(f"  permutations : {len(pool_terrain)} especes de terrain, "
-              f"{len(pool_vrais_boss)} boss entre eux, "
+              f"{len(pool_vrais_boss)} boss entre eux"
+              f"{'' if not a.boss or a.boss_legacy_tous else ' (%d tirables, legendes au niveau 1)' % len(cibles_boss)}, "
               f"{len(pool_scriptes_ordinaires)} especes de combat scripte "
               f"ordinaires entre elles")
         rencontres = TablesRencontres(rom, fichiers)
@@ -982,10 +1161,10 @@ def main():
             n_modif = rencontres.appliquer_tirage_libre(rng, choix, ids_valides)
         elif a.apparitions == "zone":
             import rencontres_zone
-            from patch_hasard import tailles_par_code
+            from patch_hasard import tailles_par_identifiant
             plan_zone, n_modif = rencontres_zone.appliquer(
                 rencontres, rng, pool_terrain, ids_valides,
-                tailles_par_code(), corresp)
+                tailles_par_identifiant(), corresp)
         else:
             n_modif = rencontres.appliquer(corresp, ids_valides)
         print(f"rencontres : mode "
@@ -993,6 +1172,19 @@ def main():
         print(f"rencontres : {total} references d'espece "
               f"({', '.join(f'{k}={v}' for k, v in sorted(detail_fichiers.items()))})")
         print(f"             {n_modif} remplacee(s)")
+
+    # LES BOSS TIRES A CHAQUE VISITE D'UNE CONFIG (ZER-88) vivent dans le
+    # blob, assemble bien avant que --config s'applique : on lui passe ici
+    # ce que la config demande. Aucun generateur n'est consomme.
+    if config is not None and "boss" in config:
+        import config_boss
+        try:
+            pool_antres, tirage_table = config_boss.preparer_blob(
+                config["boss"], pool_antres, tirage_table, a.blob,
+                config_boss.pool_defaut(a.boss_garder_premier,
+                                        a.boss_legacy_tous))
+        except config_rom.ConfigInvalide as e:
+            raise SystemExit("--config %s : %s" % (a.config, e))
 
     # coherence : tout doit tenir dans les types du format
     for i in range(len(table)):
@@ -1097,6 +1289,13 @@ def main():
         table.ecrire_dans_rom(rom)
     if rencontres is not None:
         rencontres.ecrire_dans_rom()
+        # LA MUSIQUE SUIT LE BOSS (ZER-94, defaut sans option) : chaque
+        # combat scripte prend celle de son premier boss. Sans --boss les
+        # especes n'ont pas bouge et rien ne change.
+        import musique_boss
+        n_mus = musique_boss.appliquer(rom)
+        if n_mus:
+            print(f"  musique : {n_mus} combat(s) scripte(s) accorde(s) a leur boss")
     if a.agrandir and a.rencontres:
         # Reconstruction COHERENTE des deux fichiers. Voir scripts/resync_zones.py
         # et docs/research/RESEARCH.md §24 : le conteneur RAM n'accepte que 6 entrees par
@@ -1120,14 +1319,13 @@ def main():
         from patch_loot import patcher as patcher_loot
         from patch_loot import verifier as verifier_loot
         print("objets des conteneurs (coffres, pots, tonneaux, placards)%s :"
-              % ("  [CHAOS : rangs ignores]" if a.objets_chaos else
-                 ("  [part reservee aux consommables]" if a.consommables
-                  else "  [sans part de consommables]")))
+              % (("  [rangs ignores]" if a.objets_chaos else "  [par rang]")
+                 + ("  [part reservee aux consommables]" if a.consommables
+                    else "  [tirage brut]")))
         with open(journal, "a", encoding="utf-8") as jf:
             c_loot = patcher_loot(rom, rng, langue=a.langue, journal=jf,
                                   drops=a.drops, chaos=a.objets_chaos,
-                                  consommables=a.consommables
-                                  and not a.objets_chaos,
+                                  consommables=a.consommables,
                                   rang_rouges=a.rang_rouges)
         verifier_loot(rom)
         print(f"  {c_loot['outcomes']} outcomes de table reecrits, "
@@ -1284,7 +1482,9 @@ def main():
             if tirage_table:
                 print(f"  boss tires par le blob : table de "
                       f"{len(tirage_table)} o"
-                      + (", a chaque combat" if a.boss_chaque_combat
+                      + (", cases << visite >> de la config"
+                         if config is not None and "boss" in config
+                         else ", a chaque combat" if a.boss_chaque_combat
                          else ", antres a chaque visite"))
         if a.chargeur and not (a.portier and a.place):
             raise SystemExit("--chargeur implique --portier et --place.")
@@ -1364,6 +1564,77 @@ def main():
         if verifier_actions(rom) != (m_sorts, m_tech):
             raise SystemExit("actions des monstres : la verification ne "
                              "relit pas les modes demandes")
+    if a.alchimie:
+        # PUREMENT DE LA DONNEE : les ingredients reecrits en place dans les
+        # cinq membres de recipe.gp2, puis l'archive recompressee (sa taille
+        # change). Generateur derive de la graine, pas `rng` : l'alchimie ne
+        # deplace aucun autre tirage (ZER-53).
+        from patch_alchimie import patcher as patcher_alchimie
+        from patch_alchimie import verifier as verifier_alchimie
+        import ndspy.rom as _nr
+        from rom_vanilla import chemin_vanilla as _cv
+        print("ingredients des recettes d'alchimie :")
+        with open(journal, "a", encoding="utf-8") as jf:
+            c_alc = patcher_alchimie(rom, a.seed, langue=a.langue, journal=jf)
+        n_alc = verifier_alchimie(rom, _nr.NintendoDSRom.fromFile(_cv()))
+        print(f"  {n_alc} recettes sur {c_alc['recettes']} recomposees, "
+              f"{c_alc['paires']} variantes de grand succes alignees, "
+              f"pool de {c_alc['pool']} objets")
+    if a.medailles:
+        # DEUX TABLES EN DUR DANS L'OVERLAY 4 (le menu du Capitaine), que
+        # rien d'autre ne touche. Generateur derive de la graine (ZER-55).
+        from patch_medailles import patcher as patcher_medailles
+        from patch_medailles import verifier as verifier_medailles
+        print("recompenses du Capitaine Zac Amedai%s%s :"
+              % ("  [CHAOS : tout objet]" if a.medailles_chaos else "",
+                 "  [nombres vanilla]" if a.medailles_seuils_vanilla
+                 else "  [nombres divises par 4]"))
+        with open(journal, "a", encoding="utf-8") as jf:
+            c_med = patcher_medailles(rom, a.seed, chaos=a.medailles_chaos,
+                                      seuils_vanilla=a.medailles_seuils_vanilla,
+                                      langue=a.langue, journal=jf)
+        verifier_medailles(rom, chaos=a.medailles_chaos,
+                           seuils_vanilla=a.medailles_seuils_vanilla)
+        print(f"  {c_med['paliers']} paliers et {c_med['boutique']} articles "
+              f"de sa boutique reecrits")
+    # LA FICHE DU BESTIAIRE SUIT LE BUTIN (ZER-95) : elle lit mons_info2,
+    # que rien d'autre ne touche. Butin fixe : les objets de la ROM ; butin
+    # tire a chaque combat : la fiche de base. Refait par --config.
+    import bestiaire
+    from agrandir_zones import lire_rom as _lire_rom
+    n_best = bestiaire.accorder(rom, _lire_rom(bestiaire.CHEMIN, a.rom))
+    if n_best:
+        print(f"bestiaire : {n_best} fiche(s) montrent le butin de la ROM")
+    if config is not None or a.exporter_config:
+        import config_rom
+    if config is not None:
+        # APRES tous les tirages : chaque generateur a deja servi, remplacer
+        # une categorie n'en decale aucune autre (ZER-85).
+        print(f"configuration {a.config} :")
+        try:
+            import ndspy.rom as _nr
+            faits = config_rom.appliquer(
+                rom, config, vanilla=_nr.NintendoDSRom.fromFile(a.rom))
+        except config_rom.ConfigInvalide as e:
+            raise SystemExit("--config %s : %s" % (a.config, e))
+        for cat, n in faits.items():
+            print(f"  {cat} : {n} case(s) changee(s)")
+        with open(journal, "a", encoding="utf-8") as jf:
+            jf.write("\n=== CONFIGURATION %s ===\n" % a.config)
+            for cat, n in faits.items():
+                jf.write("  %s : %d case(s) changee(s)\n" % (cat, n))
+    if a.exporter_config:
+        # les chemins reduits a leur nom : le fichier se partage, pas les
+        # dossiers de celui qui l'a produit
+        commande = " ".join(["randomizer.py"] + [
+            os.path.basename(x) if os.sep in x or "/" in x else x
+            for x in sys.argv[1:]])
+        config_rom.ecrire(a.exporter_config,
+                          config_rom.exporter(rom, a.langue, commande))
+        print(f"configuration exportee : {a.exporter_config}")
+    if a.sans_rom:
+        print("--sans-rom : aucune ROM ecrite")
+        return
     rom.saveToFile(base)
 
     # La reconstruction retire le bourrage de fin de cartouche. On le remet :

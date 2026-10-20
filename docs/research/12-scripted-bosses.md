@@ -187,3 +187,60 @@ remembers the draw per lair in the blob. The blob is re-read from the ROM at
 every map mount, so the memory lasts exactly one visit. Legacy bosses
 (events 46–84) keep their build-time draw, by the player's choice. Only with
 `--boss`.
+
+## Reading the boss draw back from a built ROM (ZER-88, 19 October 2026)
+
+For the "Create your ROM" tab, `scripts/config_boss.py` reads and writes
+every scripted battle case by case.
+
+- **No boss has a field symbol.** On the vanilla ROM, none of the 89 boss
+  species appears in `encfld`, `encbtl` or `encmons` (every emplacement of
+  `enctables.EMPLACEMENTS`); each appears exactly once, in
+  `eventbattle.bin`. Writing a boss therefore only touches `eventbattle`.
+- **The cases.** 83 records hold a boss; three (events 54, 67, 80: Mortamor
+  and its two claws, at each of the three levels) hold three, so 89 boss slots:
+  story 32 (Aquila and Corvus of the cutscenes, records 12 and 26, are
+  locked), grottos 12, legacy 45. A further 20 slots in scripted battles
+  hold ordinary monsters, which `--boss` also permutes. Record 0 (the
+  prologue) is never a case. Record 97 (event 1, again) carries a third
+  species id, 23, in field 5.
+- **Where the blob keeps the draw.** In `dq9rand.bin`, at file offset
+  `BASE + 4 × (MOTS_N + 2 × MODELES_N)` = 144: the ZER-37 lair pool (a count,
+  then u16 species), then `cache_antres` (12 × u16), then — when a 1.6 option
+  is on and the pool is empty — the `tirage_boss` table at 172. The graft is
+  present when the blob's site table holds `0x020740B8`, its target, then the
+  original word `0xE1C100B2` (`strh r0, [r1, #2]`, ARM9, not the overlay).
+  Offsets checked against `patch_blob.construire` labels, with and without
+  groups, Whistle and field bosses.
+
+## The battle music is field 7, and it follows the boss (ZER-94, 19 October 2026)
+
+Field 7 of an `eventbattle.bin` record is the **battle music**. Values on the
+vanilla ROM: 23 an ordinary battle (and Aquila's cutscene fight, record 12),
+24 every story and grotto boss, 26 Corvus (record 32), 27–38 one theme per
+legacy boss, shared by its three levels (Dragonlord 27 … Rhapthorne 38;
+Mortamor, both claws and Nocturnus all 35). Field 8 looks like the
+backdrop (30xxx, 0 in grottos). Record 97 holds `0xFFFFFFFF` in fields 7–8.
+
+So the music belongs to the **battle**, not to the species: before ZER-94,
+a boss moved by `--boss` played the music of the battle it landed in.
+
+- **Confirmed in game** (player, 19 October 2026, ROMs `dq9_v17m_*`): the
+  Equinox grotto (event 34) fixed to Gadrongo, Corvus and Dragonlord played
+  the usual boss theme, Corvus' theme and Dragonlord's theme respectively.
+- **The rule** (`scripts/musique_boss.py`): a battle's music is the vanilla
+  music of the **first slot (0, 1, 2) holding a boss**; with no boss it is
+  left alone. On the vanilla ROM the rule maps every battle to itself
+  (0 bytes changed). Each of the 89 bosses has exactly one vanilla music.
+- **At build time**, the rule rewrites field 7 after the species are
+  written, then again after a `--config` boss section.
+- **For a draw at every visit**, the record parser writes the music
+  (`0x020740F0`, `strh r0, [r1, #0xe]`) *after* the three species
+  (`0x020740B8`), so the lair graft cannot set it — it would be overwritten.
+  A second blob graft on `0x020740F0` re-reads the drawn species at
+  `+2/+4/+6` and applies the same rule from a 180-byte table (u16: species
+  in 10 bits, music − 23 in the top 6, zero-terminated). After that site the
+  parser reloads r0–r3, so they are free. The graft is installed only when
+  the blob draws bosses, and the loader's cache range then grows from
+  `0xE0` to `0x120` to cover it. Checked under unicorn on every boss in
+  every slot (`scripts/emu_boss.py`).

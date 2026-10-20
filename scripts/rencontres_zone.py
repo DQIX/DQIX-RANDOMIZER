@@ -14,9 +14,9 @@ aire n'appartient jamais a deux cartes. Les trois aires d'encbtl qu'aucune
 carte d'encfld ne porte suivent la correspondance globale.
 
 LE TAS DES MODELES. Sans le blob, rien ne charge un modele a la demande : la
-carte precharge sa liste dans un tas de taille fixe. On refuse donc un tirage
-dont la somme des tailles de modeles depasse celle du vanilla pour la meme
-carte (jusqu'a ESSAIS tirages, puis on prend des especes au modele au plus
+carte precharge sa liste (encmons) dans un tas de taille fixe. On refuse donc
+un tirage dont la liste prechargee pese plus lourd que celle du vanilla pour
+la meme carte (jusqu'a ESSAIS tirages, puis on prend des especes au modele au plus
 aussi gros que celui qu'elles remplacent).
 """
 import collections
@@ -50,23 +50,36 @@ def _carte(tables, nom, ir, aire_carte):
     return carte
 
 
-def tirer(rng, especes, pool, tailles):
+def tirer(rng, especes, pool, tailles, precharge=None):
     """Une correspondance injective `especes` -> `pool`, dont la somme des
-    tailles de modeles ne depasse pas celle des especes d'origine."""
+    tailles de modeles des especes PRECHARGEES (`precharge`, par defaut
+    toutes) ne depasse pas celle des especes d'origine.
+
+    SEULE LA LISTE PRECHARGEE PESE. Le tas des modeles ne recoit que la liste
+    encmons de la carte ; une espece qui ne vient qu'en renfort de combat n'y
+    entre pas. Un budget sur toutes les especes laissait une espece lourde
+    entrer dans la liste pendant qu'un renfort leger compensait : +13 a +24 Ko
+    sur une quarantaine de cartes (ZER-93, 10 graines)."""
     source = sorted(especes)
-    budget = sum(tailles.get(e, 0) for e in source)
+    pre = [e for e in source if precharge is None or e in precharge]
+    budget = sum(tailles.get(e, 0) for e in pre)
     for _ in range(ESSAIS):
         cibles = rng.sample(pool, len(source))
-        if sum(tailles.get(c, 0) for c in cibles) <= budget:
-            return dict(zip(source, cibles))
-    # repli : chaque espece prend une cible au modele pas plus gros
+        out = dict(zip(source, cibles))
+        if sum(tailles.get(out[e], 0) for e in pre) <= budget:
+            return out
+    # repli : chaque espece prechargee prend une cible au modele pas plus
+    # gros, les autres ce qui reste
     libres = list(pool)
     rng.shuffle(libres)
     out = {}
-    for e in sorted(source, key=lambda e: -tailles.get(e, 0)):
+    for e in sorted(pre, key=lambda e: -tailles.get(e, 0)):
         k = next((i for i, c in enumerate(libres)
                   if tailles.get(c, 0) <= tailles.get(e, 0)), None)
         out[e] = libres.pop(k) if k is not None else e
+    for e in source:
+        if e not in out:
+            out[e] = libres.pop() if libres else e
     return out
 
 
@@ -118,8 +131,8 @@ def mesurer(rom, rom_vanilla, ids_valides, tailles):
     cartes, changees     cartes lues, cartes dont une espece a change
     non_fonction         cartes ou une meme espece vanilla devient deux especes
     non_injective        cartes ou deux especes vanilla deviennent la meme
-    hors_budget          cartes dont la somme des tailles de modeles depasse
-                         celle du vanilla
+    hors_budget          cartes dont la liste prechargee pese plus lourd
+                         que celle du vanilla (tailles par IDENTIFIANT)
     terrain_hors_encmons cartes dont une espece de terrain n'est pas dans la
                          liste prechargee (vanilla : 2)
     """
@@ -133,6 +146,7 @@ def mesurer(rom, rom_vanilla, ids_valides, tailles):
     corr = collections.defaultdict(lambda: collections.defaultdict(set))
     terrain = collections.defaultdict(set)
     precharge = collections.defaultdict(set)
+    precharge_v = collections.defaultdict(set)
     for n, ir, ic, d, _m, v in tv.references(ids_valides):
         carte, aire = ctx[n][ir]
         if n == "encbtl.bin":
@@ -145,6 +159,7 @@ def mesurer(rom, rom_vanilla, ids_valides, tailles):
             terrain[carte].add(w)
         elif n == "encmons.bin":
             precharge[carte].add(w)
+            precharge_v[carte].add(v)
     c = collections.Counter(cartes=len(corr))
     for carte, m in corr.items():
         if any(len(s) > 1 for s in m.values()):
@@ -154,8 +169,8 @@ def mesurer(rom, rom_vanilla, ids_valides, tailles):
             c["non_injective"] += 1
         if any(next(iter(s)) != v for v, s in m.items()):
             c["changees"] += 1
-        if (sum(tailles.get(next(iter(s)), 0) for s in m.values())
-                > sum(tailles.get(v, 0) for v in m)):
+        if (sum(tailles.get(x, 0) for x in precharge[carte])
+                > sum(tailles.get(v, 0) for v in precharge_v[carte])):
             c["hors_budget"] += 1
         if terrain[carte] - precharge[carte]:
             c["terrain_hors_encmons"] += 1
@@ -171,10 +186,12 @@ def appliquer(tables, rng, pool, ids_valides, tailles, globale):
     par, aire_carte = especes_par_carte(tables, ids_valides)
     pool = sorted(pool)
     eligibles = set(pool)
+    listes = tables.cartes()
     plan = {}
     for carte in sorted(par):
         especes = [e for e in par[carte] if e in eligibles]
-        plan[carte] = tirer(rng, especes, pool, tailles)
+        plan[carte] = tirer(rng, especes, pool, tailles,
+                            set(listes.get(carte, ())))
 
     def f(nom, ir, ancien):
         carte = _carte(tables, nom, ir, aire_carte)

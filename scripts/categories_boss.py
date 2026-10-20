@@ -34,9 +34,71 @@ LEGENDES = frozenset(list(range(500, 515)) + [
     633, 635, 639, 641, 645, 647, 650, 652, 655, 658,
     770, 773, 776, 777, 778, 779])
 FAMILLES = {"histoire": HISTOIRE, "grottes": GROTTES, "legendes": LEGENDES}
+# LE PREMIER NIVEAU DE CHAQUE LEGENDE (ZER-76) : les especes des evenements
+# 46-58, un combat par boss (Mortamor : 510 et ses pinces 508/509, puis 514).
+# Les niveaux 2 et 3 (evenements 59-84) ne sont plus tires par defaut :
+# chaque legende ne pese plus qu'une fois dans le pool au lieu de trois.
+LEGENDES_PREMIERES = frozenset(range(500, 515))
+LEGENDES_HAUTES = LEGENDES - LEGENDES_PREMIERES
+EVT_LEGENDES_PREMIERES = range(46, 59)
 
 EVT_GROTTES = range(34, 46)
 EVT_LEGENDES = range(46, 85)
+
+# L'ORDRE DU SCENARIO (ZER-80) : les 30 boss d'histoire tirables, dans
+# l'ordre des enregistrements d'`eventbattle.bin` -- celui du jeu, qui suit
+# le scenario (Hexacorne d'abord, Corvus II en dernier, puis les quetes
+# d'apres-jeu). Aquila et Corvus des cinematiques (800, 801) n'y sont pas :
+# ils restent en place (ZER-74). `verifier_ordre()` le recompare a la ROM.
+ORDRE_HISTOIRE = (300, 301, 302, 303, 304, 305, 306, 307, 308, 310, 309,
+                  311, 312, 313, 314, 315, 316, 317, 344, 345, 346, 319, 318,
+                  320, 347, 339, 341, 342, 343, 340)
+# Les deux bornes speciales des seuils : des le debut (aucune borne, le
+# comportement d'avant la 1.7) et jamais (la famille n'arrive dans aucun
+# combat d'histoire).
+DEBUT, JAMAIS = "debut", "jamais"
+
+
+def position(espece):
+    """La place d'un boss d'histoire dans le scenario (0 = Hexacorne), ou
+    None pour un combat hors histoire (grottes, legendes)."""
+    try:
+        return ORDRE_HISTOIRE.index(espece)
+    except ValueError:
+        return None
+
+
+def familles_permises(source, seuils):
+    """Les familles de boss qu'un combat peut recevoir (ZER-80).
+
+    `seuils` : {'grottes': s, 'legendes': s}, s = DEBUT, JAMAIS ou l'espece
+    du boss d'histoire a partir duquel (inclus) la famille arrive. Un combat
+    hors histoire (grotte, legende) n'a pas de place dans le scenario : il
+    accepte tout."""
+    out = {"histoire", "grottes", "legendes"}
+    p = position(source)
+    if p is None:
+        return out
+    for fam, s in seuils.items():
+        if s == DEBUT:
+            continue
+        if s == JAMAIS or p < ORDRE_HISTOIRE.index(s):
+            out.discard(fam)
+    return out
+
+
+def verifier_ordre(eventbattle):
+    """Leve si ORDRE_HISTOIRE n'est pas l'ordre des enregistrements."""
+    vus = []
+    for r in eventbattle:
+        if r.tag != 0x64 or len(r.fields) != 9:
+            continue
+        for k in (1, 3, 5):
+            if r.fields[k] in ORDRE_HISTOIRE and r.fields[k] not in vus:
+                vus.append(r.fields[k])
+    if tuple(vus) != ORDRE_HISTOIRE:
+        raise AssertionError("categories_boss : ordre du scenario %s, la ROM "
+                             "dit %s" % (ORDRE_HISTOIRE, tuple(vus)))
 
 
 def categorie(espece):
@@ -66,6 +128,13 @@ def verifier(pool_boss, eventbattle):
         if r.tag != 0x64 or len(r.fields) != 9:
             continue
         evt = r.fields[0]
+        for k in (1, 3, 5):
+            if r.fields[k] in LEGENDES and (
+                    (r.fields[k] in LEGENDES_PREMIERES)
+                    != (evt in EVT_LEGENDES_PREMIERES)):
+                raise AssertionError("categories_boss : espece %d, niveau de "
+                                     "legende faux pour l'evenement %d"
+                                     % (r.fields[k], evt))
         attendu = ("grottes" if evt in EVT_GROTTES else
                    "legendes" if evt in EVT_LEGENDES else "histoire")
         for k in (1, 3, 5):

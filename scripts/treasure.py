@@ -6,8 +6,8 @@ L'archive porte 268 membres :
     (coffre rouge, pot, tonneau, placard, coffre bleu) avec l'opcode 0x67 ;
   - `randTBox.bin` : la table de tirage des COFFRES BLEUS, rangs 1 a 5 ;
   - `randTTT.bin`  : celle des POTS, TONNEAUX et PLACARDS, rangs 1 a 20 ;
-  - `randTD.bin`   : celle des GROTTOS, rangs 1 a 10. HORS PERIMETRE, sauf
-    les montants d'or depuis la 1.6 (ZER-59).
+  - `randTD.bin`   : celle des GROTTOS, rangs 1 a 10. Randomisee comme les
+    deux autres depuis la 1.7 (ZER-41) ; avant, seulement son or (ZER-59).
 
 Format des membres : le script Nitro generique de la classe `Script` du decomp.
 
@@ -52,7 +52,7 @@ NOM_LOOT = {0: "rien", 1: "or", 2: "objet", 3: "embuscade"}
 NOM_CONTENEUR = {0: "coffre rouge", 1: "pot", 2: "tonneau",
                  3: "placard", 4: "coffre bleu"}
 
-# Les trois tables de tirage. randTD est celle des grottos : hors perimetre.
+# Les trois tables de tirage. randTD est celle des grottos (ZER-41).
 TABLE_COFFRES_BLEUS = "randTBox.bin"
 TABLE_POTS = "randTTT.bin"
 TABLE_GROTTOS = "randTD.bin"

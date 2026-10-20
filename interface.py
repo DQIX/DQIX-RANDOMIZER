@@ -33,7 +33,7 @@ RACINE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(RACINE, "scripts"))
 
 import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, font as tkfont, messagebox, ttk
 
 import langues_interface as L
 
@@ -139,12 +139,16 @@ MERES = {"groupes": "monstres", "app_aleatoire": "monstres",
          "techniques_monstres_ajout": "techniques_monstres",
          "garder_hexacorne": "boss", "boss_familles_egales": "boss",
          "boss_histoire": "boss", "boss_mixte": "boss",
+         "boss_legacy_tous": "boss",
+         "seuil_grottes": "boss", "seuil_legendes": "boss",
          "boss_chaque_combat": "boss", "boss_terrain": "monstres",
-         "sans_consommables": "objets", "objets_chaos": "objets",
+         "equilibrer_conso": "objets", "objets_chaos": "objets",
          "rouges_libres": "objets", "butin_libre": "butin",
          "prix_libres": "boutiques", "boutiques_chaos": "boutiques",
          "sorts_chaos": "sorts", "aptitudes_chaos": "aptitudes",
-         "aptitudes_arme_origine": "aptitudes"}
+         "aptitudes_arme_origine": "aptitudes",
+         "medailles_chaos": "medailles",
+         "medailles_seuils_vanilla": "medailles"}
 
 
 class Application(object):
@@ -201,10 +205,54 @@ class Application(object):
             except tk.TclError:
                 pass
         self.choix_langue.set(dict(L.LANGUES)[code])
+        for menu, variable in getattr(self, "_listes", ()):
+            self._remplir_liste(menu, variable)
         for onglets, page, titre in getattr(self, "_onglets", ()):
             onglets.tab(page, text=self._t(titre))
+        if getattr(self, "creer", None) is not None:
+            self.creer.retraduire()
         if memoriser:
             memoriser_langue(code)
+
+    # LES SEUILS DE BOSS (ZER-80) : une liste deroulante, « le debut », les
+    # 30 boss d'histoire numerotes dans l'ordre du scenario, « jamais ».
+    def _choix_seuil(self):
+        import categories_boss as CB
+        noms = L.NOMS_BOSS_HISTOIRE[self.langue]
+        return ([(CB.DEBUT, self._t("seuil_debut"))]
+                + [(str(e), "%d. %s" % (k + 1, noms[k]))
+                   for k, e in enumerate(CB.ORDRE_HISTOIRE)]
+                + [(CB.JAMAIS, self._t("seuil_jamais"))])
+
+    def _remplir_liste(self, menu, variable):
+        choix = self._choix_seuil()
+        menu.configure(values=[t for _v, t in choix])
+        menu.set(dict(choix).get(variable.get(), choix[0][1]))
+
+    def _liste(self, page, cle, variable, retrait):
+        ligne = ttk.Frame(page)
+        ligne.pack(fill="x", anchor="w", padx=(22 * retrait, 0))
+        t = ttk.Label(ligne)
+        t.pack(side="left")
+        self._poser(t, cle, partie=0)
+        menu = ttk.Combobox(ligne, state="readonly", width=30)
+        menu.pack(side="left", padx=(6, 0))
+
+        def choisi(_evenement=None):
+            texte = menu.get()
+            for v, txt in self._choix_seuil():
+                if txt == texte:
+                    variable.set(v)
+            self.choix_manuel()
+        menu.bind("<<ComboboxSelected>>", choisi)
+        self._listes.append((menu, variable))
+        self._remplir_liste(menu, variable)
+        # le detail est long : il passe a la ligne au lieu d'elargir la fenetre
+        d = ttk.Label(ligne, foreground="#666", wraplength=380,
+                      justify="left")
+        d.pack(side="left")
+        self._poser(d, cle, partie=1)
+        return menu
 
     def _case(self, page, cle, variable, retrait, valeur=None):
         """Une ligne : la case (ou le bouton radio si `valeur`), son libelle
@@ -236,7 +284,15 @@ class Application(object):
             c.configure(state="normal" if aleatoire else "disabled")
         for cle, c in getattr(self, "_cases_filles", ()):
             actif = getattr(self, MERES[cle]).get()
-            if cle == "boss_familles_egales" and self.boss_histoire.get():
+            if (cle in ("boss_familles_egales", "boss_legacy_tous",
+                        "seuil_grottes", "seuil_legendes")
+                    and self.boss_histoire.get()):
+                actif = False
+            if isinstance(c, ttk.Combobox):
+                c.configure(state="readonly" if actif else "disabled")
+                continue
+            # les coffres rouges sont deja libres quand les rangs sont ignores
+            if cle == "rouges_libres" and self.objets_chaos.get():
                 actif = False
             if c not in self._cases_blob or not actif:
                 c.configure(state="normal" if actif else "disabled")
@@ -325,17 +381,34 @@ class Application(object):
 
         # LES ONGLETS (ZER-64) : les cases rangees par sujet. Le titre d'un
         # onglet ne passe pas par `configure`, d'ou leur registre a part.
+        # DES ONGLETS QUI SE VOIENT (ZER-82) : le titre en gras, deux points
+        # au-dessus de la police de la fenetre, et plus d'air autour.
+        base = tkfont.nametofont("TkDefaultFont").actual()
+        ttk.Style(self.racine).configure(
+            "TNotebook.Tab", padding=(12, 4),
+            font=(base["family"], abs(base["size"]) + 2, "bold"))
         onglets = ttk.Notebook(cadre)
         onglets.grid(row=6, column=0, sticky="ew", pady=(8, 0))
         self._onglets = []
         self.monstres = tk.BooleanVar(value=True)
         self.objets = tk.BooleanVar(value=True)
-        self.sans_consommables = tk.BooleanVar(value=False)
-        self.objets_chaos = tk.BooleanVar(value=False)
+        # 1.7 (joueur, 14/10/2026) : rarete libre et tirage brut par defaut ;
+        # l'equilibre equipement / consommables devient une case a cocher.
+        self.equilibrer_conso = tk.BooleanVar(value=False)
+        self.objets_chaos = tk.BooleanVar(value=True)
         self.rouges_libres = tk.BooleanVar(value=False)
         self.boutiques = tk.BooleanVar(value=True)
         self.prix_libres = tk.BooleanVar(value=False)
         self.boutiques_chaos = tk.BooleanVar(value=False)
+        # L'ALCHIMIE (ZER-53) : dans les deux prereglages depuis sa validation
+        # en jeu (joueur, 14/10/2026).
+        self.alchimie = tk.BooleanVar(value=False)
+        # LE CAPITAINE ZAC AMEDAI (ZER-55) : dans les deux prereglages depuis
+        # sa validation en jeu (joueur, 15/10/2026) ; le chaos leve la bande
+        # d'etoiles.
+        self.medailles = tk.BooleanVar(value=False)
+        self.medailles_chaos = tk.BooleanVar(value=False)
+        self.medailles_seuils_vanilla = tk.BooleanVar(value=False)
         self.boss = tk.BooleanVar(value=False)
         # COCHEE PAR DEFAUT, et c'est voulu : hexacorne est le seul boss qu'on
         # affronte sans equipe, et n'importe quel autre a sa place peut rendre
@@ -372,6 +445,14 @@ class Application(object):
         self.groupes = tk.BooleanVar(value=True)
         self.boss_familles_egales = tk.BooleanVar(value=False)
         self.boss_histoire = tk.BooleanVar(value=False)
+        # LES TROIS NIVEAUX DES LEGENDES (ZER-76) : par defaut, le premier
+        # seulement ; la case rend le tirage d'avant la 1.7.
+        self.boss_legacy_tous = tk.BooleanVar(value=False)
+        # A PARTIR DE QUEL BOSS (ZER-80) : "debut", "jamais" ou l'espece
+        # d'un boss d'histoire, en texte.
+        self.seuil_grottes = tk.StringVar(value="debut")
+        self.seuil_legendes = tk.StringVar(value="debut")
+        self._listes = []
         self.boss_mixte = tk.BooleanVar(value=False)
         self.boss_chaque_combat = tk.BooleanVar(value=False)
         # LES BOSS SUR LE TERRAIN (ZER-63) : dans la fenetre depuis le
@@ -390,7 +471,10 @@ class Application(object):
             onglets.add(page, text=self._t(titre))
             self._onglets.append((onglets, page, titre))
             for cle, retrait in cases:
-                c = self._case(page, cle, getattr(self, cle), retrait)
+                if cle in L.LISTES:
+                    c = self._liste(page, cle, getattr(self, cle), retrait)
+                else:
+                    c = self._case(page, cle, getattr(self, cle), retrait)
                 if cle in ("groupes", "boss_chaque_combat", "boss_terrain"):
                     self._cases_blob.append(c)
                 if cle in MERES:
@@ -401,6 +485,15 @@ class Application(object):
                                        1, valeur=mode)
                         self._cases_filles.append(("app_" + mode, r))
         self._etat_cases_blob()
+        # « CREER SA ROM » (ZER-86) : l'affectation explicite, dans son module.
+        from onglet_creer import OngletCreer
+        self.creer = OngletCreer(self, onglets, Sortie)
+        # LE BOUTON SUIT L'ONGLET (joueur, 20/10/2026) : depuis « Creer sa
+        # ROM », la ROM personnalisee (sa config seule) ; depuis les autres
+        # onglets, les options seules. Les deux ne se melangent jamais.
+        self.notebook = onglets
+        onglets.bind("<<NotebookTabChanged>>",
+                     lambda _e: self._libelle_bouton())
 
         # --- sortie --------------------------------------------------------
         s = ttk.LabelFrame(cadre, padding=10)
@@ -420,7 +513,7 @@ class Application(object):
         self._poser(self.etat_patch, "xdelta_cherche")
         self.etat_patch.pack(anchor="w")
         threading.Thread(target=self._chercher_xdelta, daemon=True).start()
-        self.dossier = ttk.Label(s, foreground="#666")
+        self.dossier = ttk.Label(s, foreground="#666", wraplength=700)
         self._poser(self.dossier, "dossier_defaut")
         self.dossier.pack(anchor="w")
 
@@ -505,11 +598,14 @@ class Application(object):
         self._applique = True
         for var in (self.monstres, self.objets, self.boutiques):
             var.set(True)
-        for var in (self.objets_chaos, self.rouges_libres,
+        for var in (self.rouges_libres,
                     self.boutiques_chaos, self.boss,
-                    self.sorts_chaos, self.aptitudes_chaos, self.prix_libres,
-                    self.sans_consommables):
+                    self.sorts_chaos, self.aptitudes_chaos, self.prix_libres):
             var.set(chaos)
+        # LES OBJETS RARES PARTOUT DANS LES DEUX (joueur, 14/10/2026), et le
+        # tirage brut : l'equilibre des consommables reste au choix.
+        self.objets_chaos.set(True)
+        self.equilibrer_conso.set(False)
         # LES SORTS SONT DANS LES DEUX PREREGLAGES : c'est une randomisation
         # a part entiere, pas une option de chaos. Ce qui change entre les
         # deux, c'est l'ordre de puissance.
@@ -529,17 +625,28 @@ class Application(object):
         # prereglages (decision du joueur, 11/10/2026), comme les boss sur le
         # terrain ; cases au choix du joueur.
         for var in (self.sorts_monstres, self.sorts_monstres_ajout,
-                    self.techniques_monstres, self.techniques_monstres_ajout):
+                    self.techniques_monstres, self.techniques_monstres_ajout,
+                    self.medailles_seuils_vanilla):
             var.set(False)
+        # LE CAPITAINE DANS LES DEUX ; le chaos leve la bande d'etoiles
+        # (ZER-55, joueur, 15/10/2026).
+        self.medailles.set(True)
+        self.medailles_chaos.set(chaos)
+        # L'ALCHIMIE DANS LES DEUX (ZER-53, joueur, 14/10/2026).
+        self.alchimie.set(True)
         self.garder_hexacorne.set(True)
         self.stats.set(False)
         # LA 1.6 : le mode aleatoire et ses groupes dans les deux ; les
         # options neuves restent au choix du joueur.
         self.apparitions.set("aleatoire")
         self.groupes.set(True)
+        for var in (self.seuil_grottes, self.seuil_legendes):
+            var.set("debut")
+        for menu, variable in self._listes:
+            self._remplir_liste(menu, variable)
         for var in (self.boss_familles_egales, self.boss_histoire,
-                    self.boss_mixte, self.boss_chaque_combat,
-                    self.boss_terrain,
+                    self.boss_legacy_tous, self.boss_mixte,
+                    self.boss_chaque_combat, self.boss_terrain,
                     self.aptitudes_arme_origine):
             var.set(False)
         self._etat_cases_blob()
@@ -554,13 +661,32 @@ class Application(object):
     def nouvelle_graine(self):
         self.graine.set(str(random.randrange(1, 10 ** 6)))
 
-    def arguments(self):
-        """La ligne de commande, exactement celle qu'on taperait a la main."""
+    def _chemin_config(self, sortie):
+        """Le fichier de « Creer sa ROM », a cote de la ROM qu'il produit."""
+        return os.path.splitext(sortie)[0] + "_config.json"
+
+    def arguments(self, sans_config=False):
+        """La ligne de commande, exactement celle qu'on taperait a la main.
+        Depuis l'onglet « Creer sa ROM » (et sans `sans_config`, qui sert a
+        tirer avec les options), la ROM PERSONNALISEE : sa config seule, sans
+        aucune case des autres onglets (joueur, 20/10/2026)."""
         seed = self.graine.get().strip()
+        # UN DOSSIER PAR GRAINE (ZER-79, suggestion d'un joueur) : la ROM, son
+        # journal et le patch eventuel portent le meme nom et vont ensemble
+        # dans un dossier a ce nom, a cote de la ROM d'origine.
+        nom = "DQIX-Randomizer-seed%s" % seed
         sortie = os.path.join(
-            os.path.dirname(os.path.abspath(self.rom)),
-            "DQIX-Randomizer-seed%s.nds" % seed)
+            os.path.dirname(os.path.abspath(self.rom)), nom, nom + ".nds")
         args = [self.rom, "--seed", seed]
+        if not sans_config and self.personnalise():
+            # le randomizer ne tire d'office que les objets et les boutiques ;
+            # le reste (monstres, boss et leur code) vient de la config
+            args += ["--sans-objets", "--sans-boutiques"]
+            if self.patch.get():
+                args.append("--patch")
+            args += ["--langue", self.langue,
+                     "--config", self._chemin_config(sortie), "-o", sortie]
+            return args, sortie
         # LE MODE ALEATOIRE GARDE SA LIGNE D'AVANT (les greffes du blob) : la
         # meme ROM que `--apparitions aleatoire`, verifie par la matrice.
         aleatoire = self.monstres.get() and self.apparitions.get() == "aleatoire"
@@ -575,12 +701,12 @@ class Application(object):
         else:
             args += ["--apparitions", self.apparitions.get()]
         if self.objets.get():
-            if self.sans_consommables.get():
-                args.append("--objets-sans-consommables")
-            if self.rouges_libres.get():
-                args.append("--coffres-rouges-libres")
-            if self.objets_chaos.get():
-                args.append("--objets-chaos")
+            if self.equilibrer_conso.get():
+                args.append("--objets-consommables")
+            if not self.objets_chaos.get():
+                args.append("--objets-par-rang")
+                if self.rouges_libres.get():
+                    args.append("--coffres-rouges-libres")
         else:
             args.append("--sans-objets")
         if self.boutiques.get():
@@ -599,6 +725,14 @@ class Application(object):
                 args.append("--boss-familles-egales")
             if self.boss_histoire.get():
                 args.append("--boss-histoire")
+            elif self.boss_legacy_tous.get():
+                args.append("--boss-legacy-tous")
+            if not self.boss_histoire.get():
+                for opt, var in (("--boss-grottes-des", self.seuil_grottes),
+                                 ("--boss-legendes-des",
+                                  self.seuil_legendes)):
+                    if var.get() != "debut":
+                        args += [opt, var.get()]
             if self.boss_mixte.get():
                 args.append("--boss-mixte")
             if self.boss_chaque_combat.get() and aleatoire:
@@ -613,6 +747,14 @@ class Application(object):
                 args.append("--aptitudes-chaos")
             if self.aptitudes_arme_origine.get():
                 args.append("--aptitudes-arme-origine")
+        if self.alchimie.get():
+            args.append("--alchimie")
+        if self.medailles.get():
+            args.append("--medailles")
+            if self.medailles_chaos.get():
+                args.append("--medailles-chaos")
+            if self.medailles_seuils_vanilla.get():
+                args.append("--medailles-seuils-vanilla")
         if self.butin.get():
             args.append("--butin-combat")
             if self.butin_libre.get():
@@ -644,7 +786,8 @@ class Application(object):
         return args, sortie
 
     def lancer(self):
-        if self.en_cours or not self.rom_conforme:
+        # un tirage de « Creer sa ROM » detourne lui aussi la sortie standard
+        if self.en_cours or not self.rom_conforme or self.creer._occupe:
             return
         try:
             int(self.graine.get().strip())
@@ -657,7 +800,9 @@ class Application(object):
                 or self.vocations.get() or self.vocations_embauche.get()
                 or self.vocations_bloquees.get() or self.vocation_depart.get()
                 or self.butin.get() or self.sorts_monstres.get()
+                or self.alchimie.get() or self.medailles.get()
                 or self.techniques_monstres.get()
+                or (self.personnalise() and self.creer.cfg)
                 or (self.boss_terrain.get() and self.monstres.get())):
             messagebox.showerror(TITRE, self._t("rien_coche"))
             return
@@ -665,6 +810,9 @@ class Application(object):
         if os.path.exists(sortie) and not messagebox.askyesno(
                 TITRE, self._t("existe_deja", os.path.basename(sortie))):
             return
+        if "--config" in args:
+            # le fichier part avec la ROM, dans son dossier : pret a partager
+            self.creer.ecrire(args[args.index("--config") + 1])
         self.en_cours = True
         self.bouton.configure(state="disabled")
         self._poser(self.bouton, "travail")
@@ -733,6 +881,9 @@ class Application(object):
                     self._echoue(charge)
                 elif genre == "xdelta":
                     self._xdelta_trouve(charge)
+                elif genre == "appel":
+                    # le retour d'un fil de « Creer sa ROM »
+                    charge()
         except queue.Empty:
             pass
         self.racine.after(100, self._vider_file)
@@ -753,11 +904,17 @@ class Application(object):
             self._ecrire(self._t("md5_attendu", MD5_ATTENDU))
             return
         self.rom_conforme = True
+        # LA ROM DU JOUEUR EST LA VANILLA de reference : les modules qui
+        # relisent le jeu d'origine (rom_vanilla.chemin_vanilla) la trouvent
+        # ainsi dans l'exe, qui n'a pas de banc/roms (20/10 : onglet « Creer
+        # sa ROM » vide, monstres et actions la relisent)
+        os.environ["DQ9_VANILLA"] = os.path.abspath(chemin)
         self.bouton.configure(state="normal")
         self._poser(self.zone, brut=os.path.basename(chemin), fg="#070")
         self._poser(self.etat_rom, "rom_ok", foreground="#070")
         self._poser(self.dossier, "dossier",
                     os.path.dirname(os.path.abspath(chemin)))
+        self.creer.rom_prete()
 
     def _xdelta_trouve(self, chemin):
         if chemin:
@@ -772,7 +929,19 @@ class Application(object):
         self.progres.stop()
         self.progres.configure(mode="determinate", value=0)
         self.bouton.configure(state="normal")
-        self._poser(self.bouton, "lancer")
+        self._libelle_bouton()
+
+    def personnalise(self):
+        """L'onglet « Creer sa ROM » est-il celui qu'on regarde ?"""
+        try:
+            return self.notebook.select() == str(self.creer.page)
+        except (AttributeError, tk.TclError):
+            return False
+
+    def _libelle_bouton(self):
+        if not self.en_cours:
+            self._poser(self.bouton, "lancer_perso" if self.personnalise()
+                        else "lancer")
 
     def _termine(self, sortie):
         self._fin_de_travail()

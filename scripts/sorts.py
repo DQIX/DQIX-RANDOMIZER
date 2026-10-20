@@ -27,6 +27,18 @@ complete : le sort 0 devient Frizz, 1 Frizzle, 2 Kafrizz, 3 Kafrizzle,
 decalage nul on obtient une bouillie (le sort 0 n'a pas de nom, le 3 devient
 Fullheal).
 
+LES NOMS AFFICHES, DANS LES CINQ LANGUES (mesure le 19/10/2026, ZER-91) :
+`actname.nat` n'existe qu'en anglais ; le jeu affiche ceux des fiches
+d'action, `data/prm/actdt_a.gp2` et `actdt_b.gp2`, membres
+`actdt_<x>_<lg>.nat` stockes EN CLAIR : u16 nombre (10 bits bas), fiches de
+60 o (identifiant d'action en +6, 10 bits bas ; offset du nom en u16 a +2),
+puis le pool, le nom etant a pool + 2 + offset. L'identifiant de la fiche
+est le second champ de l'enregistrement 0x66 TEL QUEL (sans le decalage
+d'actname) : 346 noms anglais sur 358 identiques a actname, les 12 autres ne
+different que par la balise d'apostrophe `<1>`. Les 61 sorts du pool ont un
+nom dans les cinq langues (Omniheal = Omnisoin, Megaheilung...).
+`noms_localises`.
+
 LE POOL. 61 sorts portent un nom et sont enseignes en vanilla. Quatre
 identifiants (60, 61, 62, 65) n'ont ni nom ni usage : on ne les tire pas. Un
 seul, le 24, est enseigne sans porter de nom -- on le garde, puisque le jeu
@@ -81,6 +93,42 @@ def noms(rom):
         if r.tag == TAG_NOM and len(r.fields) == 2:
             # LE DECALAGE DE UN : voir l'en-tete du module.
             out[r.fields[0]] = actions.get(r.fields[1] + 1, "")
+    return out
+
+
+def _noms_fiches(rom, langue):
+    """{identifiant de fiche d'action: nom brut} dans `langue`."""
+    import gp2
+    out = {}
+    for base in ("actdt_b", "actdt_a"):
+        data = _lire(rom, "data/prm/%s.gp2" % base)
+        g = gp2.GP2(base, donnees=data)
+        ent = sorted(g.entrees, key=lambda e: e[1] & 0xFFFFFF)
+        _h, o, t = ent[g.noms.index("%s_%s.nat" % (base, langue))]
+        m = data[g.first_file * 4 + (o & 0xFFFFFF) * 4:][:t]
+        n = struct.unpack_from("<H", m, 0)[0] & 0x3FF
+        pool = 2 + n * 60
+        for i in range(n):
+            ident = struct.unpack_from("<H", m, 2 + i * 60 + 6)[0] & 0x3FF
+            p = pool + 2 + struct.unpack_from("<H", m, 2 + i * 60 + 2)[0]
+            out.setdefault(ident, m[p:m.find(b"\0", p)].decode("utf-8",
+                                                             "replace"))
+    return out
+
+
+def noms_localises(rom, langue="en"):
+    """{id de sort: nom tel que le jeu l'affiche dans `langue`}, accents
+    compris ; le nom d'actname (anglais) a defaut."""
+    import objets
+    fiches = _noms_fiches(rom, langue)
+    anglais = noms(rom)
+    table = PrmTable(_lire(rom, CHEMIN_TABLE))
+    out = {}
+    for r in table.records:
+        if r.tag == TAG_NOM and len(r.fields) == 2:
+            s, action = r.fields
+            out[s] = (objets.avec_accents(fiches.get(action, ""))
+                      or nom_lisible(anglais, s))
     return out
 
 
