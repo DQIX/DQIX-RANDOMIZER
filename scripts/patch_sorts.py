@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Randomise les sorts appris a niveau fixe par les vocations.
 
-CE QUI EST TOUCHE, et rien d'autre : le champ « sort » des 107 triplets
+CE QUI EST TOUCHE, et rien d'autre : le champ « sort » des 108 triplets
 (vocation, sort, niveau) de `data/prm/spelltable.bin`. Les niveaux ne bougent
 pas, le nombre de sorts d'une vocation ne bouge pas, la taille du fichier ne
-bouge pas -- on reecrit 107 mots la ou ils sont.
+bouge pas -- on reecrit 108 mots la ou ils sont.
 
 CE QUI N'EST PAS TOUCHE : les trois vocations sans magie (guerrier, artiste
 martial, gladiateur) n'ont aucun triplet, donc elles n'en recoivent aucun.
@@ -23,7 +23,7 @@ DEUX MODES, comme pour le loot et les boutiques :
 
 DANS LES DEUX CAS, un meme sort n'est jamais donne deux fois a la meme
 vocation, et le tirage se fait dans un paquet melange (`Pioche`), donc les 61
-sorts sortent tous quelque part tant qu'il reste des places -- 107 places pour
+sorts sortent tous quelque part tant qu'il reste des places -- 108 places pour
 61 sorts.
 """
 import collections
@@ -77,6 +77,10 @@ class Pioche(object):
             self.paquet = refuses + self.paquet
 
 
+# 108 TRIPLETS : 107 jusqu'a la 1.7, le dernier (ranger, Soins avances,
+# niveau 34) etait perdu par la lecture (ZER-103).
+NB_APPRIS = 108
+
 def puissance(appris):
     """{sort: niveau median auquel le vanilla l'enseigne}.
 
@@ -100,7 +104,9 @@ def patcher(rom, rng, journal=None, chaos=False):
             journal.write(ligne + "\n")
 
     fid = rom.filenames.idOf(sorts.CHEMIN_TABLE)
-    table = PrmTable(bytes(rom.files[fid]))
+    # selon_entete : le 108e triplet (ranger, Soins avances, niveau 34)
+    # est colle au pool ; il n'etait jamais tire avant la 1.8 (ZER-103)
+    table = PrmTable(bytes(rom.files[fid]), selon_entete=True)
     taille_avant = len(table.data)
 
     appris = sorts.apprentissages(rom)
@@ -153,8 +159,9 @@ def verifier(rom):
     par_voc = collections.defaultdict(list)
     for _i, v, s, niveau in appris:
         par_voc[v].append((s, niveau))
-    if len(appris) != 107:
-        raise AssertionError("%d apprentissages, 107 attendus" % len(appris))
+    if len(appris) != NB_APPRIS:
+        raise AssertionError("%d apprentissages, %d attendus"
+                             % (len(appris), NB_APPRIS))
     for v, l in par_voc.items():
         vus = [s for s, _n in l]
         if len(vus) != len(set(vus)):

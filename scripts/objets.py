@@ -143,6 +143,10 @@ def catalogue(rom, langue="en"):
             if ident in out:
                 raise ValueError("identifiant d'objet en double : %d" % ident)
             out[ident] = (c, quartet)
+    # UNE ROM FINIE (1.8) porte un objet de plus, l'arme du boss secret
+    # (patch_arme) ; le randomizer, lui, lit le catalogue avant de la poser.
+    if len(out) == NB_OBJETS + 1 and ECLAIR_ZENUS in out:
+        return out
     if len(out) != NB_OBJETS:
         raise ValueError("catalogue : %d objets, %d attendus"
                          % (len(out), NB_OBJETS))
@@ -157,7 +161,9 @@ def objets_importants(rom, langue="en"):
     """
     imp = {ident for ident, quartet in lire_categorie(rom, "t", langue)
            if quartet == 9}
-    if len(imp) != NB_IMPORTANTS:
+    # la page de la quete cachee (patch_pages) est une pierre de debogage
+    # devenue objet important : on la compte a part
+    if len(imp - DEBUG) != NB_IMPORTANTS:
         raise ValueError("objets importants : %d trouves, %d attendus. La "
                          "lecture du catalogue est fausse, on s'arrete."
                          % (len(imp), NB_IMPORTANTS))
@@ -195,7 +201,9 @@ SIFFLET = 22256
 # important, donc le pool le distribuait -- un testeur en a obtenu une piece.
 DRACOGUERRIER = {12785, 13162, 15286, 16256, 17303}   # casque, armure, gants,
 #                                                       culotte, bottes
-HORS_TIRAGE = DEBUG | {SIFFLET} | DRACOGUERRIER
+# L'Eclair de Zenus (patch_arme, ZER-116) : une seule place, le butin de Zenus.
+ECLAIR_ZENUS = 20030
+HORS_TIRAGE = DEBUG | {SIFFLET} | DRACOGUERRIER | {ECLAIR_ZENUS}
 
 
 def pool(rom, langue="en"):
@@ -267,14 +275,25 @@ def _membre_archive(rom, chemin, vise):
     raise ValueError("membre introuvable : " + vise)
 
 
-def noms(rom, langue="en", accents=False):
+def _brut(nom):
+    """Le nom avec ses balises (pour un texte du jeu), sans les flexions
+    allemandes ([gs], [ges]...) que le moteur ne resout que sur un nom
+    d'objet affiche par balise."""
+    import re
+    return re.sub(r"\[[^\]]{1,16}\]", "", nom).strip()
+
+
+def noms(rom, langue="en", accents=False, brut=False):
     """Rend {identifiant: nom} lus dans `itemname.gp2`. `accents` : tels que
-    le jeu les affiche (pour la fenetre), sinon sans accents (console)."""
-    propre = avec_accents if accents else nettoyer
+    le jeu les affiche (pour la fenetre), sinon sans accents (console) ;
+    `brut` : avec les balises du jeu, pour l'ecrire dans un texte."""
+    propre = _brut if brut else avec_accents if accents else nettoyer
     d = _membre_archive(rom, "data/prm/itemname.gp2",
                         "itemname_%s.nat" % langue)
     n = struct.unpack_from("<H", d, 0)[0] & 0xFFF
-    if n != NB_OBJETS:
+    # NB_OBJETS + 1 : une ROM finie, avec l'arme du boss secret (patch_arme,
+    # inseree a sa place) ; le compte se verifie en fin de lecture
+    if n not in (NB_OBJETS, NB_OBJETS + 1):
         raise ValueError("itemname : %d noms, %d attendus" % (n, NB_OBJETS))
     pool_debut = 4 + n * 16
     while d[pool_debut] == 0:
@@ -290,6 +309,8 @@ def noms(rom, langue="en", accents=False):
         for ident, _q in lire_categorie(rom, c, langue):
             out[ident] = chaine(k)
             k += 1
+    if k != n:
+        raise ValueError("itemname : %d noms, %d objets dans itemdt" % (n, k))
     return out
 
 

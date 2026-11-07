@@ -86,7 +86,7 @@ def nom_lisible(noms, ident):
 
 def noms(rom):
     """Rend {id de sort: nom}. Un nom vide signale un identifiant inutilise."""
-    table = PrmTable(_lire(rom, CHEMIN_TABLE))
+    table = PrmTable(_lire(rom, CHEMIN_TABLE), selon_entete=True)
     actions = noms_actions(rom)
     out = {}
     for r in table.records:
@@ -122,7 +122,7 @@ def noms_localises(rom, langue="en"):
     import objets
     fiches = _noms_fiches(rom, langue)
     anglais = noms(rom)
-    table = PrmTable(_lire(rom, CHEMIN_TABLE))
+    table = PrmTable(_lire(rom, CHEMIN_TABLE), selon_entete=True)
     out = {}
     for r in table.records:
         if r.tag == TAG_NOM and len(r.fields) == 2:
@@ -134,7 +134,7 @@ def noms_localises(rom, langue="en"):
 
 def apprentissages(rom):
     """Rend [(index d'enregistrement, vocation, sort, niveau)], dans l'ordre."""
-    table = PrmTable(_lire(rom, CHEMIN_TABLE))
+    table = PrmTable(_lire(rom, CHEMIN_TABLE), selon_entete=True)
     out = []
     for i, r in enumerate(table.records):
         if r.tag == TAG_APPRIS and len(r.fields) == 3:

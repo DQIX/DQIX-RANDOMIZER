@@ -308,6 +308,34 @@ Limits measured (battle freezes on a black screen at its first frame):
 So a list holds at most 40 actions (the limit is between 40 and 49), and the
 file at most ~660 commands.
 
+**Correction (29 October 2026, ZER-115): only the first 8 ids of a list
+show their case.** The 40 above is the freeze limit, not the display limit.
+Measured in the Equinox lair battle (`scripts/lua/combat_actions.lua`: the
+monsters' kits written in the battle copies, `0x02361FEC + k × 0x84`, and a
+`default.bact` injected into the archive buffer `0x0211E33C` when overlay 0
+calls the compiler at `0x02165070`, with `r2` = the member size and the heap
+literal `0x021B727C` raised beforehand; injecting the vanilla file is the
+control, and it shows the case):
+
+| list | result |
+|---|---|
+| action at index 0..7 (lists of 8 to 20) | text, animation, camera on the monster |
+| action at index 8 or more (index 8, 11) | nothing: the effect applies, default camera, no text |
+| list of 24 or 31 ids | even index 0 shows nothing |
+| copies of the case at the end of the file (2nd, 3rd list) | fine, under the same rule |
+
+The command format gives the types of 8 arguments at most (header byte for
+0..3, the word `0xFFFFFFtt` for 4..7), and no command of the game has more
+than 7. `patch_actions.LISTE_IDS = 8` now caps every list. A full fixed kit
+then needs ~960 commands; injected (with the heap raised by 16 KB) it runs and
+shows its cases.
+
+Also measured there: the action record is not the cause. Psyche Up (`0xA1`)
+with the bytes of `0x151` (the monsters' « tension toujours plus haut ») keeps
+its text and aura, and only climbs three steps at once (byte 50). The three
+real cases of `0x151` (`b016a`, `z032c`, `z002b`), copied into `default.bact`,
+all show text and aura on Mortamor.
+
 ### 94.3 What the randomizer does (`scripts/patch_actions.py`)
 
 The technique pool is the techniques carried by bestiary monsters plus the

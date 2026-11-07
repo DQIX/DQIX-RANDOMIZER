@@ -55,19 +55,25 @@ def objets_btl(rom):
     return out
 
 
+# BUTIN FIXE, JAMAIS TIRE : Zenus (espece 900, ZER-116) lache toujours son arme,
+# greffe du butin comprise (patch_butin.GARDE) ; sa fiche montre donc toujours
+# les objets de mon_btldata. Sur la vanilla, sa fiche les porte deja.
+ESPECES_FIXES = {900}
+
+
 def attendu(rom, vanilla):
     """Les octets de mons_info2 que la regle donne a `rom`. `vanilla` : les
     octets vanilla du fichier."""
     import patch_butin
     info = bytearray(vanilla)
-    if patch_butin.lire(rom) is not None:
-        return bytes(info)
     n = _fiches(info)
     btl = objets_btl(rom)
     if len(btl) != n:
         raise ValueError("mons_info2 : %d fiches, mon_btldata %d" % (n, len(btl)))
-    for i, (_esp, c, r) in enumerate(btl):
-        struct.pack_into("<HH", info, ENTETE + i * PAS + 8, c, r)
+    tire = patch_butin.lire(rom) is not None
+    for i, (esp, c, r) in enumerate(btl):
+        if not tire or esp in ESPECES_FIXES:
+            struct.pack_into("<HH", info, ENTETE + i * PAS + 8, c, r)
     return bytes(info)
 
 

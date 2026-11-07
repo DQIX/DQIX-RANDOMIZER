@@ -117,6 +117,128 @@ def mesurer(rom=None):
     return par_code
 
 
+def taille_mon(d):
+    """Poids d'un `<code>.mon` COMPLET (celui du combat) : chaque membre du
+    NARC decompresse s'il est en LZ77 (`entete >> 8`), brut sinon."""
+    tot = 0
+    for _nom, (a, b) in fichiers_narc(d).items():
+        h = struct.unpack_from("<I", d, a)[0] if b - a >= 4 else 0
+        tot += (h >> 8) if (h & 0xFF) == 0x10 else (b - a)
+    return tot
+
+
+_combat = {}
+_modeles = {}
+_declarees = {}
+
+# LES ESPECES QU'UNE AUTRE AMENE DANS LE COMBAT : leurs modeles sont charges
+# avec elle, APRES les especes du combat (coupees les premieres si la place
+# manque : le renfort ne vient pas, rien ne gele). Deux sources, overlay 0 :
+#  - la table de 4 x 16 o en 0x02183070, lue en 0x0216571C (75, 77) ;
+#  - les APPELS DE RENFORT du kit de l'espece (0x0216564C : chaque action de
+#    type 0xC est cherchee dans la table action -> espece de 0x02182E6C,
+#    lue par 0x0215FB54), releves sur les kits du jeu d'origine (ZER-110,
+#    29/10 : Monte-gluancien amenait 180, vu au banc). Un renfort tire par
+#    les options d'actions n'est pas compte : au pire il ne vient pas.
+SUPPLEMENTS = {43: (35,), 64: (128,), 75: (15, 3), 77: (19, 27), 78: (145,),
+               79: (146,), 119: (15,), 120: (17,), 121: (19,), 225: (180,),
+               266: (179,), 267: (75,), 298: (19,)}
+
+
+MARGE_NULLE = 1.3
+
+
+def tailles_declarees(rom=None):
+    """{IDENTIFIANT d'espece: taille de modele DECLAREE, en Ko}, le champ
+    +0x2A de sa fiche de `mon_btldata` (meme rang que `mon_moddata`).
+
+    C'EST CE QUE LE COMBAT COMPTE (ZER-110, research §108) : avant de charger
+    ses modeles, un combat scripte soustrait, espece par espece, cette taille
+    x 1024 de la place libre de son tas (overlay 0, 0x02165C54) et coupe la
+    liste a la premiere qui ne tient pas. Les fichiers reels n'y sont pour
+    rien.
+
+    SAUF UNE TAILLE DECLAREE NULLE (Nokturnus et 769-775) : le combat ne la
+    compte pas, mais le modele se charge quand meme (Nokturnus : 98 Ko
+    reels). Monte-gluancien + Larstastnaras + Nokturnus, 150 Ko declares :
+    ECRAN NOIR au chargement (joueur, 29/10). Partout ailleurs la taille
+    declaree depasse la reelle (de 3 a 26 Ko, x1,25 au plus) : une taille
+    nulle est remplacee par la reelle x MARGE_NULLE, pour NOTRE compte."""
+    if rom in _declarees:
+        return _declarees[rom]
+    btl = lire_rom("data/prm/mon_btldata.nat", rom)
+    mod = lire_rom("data/prm/mon_moddata.nat", rom)
+    n = struct.unpack_from("<I", mod, 0)[0]
+    out = {}
+    for i in range(n):
+        ident = struct.unpack_from("<H", mod, 4 + i * 64)[0]
+        out.setdefault(ident, struct.unpack_from("<H", btl,
+                                                 4 + i * 132 + 0x2A)[0])
+    reelles = tailles_combat(rom)
+    for e, ko in out.items():
+        if ko == 0 and reelles.get(e):
+            out[e] = -(-int(reelles[e] * MARGE_NULLE) // 1024)
+    _declarees[rom] = out
+    return out
+
+
+def modeles_combat(rom=None):
+    """{IDENTIFIANT d'espece: code du `.mon` qu'elle charge en combat}. Deux
+    especes au meme code (deux decarions, une variante sans `.mon` a elle)
+    ne chargent le modele qu'UNE fois (ZER-110)."""
+    tailles_combat(rom)
+    return _modeles[rom]
+
+
+def tailles_combat(rom=None):
+    """{IDENTIFIANT d'espece: poids du modele EN COMBAT}, boss compris (ZER-104).
+
+    LE COMBAT A SON TAS. Un combat scripte trop lourd n'affiche que ses
+    premiers emplacements, sans gel : hypothermiasme / Barbarus / vampivolle
+    (202 Ko) n'a montre que l'hypothermiasme, gluant / Barbarus / gluante
+    (131 Ko) les trois (joueur, 27/10/2026). Le poids d'un combat compte
+    chaque modele une fois (`modeles_combat`, `escortes.poids`) : le plus
+    lourd du vanilla pese 116 232 o (l'archer vert du rang 97 a un nombre 0,
+    ZER-110)."""
+    if rom in _combat:
+        return _combat[rom]
+    from montable import ids_par_index
+    from rom_vanilla import chemin_vanilla
+    g = GP2(ARCHIVE, donnees=lire_rom(ARCHIVE, rom))
+    par_code = {}
+    entrees = sorted(g.entrees, key=lambda e: e[1] & 0xFFFFFF)
+    for i, (_h, offs, taille) in enumerate(entrees):
+        nom = g.noms[i] if i < len(g.noms) else None
+        if not nom or not nom.endswith(".mon") or nom.endswith("_f.mon"):
+            continue
+        pos = g.first_file * 4 + (offs & 0xFFFFFF) * 4
+        try:
+            par_code[nom[:-4]] = taille_mon(g.d[pos:pos + taille])
+        except Exception:
+            pass
+    chemin = rom or chemin_vanilla()
+    noms = charger(chemin, "fr")
+    out, modeles = {}, {}
+    for r, ident in enumerate(ids_par_index(chemin)):
+        try:
+            f = noms[r]
+        except (KeyError, IndexError):
+            continue
+        code = f.get("modele") if isinstance(f, dict) else None
+        if not code:
+            continue
+        n = par_code.get(code)
+        if n is None and code[-1:].isalpha() and code[-1] != "a":
+            code = code[:-1] + "a"
+            n = par_code.get(code)
+        if n:
+            out[ident] = n
+            modeles[ident] = code
+    _combat[rom] = out
+    _modeles[rom] = modeles
+    return out
+
+
 if __name__ == "__main__":
     seuil = int(sys.argv[1]) if len(sys.argv) > 1 else None
     par_code = mesurer()

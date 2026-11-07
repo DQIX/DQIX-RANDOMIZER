@@ -33,7 +33,10 @@ CE QUE FAIT CE PATCH.
   * A LA CONSTRUCTION, dans `mon_btldata`, deux octets a zero dans les
     438 fiches d'origine (bourrage de fin) recoivent les masques des
     emplacements a tirer : `+0x82` les sorts, `+0x83` les techniques.
-    Zero pour les boss et le prologue. Par sorte d'action, un mode :
+    Zero pour le prologue, et pour les boss sauf `boss=True` (ZER-109,
+    option --actions-boss ; chez un boss, TOUTE technique est tiree, meme
+    hors pool, l'Attaque reste : `technique_a_tirer`). Par sorte d'action,
+    un mode :
       - `remplacer` : les emplacements qui en portent une d'origine ;
       - `ajouter`   : pareil, et une espece qui n'en a pas en recoit une, sur
                       UN emplacement (un doublon de l'Attaque, voir
@@ -551,15 +554,23 @@ COMMANDES_MAX = 662             # mesure : 662 passent, 740 font geler
 # PILE : 32 au plus (research §94.7, mesure apres celle des 40 ci-dessus) ;
 # au-dela, il ecrase des registres sauves. Le kit fixe s'y tient.
 LISTE_PILE = 32
+# MAIS LE JEU NE RECONNAIT QUE LES 8 PREMIERS IDS D'UNE LISTE (ZER-115,
+# 29/10, mesure dans le combat de l'antre, default.bact injecte) : un id a
+# l'index 7 montre son cas, a l'index 8 rien (ni texte ni animation, camera
+# par defaut) ; une liste de 24 ou plus perd meme son premier id. Le format
+# ne donne les types que de 8 arguments (octet de l'entete + 0xFFFFFFtt),
+# et aucune commande du jeu n'en a plus de 7. Toute liste s'arrete la.
+LISTE_IDS = 8
 
 
 def allonger_default(d, ajouts, liste_max=LISTE_MAX):
     """Rattache des actions aux cas generiques de default.bact :
     {cas: [actions]}. La liste `op01 [cas]` d'origine est allongee jusqu'a
-    LISTE_MAX actions ; au-dela, le cas est DUPLIQUE a la fin du fichier
-    (meme corps, nouvelle liste), par paquets de LISTE_MAX. Mesures en jeu :
+    LISTE_MAX actions (LISTE_IDS au plus) ; au-dela, le cas est DUPLIQUE a
+    la fin du fichier (meme corps, nouvelle liste), par paquets. Mesures en jeu :
     une liste de 50 fait geler le combat, deux de 40 passent ; ~660
     commandes passent, 740 font geler."""
+    liste_max = min(liste_max, LISTE_IDS)
     ajouts = {c: [a for a in l if a != c] for c, l in ajouts.items()}
     tete = {c: l[:liste_max - 1] for c, l in ajouts.items()}
     reste = {c: l[liste_max - 1:] for c, l in ajouts.items()}
@@ -597,6 +608,9 @@ def _allonger(d, ajouts):
     for p, op, args, t in cmds:
         brut = d[p:p + t]
         if op == 1 and len(args) == 1 and args[0] in ajouts:
+            if len(args + ajouts[args[0]]) > LISTE_IDS:
+                raise SystemExit("default.bact : cas %d, une liste de plus de "
+                                 "%d ids" % (args[0], LISTE_IDS))
             brut = _op01(args + ajouts[args[0]])
             vus.add(args[0])
         out += brut
@@ -638,29 +652,61 @@ def emplacement_ajoute(actions, ia, pris=()):
     return None
 
 
-def eligibles(mod):
+# LES BOSS QUI PEUVENT RECEVOIR DES ACTIONS (ZER-109) : ceux de --boss, sans
+# Aquila ni Corvus des cinematiques (combats mis en scene, ZER-74).
+CINEMATIQUES = (800, 801)
+FICHE_BOSS_SECRET = 437          # espece 900 (patch_boss_secret) : son kit est le sien
+
+
+def eligibles(mod, boss=False, monstres=True):
     """Index des fiches qui peuvent recevoir des actions : le bestiaire, sans
-    boss ni combat du prologue."""
+    boss ni combat du prologue ; avec `boss` (ZER-109), les boss des combats
+    scriptes en plus, sauf ceux des cinematiques. `monstres` faux : les boss
+    SEULS (option du joueur, 28/10/2026)."""
+    import categories_boss as CB
     from monstres_nommes import MONSTRES
     PROLOGUE = (290, 292)
     out = []
     for i in range(struct.unpack_from("<I", mod, 0)[0]):
         ident = struct.unpack_from("<H", mod, ENTETE + i * MOD_TAILLE)[0]
-        if i in MONSTRES and ident not in PROLOGUE:
+        if ident in PROLOGUE:
+            continue
+        if (monstres and i in MONSTRES) or (boss and ident in CB.TOUS
+                                            and ident not in CINEMATIQUES):
             out.append(i)
     return out
 
 
-def marquer(mod, btl, sorts_mode, tech_mode, pool, rng):
+# LES ATTAQUES SIMPLES DES BOSS : actions sans nom dont le message de combat
+# est celui de l'Attaque (message 1, « X attaque ! ») -- mesure du 28/10 sur
+# les 87 boss : 0xF4 (25 emplacements), 0xF5, 0x112, 0x113. « Les boss gardent
+# bien leur attaque simple de base » (joueur, 28/10/2026).
+ATTAQUES = (ATTAQUE, 0xF4, 0xF5, 0x112, 0x113)
+
+
+def technique_a_tirer(action, pool_set, fiche_boss=False):
+    """L'emplacement d'une technique est-il tire ? Pour un monstre, s'il porte
+    une technique du pool ; pour un BOSS (ZER-109, joueur, 28/10/2026 : « si
+    c'est juste un c'est moins bien »), toute action qui n'est ni une
+    attaque simple (ATTAQUES) ni un sort -- ses techniques propres aussi,
+    hors pool."""
+    if fiche_boss:
+        return action not in (0,) + ATTAQUES and not est_sort(action)
+    return action in pool_set
+
+
+def marquer(mod, btl, sorts_mode, tech_mode, pool, rng, boss=False,
+            monstres=True):
     """Pose les masques (et, en mode `ajouter`, l'action d'origine de l'espece
     qui n'en avait pas). Rend un bilan."""
+    from monstres_nommes import MONSTRES
     for m in (sorts_mode, tech_mode):
         if m is not None and m not in MODES:
             raise ValueError(m)
     pool_set = set(pool)
     bilan = {"a_sorts": 0, "sorts_ajoutes": 0, "a_techniques": 0,
              "techniques_ajoutees": 0, "sans_place": 0}
-    for i in eligibles(mod):
+    for i in eligibles(mod, boss, monstres):
         om = ENTETE + i * MOD_TAILLE
         ob = ENTETE + i * BTL_TAILLE
         if btl[ob + BTL_MASQUE] or btl[ob + BTL_MASQUE_T]:
@@ -668,7 +714,8 @@ def marquer(mod, btl, sorts_mode, tech_mode, pool, rng):
         actions = list(struct.unpack_from("<6H", mod, om + MOD_ACTIONS))
         ia = struct.unpack_from("<I", mod, om + MOD_IA)[0] & 7
         ms = sum(1 << k for k, a in enumerate(actions) if est_sort(a))
-        mt = sum(1 << k for k, a in enumerate(actions) if a in pool_set)
+        mt = sum(1 << k for k, a in enumerate(actions)
+                 if technique_a_tirer(a, pool_set, i not in MONSTRES))
         bilan["a_sorts"] += bool(ms)
         bilan["a_techniques"] += bool(mt)
         if sorts_mode is None:
@@ -778,10 +825,11 @@ def poser_code(rom, pool_sorts, cas, animations=True, bavard=True,
 
 
 def patcher(rom, sorts=None, techniques_mode=None, seed=0, bavard=True,
-            mode=None, animations=False):
+            mode=None, animations=False, boss=False, monstres=True):
     """Pose les trois blocs de l'overlay 0, marque `mon_moddata` et, pour les
     techniques, allonge les deux cas generiques de default.bact.
     `sorts`, `techniques_mode` : None, `remplacer`, `ajouter` ou `tous`.
+    `boss` sans `monstres` : les boss seuls.
     (`mode` : ancien nom de `sorts`.) Rend le bilan."""
     if mode is not None:
         sorts = mode
@@ -794,7 +842,8 @@ def patcher(rom, sorts=None, techniques_mode=None, seed=0, bavard=True,
     bilan = poser_code(rom, sorts_tirables(), cas if techniques_mode else {},
                        animations=animations, bavard=bavard)
     bilan.update(marquer(mod, btl, sorts, techniques_mode, pool,
-                         random.Random("actions-%s" % seed)))
+                         random.Random("actions-%s" % seed), boss=boss,
+                         monstres=monstres))
     rom.files[fm], rom.files[fb] = bytes(mod), bytes(btl)
     bilan["pool"] = len(pool)
     if bavard:
@@ -821,11 +870,16 @@ def patcher(rom, sorts=None, techniques_mode=None, seed=0, bavard=True,
             print("  %d ajout(s) sans place (six actions differentes)"
                   % bilan["sans_place"])
         print("  PM : max(origine, %d x cout de l'action tiree la plus chere),"
-              " plafond 255 ; boss et prologue exclus" % FACTEUR_PM)
+              " plafond 255 ; %s exclus" % (FACTEUR_PM, "prologue et "
+                                            "cinematiques" if boss else
+                                            "boss et prologue"))
+        if not monstres:
+            print("  les BOSS SEULS : les monstres gardent leurs actions")
     return bilan
 
 
-def fixer(rom, sorts=None, techniques_mode=None, seed=0, bavard=True):
+def fixer(rom, sorts=None, techniques_mode=None, seed=0, bavard=True,
+          boss=False):
     """UN KIT FIXE PAR MONSTRE (joueur, 20/10/2026) : les memes emplacements
     que `patcher` (`remplacer` / `ajouter`), mais tires UNE FOIS, a la
     construction -- tous les gluants ont le meme kit toute la partie.
@@ -847,7 +901,7 @@ def fixer(rom, sorts=None, techniques_mode=None, seed=0, bavard=True):
     cas = techniques(rom, bytes(mod))
     pool = sorted(a for l in cas.values() for a in l)
     rng = random.Random("actions-fixes-%s" % seed)
-    bilan = marquer(mod, btl, sorts, techniques_mode, pool, rng)
+    bilan = marquer(mod, btl, sorts, techniques_mode, pool, rng, boss=boss)
     fiches = actions_rom(rom)
     liste_sorts = globals()["sorts"]()
     places = set()
@@ -855,7 +909,7 @@ def fixer(rom, sorts=None, techniques_mode=None, seed=0, bavard=True):
     # TOUS LES GLUANTS : 25 noms du bestiaire ont plusieurs fiches (gluant :
     # 1, 266, 267, 291). Un tirage par NOM, sur la premiere fiche qui a des
     # emplacements a tirer ; ses six actions vont aux autres fiches du nom.
-    elig = eligibles(mod)
+    elig = eligibles(mod, boss)
     rep_de = groupes_par_nom(mod, elig, btl)
     kits = {}
     # les references d'abord : leurs copies viennent apres
@@ -868,11 +922,15 @@ def fixer(rom, sorts=None, techniques_mode=None, seed=0, bavard=True):
             # la copie : une action que ni le jeu (fiche d'origine) ni
             # default.bact ne sait mettre en scene garde celle d'origine
             src, pris = kits[r]
+            orig = set(acts)
             for k, a in enumerate(src):
                 if (a in acts or a < BORNE_SORTS or a in pool_set
                         or est_sort(a)):
                     acts[k] = a
-            pris = set(pris) & set(acts)
+            # une technique du pool d'origine chez la reference (pas tiree)
+            # est NEUVE chez la copie : elle a besoin de son cas generique
+            pris = (set(pris) & set(acts)) | {a for a in acts if a in pool_set
+                                              and a not in orig}
         else:
             pris = set()
             for masque, choix in ((btl[ob + BTL_MASQUE], liste_sorts),
@@ -934,7 +992,9 @@ def fixer(rom, sorts=None, techniques_mode=None, seed=0, bavard=True):
             if ajouts:
                 print("  default.bact : %d commandes" % bilan["commandes"])
         print("  PM : max(origine, %d x cout de l'action la plus chere), "
-              "plafond 255 ; boss et prologue exclus" % FACTEUR_PM)
+              "plafond 255 ; %s exclus" % (FACTEUR_PM, "prologue et "
+                                           "cinematiques" if boss else
+                                           "boss et prologue"))
     return bilan
 
 
@@ -992,7 +1052,7 @@ def groupes_par_nom(mod, elig, btl=None):
     return out
 
 
-def verifier_fixe(rom):
+def verifier_fixe(rom, boss=False):
     """Relit un kit fixe : aucune greffe ni masque, chaque technique d'une
     espece eligible a une mise en scene (cas du default.bact ou action
     d'origine de l'espece), PM >= FACTEUR_PM x cout. Rend le nombre
@@ -1012,14 +1072,14 @@ def verifier_fixe(rom):
     d = bytes(ndspy.narc.NARC(rom.files[rom.filenames.idOf(ACTDEF)]).files[0])
     defaut = actions_default(d)
     _h, cmds = _bact_lire(d)
-    if any(op == 1 and len(args) > LISTE_PILE for _p, op, args, _t in cmds):
+    if any(op == 1 and len(args) > LISTE_IDS for _p, op, args, _t in cmds):
         raise AssertionError("default.bact : une liste de plus de %d ids"
-                             % LISTE_PILE)
+                             % LISTE_IDS)
     if _h[0] > COMMANDES_MAX and not tas_agrandi(rom):
         raise AssertionError("default.bact : %d commandes, tas d'origine"
                              % _h[0])
     fiches = actions_rom(rom)
-    elig = set(eligibles(mod))
+    elig = set(eligibles(mod, boss))
     for i, r in groupes_par_nom(mod, sorted(elig)).items():
         a_i = struct.unpack_from("<6H", mod, ENTETE + i * MOD_TAILLE
                                  + MOD_ACTIONS)
@@ -1040,8 +1100,8 @@ def verifier_fixe(rom):
         va = struct.unpack_from("<6H", vmod, om + MOD_ACTIONS)
         if acts != struct.unpack_from("<6H", btl, ob + BTL_ACTIONS):
             raise AssertionError("fiche %d : moddata et btldata different" % i)
-        if acts == va:
-            continue
+        if acts == va or i == FICHE_BOSS_SECRET:
+            continue          # le boss secret (1.8) porte son kit, pose apres le tirage
         if i not in elig:
             raise AssertionError("fiche %d (boss ou prologue) changee" % i)
         n += 1
@@ -1157,7 +1217,7 @@ def retirer(rom, vanilla=None):
         rom.arm9 = bytes(vanilla.arm9)
 
 
-def verifier(rom):
+def verifier(rom, boss=False, monstres=True):
     """Relit la ROM : les trois blocs sont les notres, les masques ne visent
     que des especes eligibles et, hors `tous`, que des emplacements du bon
     genre ; la table et default.bact portent le pool. Rend (mode des sorts,
@@ -1186,15 +1246,23 @@ def verifier(rom):
             raise AssertionError("default.bact : techniques sans mise en scene")
     from rom_vanilla import chemin_vanilla
     import ndspy.rom
-    vmod = bytes(ndspy.rom.NintendoDSRom.fromFile(chemin_vanilla()).files[
-        _fid(rom, MOD)])
-    elig = set(eligibles(mod))
+    # le numero de fichier de la VANILLA : celui de `rom` peut etre decale
+    # (le boss secret insere des fichiers, 1.8)
+    _van = ndspy.rom.NintendoDSRom.fromFile(chemin_vanilla())
+    vmod = bytes(_van.files[_fid(_van, MOD)])
+    from monstres_nommes import MONSTRES
+    elig = set(eligibles(mod, boss, monstres))
     modes = []
     btl = bytes(rom.files[_fid(rom, BTL)])
-    for off, genre in ((BTL_MASQUE, est_sort), (BTL_MASQUE_T, pool_set.__contains__)):
+    for off, genre_de in (
+            (BTL_MASQUE, lambda k: est_sort),
+            # un boss : toute action hors Attaque et sorts (ZER-109)
+            (BTL_MASQUE_T, lambda k: lambda a: technique_a_tirer(
+                a, pool_set, k not in MONSTRES))):
         vus, tous, ajoute = False, True, False
         for k in range(struct.unpack_from("<I", mod, 0)[0]):
             om = ENTETE + k * MOD_TAILLE
+            genre = genre_de(k)
             m = btl[ENTETE + k * BTL_TAILLE + off]
             if m and k not in elig:
                 raise AssertionError("fiche %d (boss ou prologue) marquee" % k)

@@ -380,7 +380,7 @@ def talon_capture(adr):
 
 
 def patcher(rom, bavard=True, plafond=None, etapes=4, boss=False, antres=None,
-            tirage=None, groupes=False, sifflet=False):
+            tirage=None, groupes=False, sifflet=False, embuscades=None):
     """Pose l'amorce, la chaine, le tireur, et ajoute le fichier du blob.
 
     A appeler APRES patch_hasard (qui pose le bitmap et la greffe A2) et
@@ -416,7 +416,7 @@ def patcher(rom, bavard=True, plafond=None, etapes=4, boss=False, antres=None,
     blob, etiq = patch_blob.construire(plafond, originaux=originaux,
                                        boss=boss, antres=antres,
                                        tirage=tirage, groupes=groupes,
-                                       sifflet=sifflet)
+                                       sifflet=sifflet, embuscades=embuscades)
     taille_blob = TAILLE_BLOB if len(blob) <= TAILLE_BLOB else TAILLE_BLOB_GRAND
     if len(blob) > taille_blob:
         raise SystemExit(f"blob de {len(blob)} o : l'amorce n'en vide que "

@@ -536,6 +536,10 @@ def verifier(rom, vanilla=None):
     if vanilla is not None:
         av, ap = lire(vanilla), lire(rom)
         for i in verrouilles(rom):
+            # l'espece 900 : le boss secret (1.8) y pose SES stats apres le
+            # tirage (combat_zenus) ; le tirage, lui, ne l'a pas touchee
+            if identifiants(rom)[i] == 900 and ap[i]["pv"] == 20000:
+                continue
             if av[i] != ap[i]:
                 raise AssertionError("fiche verrouillee %d modifiee" % i)
     # A CHAQUE COMBAT (ZER-96) : la greffe posee si et seulement si une

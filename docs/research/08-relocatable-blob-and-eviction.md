@@ -682,3 +682,28 @@ pointer offset by about 1,532 bytes: usable space is `BUFFER_SIZE - 1532`. Beyon
 **is not loaded at all** — no install, no spawns, not found in memory — rather than "loaded
 truncated". Measurements: with an 8 KiB buffer, 5,932 bytes pass, 6,044 do not. 1.1 is 5,920
 bytes.
+
+## §109 Do big models lose their spawn in random mode? First in-game count (ZER-113, 29 October 2026)
+
+`tirage_unique` returns -1 when the drawn species' model cannot be loaded
+(heap full), and the field tick draws **another** species next time: big
+models could lose their spawns. Passive probe `scripts/lua/tirages_joueur.lua`
+(draws read on return from the chooser at `0x02073FEC`, outcome read at
+`0x02073CA4` after `bl tirage_unique` in the tick), analysis
+`scripts/analyse_tirages_joueur.py`. The player played v18d (random mode)
+about 5 minutes over 3 maps (20002, 20063, 20003): 142 ticks, 168 draws,
+86 spawns, 56 ticks without a spawn.
+
+| field-model size quarter | draws | spawns | failures | spawns / expected |
+|---|---|---|---|---|
+| 5,508-14,816 bytes | 36 | 17 | 14 (39 %) | 0.79 |
+| 14,816-17,732 | 33 | 16 | 12 (36 %) | 0.74 |
+| 17,844-21,360 | 53 | 27 | 16 (30 %) | 1.26 |
+| 21,376-42,408 | 46 | 26 | 14 (30 %) | 1.21 |
+
+The failure rate does not grow with model size (if anything the light
+quarters fail more), and the heavy quarters spawn at least their share. The
+sample is small (chi-square over the quarters, p about 0.2): no bias against
+big models is seen, a bias below about 25 % cannot be excluded. A failed
+tick is common (40 %) and size-blind. 108 species seen in 168 draws is what
+a uniform draw over 256 gives (about 123 expected).

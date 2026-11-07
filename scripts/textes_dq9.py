@@ -84,7 +84,8 @@ def ajouter_message(m, ident, texte):
     n, taille = h & 0xFFF, h >> 12
     pool = 4 + 8 * n
     ids = [struct.unpack_from("<I", m, 4 + 8 * i)[0] for i in range(n)]
-    if ident in ids or ident < max(ids):
+    # le dernier, pas le plus grand : actmsg commence par un DUMMY 0x390000
+    if ident in ids or ident < ids[-1]:
         raise ValueError("identifiant %#x : deja pris ou hors ordre" % ident)
     if n + 1 > 0xFFF:
         raise ValueError("table pleine")
@@ -92,3 +93,24 @@ def ajouter_message(m, ident, texte):
     out += m[4:pool] + struct.pack("<II", ident, taille)
     out += m[pool:pool + taille] + texte + b"\0"
     return bytes(out)
+
+
+def remplacer_message(m, ident, texte):
+    """Rend une copie de la table de messages `m` ou le message `ident`
+    devient `texte` ; le pool est reconstruit dans l'ordre des messages."""
+    h = struct.unpack_from("<I", m, 0)[0]
+    n = h & 0xFFF
+    pool = 4 + 8 * n
+    paires = [struct.unpack_from("<II", m, 4 + 8 * i) for i in range(n)]
+    if ident not in {i for i, _o in paires}:
+        raise ValueError("message %#x absent" % ident)
+    textes = [texte if i == ident else bytes(m[pool + o:m.index(b"\0", pool + o)])
+              for i, o in paires]
+    corps, offs = bytearray(), []
+    for t in textes:
+        offs.append(len(corps))
+        corps += t + b"\0"
+    out = bytearray(struct.pack("<I", n | (len(corps) << 12)))
+    for (i, _o), o in zip(paires, offs):
+        out += struct.pack("<II", i, o)
+    return bytes(out + corps)

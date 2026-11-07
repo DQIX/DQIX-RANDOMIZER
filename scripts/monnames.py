@@ -133,13 +133,9 @@ def charger(chemin_rom, langue="en"):
         raise ValueError(f"langue inconnue : {langue} (attendu {LANGUES})")
     fs = NitroFS(chemin_rom)
     fid = next(k for k, v in fs.paths.items() if v == ARCHIVE)
-    racine = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "work")
-    os.makedirs(racine, exist_ok=True)
-    tmp = os.path.join(racine, "_mon_data.gp2")
-    with open(tmp, "wb") as f:
-        f.write(fs.read(fid))
-
-    g = GP2(tmp)
+    # lue en memoire : un fichier temporaire commun (work/_mon_data.gp2)
+    # faisait se croiser deux randomizer.py lances ensemble
+    g = GP2(ARCHIVE, donnees=fs.read(fid))
     # les noms de la table correspondent aux entrees triees par offset masque
     for i, (h, offs, taille) in enumerate(
             sorted(g.entrees, key=lambda e: e[1] & 0xFFFFFF)):

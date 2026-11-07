@@ -139,11 +139,44 @@ def construire_table(rom, mode, pool=None):
     return struct.pack("<HH", len(pool), base) + donnees
 
 
-def greffe(adr, mode, table):
+# L'ARME DE ZENUS (ZER-116, patch_arme) : avec `garde`, l'objet GARDE est rendu
+# tel quel, comme une place vide. Meme longueur que sans (la greffe des pages,
+# posee juste derriere la table, ne bouge pas) : deux instructions gagnees
+# (lecture post-indexee, comparaison soustraite), r4 n'est plus initialise
+# (il ne sert qu'apres `trouve`). r0 est mort aux deux sites (`ldr r0, [sp,
+# #0xc]` les suit).
+GARDE = 20030
+
+
+def greffe(adr, mode, table, garde=False):
     """Le code, puis la table. Rend les octets a poser a `adr`."""
     from patch_hasard import assembler
 
     def lignes(d_table):
+        if garde:
+            tete = [
+                "sub r0, r1, #%d" % (GARDE & 0xFF00),
+                "cmp r0, #%d" % (GARDE & 0xFF),
+                "cmpne r1, #0",             # place vide, ou l'arme : rendue telle quelle
+                "bxeq lr",
+                "push {r4, r5, r6, r7, lr}",
+            ]
+            lecture = ["ldrh r0, [r5], #2", "bl #%d" % RAND_BELOW, "ldrh r6, [r5], #2"]
+            choix = ["subs r0, r0, r1", "addge r6, r6, r1", "bge #{@suite}", "add r0, r0, r1"]
+        else:
+            tete = [
+                "push {r4, r5, r6, r7, lr}",
+                "movs r4, r1",              # place vide : elle le reste
+                "beq #{@fin}",
+            ]
+            lecture = [
+                "ldrh r0, [r5]",            # nombre d'objets du pool
+                "bl #%d" % RAND_BELOW,      # r0 = k dans [0, nombre[
+                "ldrh r6, [r5, #2]",        # premier identifiant
+                "add r5, r5, #4",
+            ]
+            choix = ["cmp r0, r1", "blt #{@trouve}", "sub r0, r0, r1",
+                     "add r6, r6, r1", "b #{@suite}"]
         return [
             # DEUX ENTREES, une par site : chacune rejoue son `ldrh`, et `lr`
             # (pose par le `bl` du site) ramene a l'instruction suivante.
@@ -151,17 +184,12 @@ def greffe(adr, mode, table):
             "b #{@tirage}",
             "ldrh r1, [fp, #4]",
             "tirage:",
-            "push {r4, r5, r6, r7, lr}",
-            "movs r4, r1",                  # place vide : elle le reste
-            "beq #{@fin}",
+        ] + tete + [
             "mov r7, #%d" % ESSAIS,
             "encore:",
             "ici:",
             "add r5, pc, #%d" % d_table,     # r5 = la table (adresse fixe)
-            "ldrh r0, [r5]",                # nombre d'objets du pool
-            "bl #%d" % RAND_BELOW,          # r0 = k dans [0, nombre[
-            "ldrh r6, [r5, #2]",            # premier identifiant
-            "add r5, r5, #4",
+        ] + lecture + [
             # LE DECODAGE : on saute les suites jusqu'a celle qui contient k.
             "suite:",
             "ldrb r2, [r5], #1",
@@ -181,11 +209,7 @@ def greffe(adr, mode, table):
             "bne #{@longueur_lue}",
             "ldrb r1, [r5], #1",
             "longueur_lue:",
-            "cmp r0, r1",
-            "blt #{@trouve}",
-            "sub r0, r0, r1",
-            "add r6, r6, r1",
-            "b #{@suite}",
+        ] + choix + [
             "trouve:",
             "add r4, r6, r0",
             # MODE `rares` : une suite 4-5 etoiles ne passe qu'une fois sur
@@ -283,11 +307,26 @@ def lire(rom):
     base, adr = o.ramAddress, ADR_GREFFE
     if o.bssSize != 0 or base + o.ramSize <= adr:
         return None
+    # LES BOUTS DE PAGE (patch_pages) occupent aussi la place derriere le
+    # BSS : sans le butin, les deux sites gardent leur `ldrh`.
+    if _desas(o.data, base, SITE_RARE) == ORIGINE_RARE and \
+            _desas(o.data, base, SITE_COMMUN) == ORIGINE_COMMUN:
+        return None
     for site, cible in ((SITE_RARE, adr), (SITE_COMMUN, adr + 8)):
         lu = _desas(o.data, base, site)
         if lu != "bl #%#x" % cible:
             raise AssertionError("overlay 23 : %#010x lit %r" % (site, lu))
     bloc = bytes(o.data[adr - base:])
+    # ... et avec le butin, ils viennent derriere sa table, alignes sur 4 :
+    # on coupe au debut de leur greffe, puis le bourrage (au plus 3 zeros ;
+    # le dernier octet d'une table n'est jamais nul).
+    import patch_pages
+    page = patch_pages.lire(rom)
+    if page is not None and page > adr:
+        bloc = bloc[:page - adr]
+        for _ in range(3):
+            if bloc.endswith(b"\0"):
+                bloc = bloc[:-1]
     n_code = len(greffe(adr, "libre", b""))
     table = bloc[n_code:]
     n, premier = struct.unpack_from("<HH", table, 0)
@@ -295,10 +334,44 @@ def lire(rom):
     pool = [i for i, _t in relu]
     mode = ("rares" if any(t for _i, t in relu) or not any(
         objets.raretes(rom, "en").get(i, 0) >= 4 for i in pool) else "libre")
-    if len(relu) != n or bloc != greffe(adr, mode, construire_table(
-            rom, mode, pool)):
+    tab = construire_table(rom, mode, pool)
+    # avec ou sans la garde de l'arme de Zenus (meme longueur, ZER-116)
+    if len(relu) != n or bloc not in (greffe(adr, mode, tab),
+                                      greffe(adr, mode, tab, garde=True)):
         raise AssertionError("overlay 23 : greffe ou table inattendue")
     return mode, pool
+
+
+def garde_posee(rom):
+    """Vrai si la greffe du butin porte la garde de l'arme de Zenus."""
+    o = rom.loadArm9Overlays()[OVL]
+    n = len(greffe(ADR_GREFFE, "libre", b""))
+    p = ADR_GREFFE - o.ramAddress
+    return (0 <= p < len(o.data)
+            and bytes(o.data[p:p + n]) == greffe(ADR_GREFFE, "libre", b"", garde=True))
+
+
+def poser_garde(rom):
+    """Pose la garde de l'arme sur une greffe du butin deja en place, sans
+    rien deplacer (meme longueur ; la table et la greffe des pages restent).
+    Rend False sans greffe du butin."""
+    import ndspy.code
+    if lire(rom) is None:
+        return False
+    if garde_posee(rom):
+        return True
+    ovl = rom.loadArm9Overlays()
+    o = ovl[OVL]
+    n = len(greffe(ADR_GREFFE, "libre", b""))
+    p = ADR_GREFFE - o.ramAddress
+    if bytes(o.data[p:p + n]) != greffe(ADR_GREFFE, "libre", b""):
+        raise AssertionError("overlay 23 : code du butin inattendu")
+    d = bytearray(o.data)
+    d[p:p + n] = greffe(ADR_GREFFE, "libre", b"", garde=True)
+    o.data = bytes(d)
+    rom.files[o.fileID] = o.save(compress=True)
+    rom.arm9OverlayTable = ndspy.code.saveOverlayTable(ovl)
+    return True
 
 
 def verifier(rom, pool=None):

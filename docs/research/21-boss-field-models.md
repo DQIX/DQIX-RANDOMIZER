@@ -89,3 +89,57 @@ Census of the 148 boss entries (legacy levels included): 19 with their own
 `_f.mon` and id < 384 (16 drawable), 93 with their own `_f.mon` but id >= 384
 (the blob bitmap stops at 384), 22 with only a colour variant's `_f.mon`, 14
 with none. The player keeps the 16 for now.
+
+## §108 How many monsters a scripted fight shows: the declared model size (ZER-104, ZER-110, 27-29 October 2026)
+
+A scripted fight that is too heavy **shows only its first slots, with no
+freeze**: the later monsters are silently missing. Two caps in bytes of model
+files (160,312, then 131,452) both turned out wrong in game. The rule, read in
+the code on 29 October:
+
+**The rule** (overlay 0, function `0x02165490`, the battle model loader):
+
+1. `0x021653F8`: the battle creates its model heap, a frame heap of
+   `0x26A80` = 158,336 bytes (literal at `0x0216547C`), handle `ctx+0x44`.
+2. The species list `sp+0x44`: the fight's groups (`0x0215ED34`: count in
+   bits 4-5 of `[ctx+0x81B1]`, 0x18-byte entries at `ctx+0x81B4`), deduped
+   **by species id**, then extended by a table of species another one brings
+   (`0x0216571C`, table of 4 x 16 bytes at `0x02183070`: 75 brings 15 and 3,
+   77 brings 19 and 27, 266 brings 179, 267 brings 75 -- applied in chain).
+3. The 132-byte `mon_btldata` records of these species (and of species
+   summoned by their actions) are copied into the heap (`0x02070B7C`).
+4. `0x02165C20`: `free = HeapGetFree(ctx+0x44)` (`0x02032804`). Then, for each
+   species of the list in order (`0x02165C38`):
+   `need = mon_btldata[+0x2A] * 1024` (u16, **the declared model size in KB**);
+   `if free < need: cut the list here` (`fp = index`, `0x02165C5C`);
+   `free -= need`.
+5. Only the species before the cut get their models loaded (`0x02165F28` ->
+   `0x02166070`, which reads the raw `.mon` into a 0x30000-byte work buffer
+   and LZ-decompresses `.cchr` and `.cmot` into the heap). The groups of the
+   cut species are cleared (`0x02165D04`).
+
+The real file sizes play no part. Nokturnus declares 0 KB; Corvus the most,
+136 KB; the bestiary drawn by the randomizer 17 (platinum king jewel) to 112
+KB (vermilion).
+
+**Measured** (vanilla ROM, the Equinox lair fight rewritten with three
+species, savestate `banc/states/antre_equinocte_test_mortamor.State`, probes
+`scripts/lua/combat_libre.lua`, `combat_tas.lua`, `combat_mon.lua`; game
+results seen by the player):
+
+| fight | declared | free at the check | kept |
+|---|---|---|---|
+| slime / Barbarus / she-slime | 26+102+25 = 153 KB = 156,672 | 156,676 | 3 (4 bytes to spare) |
+| frappillon / Mortamor / sorciergrif | 34+61+43 = 138 KB | 156,660 | 3 |
+| Grevanescent / Mortamor / left claw | 65+61+33 = 159 KB | 156,648 | 2 |
+| cursed emperor / Sylvane / gold slime | 37+97+21 = 155 KB | 156,852 | 2 |
+
+and, in game only: vanilla Mortamor 131 KB (3), stenchurions / Hootingham-Gore
+113 KB (3), right claw / Hexacorne / Monte-gluancien 171 KB (2), Balthazar /
+Medhor / Hootingham-Gore 189 KB (2). The free space varies by a few hundred
+bytes with the number of records copied (132 bytes each). The heaviest vanilla
+fight declares 136 KB (Corvus alone).
+
+The randomizer keeps every fight it fills at **150 KB declared or less**
+(`escortes.PLAFOND`, `escortes.poids`, `tailles_modeles.tailles_declarees`),
+2 KB under the smallest free space measured.

@@ -29,6 +29,14 @@ DECISIONS DU JOUEUR (14-15/10/2026) :
     d'equilibrage, donc en deux options : `--medailles-seuils-vanilla` garde
     les nombres du jeu ;
   - la regle des 4-5 etoiles (ZER-49) ne s'applique PAS chez le Capitaine.
+  - PALIERS GENEREUX (ZER-106, `--medailles-genereux`, dans les deux
+    prereglages depuis le 28/10) : chaque palier donne un objet de 3 a 5
+    etoiles, et les paliers montent de 1 en 1 : 1, 2, ... 10 (joueur, 28/10 :
+    « qu'on monte que de 1 a chaque fois ») -- DIX MEDAILLES POUR LES DIX
+    PALIERS. La medaille rendue a chaque palier (27/10, greffe de la remise
+    0x02167A0C, research 103.1) est retiree : avec des paliers de 1 en 1,
+    une seule medaille les aurait tous donnes (joueur, 28/10). La boutique
+    reste tiree comme sans l'option, et garde ses nombres.
 
 TIRAGE. Mode equilibre : chaque objet est remplace par un objet a une etoile
 pres de l'objet vanilla (`rarete.rouge`). Mode chaos : n'importe quel objet
@@ -61,11 +69,17 @@ VANILLA_PALIERS = ((4, 22042), (8, 12415), (13, 13606), (18, 13040),
 VANILLA_BOUTIQUE = ((3, 18023), (5, 22017), (8, 22080), (10, 22107),
                     (15, 22076), (20, 17170))
 DIVISEUR = 4
-
-
+ETOILES_GENEREUX = (3, 4, 5)
 def diviser(n):
     """n / 4 arrondi au plus proche (demi vers le haut), au moins 1."""
     return max(1, (n * 2 + DIVISEUR) // (2 * DIVISEUR))
+
+
+def nombres_paliers(seuils_vanilla=False, genereux=False):
+    """Les nombres de medailles des 10 paliers selon les options."""
+    if genereux:
+        return list(range(1, NB_PALIERS + 1))
+    return [n if seuils_vanilla else diviser(n) for n, _ in VANILLA_PALIERS]
 
 
 def _table(d, base, adr, nb):
@@ -81,7 +95,7 @@ def lire(rom):
 
 
 def patcher(rom, seed, chaos=False, seuils_vanilla=False, langue="en",
-            journal=None):
+            journal=None, genereux=False):
     """Tire les objets, divise les nombres. Rend un dictionnaire de comptes."""
     import ndspy.code
 
@@ -106,26 +120,30 @@ def patcher(rom, seed, chaos=False, seuils_vanilla=False, langue="en",
     pool = [i for i in objets.pool(rom) if i != MINI_MEDAILLE]
     pris = {CLEF_VOLEUR}
 
-    def tirer(vanilla):
+    def tirer(vanilla, palier=False):
         if vanilla == CLEF_VOLEUR:
             return CLEF_VOLEUR
         bande = rarete.TOUTES if chaos else rarete.rouge(etoiles.get(vanilla, 0))
+        if palier and genereux:
+            bande = ETOILES_GENEREUX
         cand = [i for i in pool if i not in pris and etoiles.get(i, 0) in bande]
         choix = rng.choice(cand)
         pris.add(choix)
         return choix
 
-    neufs_p = [((n if seuils_vanilla else diviser(n)), tirer(i))
-               for n, i in paliers]
+    neufs_p = [(n, tirer(i, palier=True)) for n, (_n, i) in
+               zip(nombres_paliers(seuils_vanilla, genereux), paliers)]
     neufs_b = [((n if seuils_vanilla else diviser(n)), tirer(i))
                for n, i in boutique]
     _ecrire_tables(rom, neufs_p, neufs_b)
 
     nm = objets.noms(rom, langue)
     note("=== CAPITAINE ZAC AMEDAI (mini medailles) ===")
-    note("mode : %s ; nombres de medailles : %s"
+    note("mode : %s ; nombres de medailles : %s%s"
          % ("chaos" if chaos else "equilibre (+/-1 etoile)",
-            "vanilla" if seuils_vanilla else "divises par 4"))
+            "vanilla" if seuils_vanilla else "divises par 4",
+            " ; paliers genereux (1 a 10, objets 3-5 etoiles)"
+            if genereux else ""))
     for titre, avant, apres in (("paliers", paliers, neufs_p),
                                 ("boutique", boutique, neufs_b)):
         note("  %s" % titre)
@@ -171,9 +189,13 @@ def interdits(rom):
     return (objets.objets_importants(rom) | objets.HORS_TIRAGE) - {CLEF_VOLEUR}
 
 
-def tirer_section(rom, graine, langue="en", chaos=False, seuils_vanilla=False):
-    """Tire la categorie seule sur `rom` (vanilla) et rend sa section."""
-    patcher(rom, graine, chaos=chaos, seuils_vanilla=seuils_vanilla)
+def tirer_section(rom, graine, langue="en", chaos=False, seuils_vanilla=False,
+                  genereux=False):
+    """Tire la categorie seule sur `rom` (vanilla) et rend sa section. Avec
+    `genereux`, les objets 3-5 etoiles seulement : la medaille de palier est
+    du code, que la configuration ne porte pas."""
+    patcher(rom, graine, chaos=chaos, seuils_vanilla=seuils_vanilla,
+            genereux=genereux)
     return exporter(rom, langue)
 
 
@@ -232,12 +254,12 @@ def appliquer(rom, section, verrous=True, vanilla=None):
     return _ecrire_tables(rom, p, tables["boutique"])
 
 
-def verifier(rom, chaos=False, seuils_vanilla=False):
+def verifier(rom, chaos=False, seuils_vanilla=False, genereux=False):
     """Leve si les tables ne suivent pas les regles. Rend (paliers, boutique)."""
     paliers, boutique = lire(rom)
     etoiles = objets.raretes(rom)
     pool = set(objets.pool(rom)) - {MINI_MEDAILLE}
-    attendu_p = [n if seuils_vanilla else diviser(n) for n, _ in VANILLA_PALIERS]
+    attendu_p = nombres_paliers(seuils_vanilla, genereux)
     attendu_b = [n if seuils_vanilla else diviser(n) for n, _ in VANILLA_BOUTIQUE]
     if [n for n, _ in paliers] != attendu_p:
         raise ValueError("paliers : nombres %s, attendus %s"
@@ -253,11 +275,16 @@ def verifier(rom, chaos=False, seuils_vanilla=False):
     if len(set(objs)) != len(objs):
         raise ValueError("un objet du Capitaine est en double")
     vanilla = [i for _, i in VANILLA_PALIERS + VANILLA_BOUTIQUE]
-    for i, v in zip(objs, vanilla):
+    for k, (i, v) in enumerate(zip(objs, vanilla)):
         if v == CLEF_VOLEUR:
             continue
         if i not in pool:
             raise ValueError("objet %d hors du pool (ou mini medaille)" % i)
+        if genereux and k < NB_PALIERS:
+            if etoiles.get(i, 0) not in ETOILES_GENEREUX:
+                raise ValueError("palier %d : objet %d a %d etoiles"
+                                 % (k, i, etoiles.get(i, 0)))
+            continue
         if not chaos and etoiles.get(i, 0) not in rarete.rouge(etoiles.get(v, 0)):
             raise ValueError("objet %d : %d etoiles pour un vanilla a %d"
                              % (i, etoiles.get(i, 0), etoiles.get(v, 0)))

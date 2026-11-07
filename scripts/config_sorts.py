@@ -1,7 +1,7 @@
 """La categorie `sorts` de « Creer sa ROM » (ZER-91) : le sort que chaque
 vocation apprend a chaque niveau, pour `config_rom`.
 
-LES CASES. Les 107 triplets (vocation, sort, niveau) de `spelltable.bin`
+LES CASES. Les 108 triplets (vocation, sort, niveau) de `spelltable.bin`
 (sorts.py) : le niveau et la vocation sont la place, le sort se choisit
 parmi les sorts du jeu (`sorts.pool`, le format : un identifiant de sort
 nomme), sous le nom que le jeu affiche dans la langue choisie. Les trois
@@ -23,7 +23,7 @@ def _place(t, table, k, l):
              l["niveau"])
 
 
-FORME = dict(tables=(("appris", 107),), champs=(("sort", "sort"),),
+FORME = dict(tables=(("appris", 108),), champs=(("sort", "sort"),),
              verrous=set(), place=_place)
 
 
@@ -64,10 +64,15 @@ def appliquer(rom, section, verrous=True, vanilla=None):
     permis = set(sorts.pool(rom)) | (set(sorts.pool(vanilla)) if vanilla
                                      else set())
     lignes = section.get("appris")
+    # UNE CONFIG DE LA 1.7 (107 cases) : le 108e triplet, que la lecture
+    # perdait (ZER-103), garde ce que la ROM porte.
+    if isinstance(lignes, list) and len(lignes) == len(appris) - 1:
+        _i, v, s, niv = appris[-1]
+        lignes = lignes + [{"vocation": v, "niveau": niv, "sort": s}]
     if not isinstance(lignes, list) or len(lignes) != len(appris):
         raise ConfigInvalide("sorts.appris : %d cases attendues" % len(appris))
     fid = rom.filenames.idOf(sorts.CHEMIN_TABLE)
-    table = PrmTable(bytes(rom.files[fid]))
+    table = PrmTable(bytes(rom.files[fid]), selon_entete=True)
     n = 0
     for k, (l, (i, v, s, niv)) in enumerate(zip(lignes, appris)):
         ou = "sorts.appris[%d]" % k

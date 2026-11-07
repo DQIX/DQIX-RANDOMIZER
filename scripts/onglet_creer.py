@@ -656,7 +656,8 @@ class OngletCreer(object):
         a = self.app
         if self.cat == "capitaine":
             return dict(chaos=a.medailles_chaos.get(),
-                        seuils_vanilla=a.medailles_seuils_vanilla.get())
+                        seuils_vanilla=a.medailles_seuils_vanilla.get(),
+                        genereux=a.medailles_genereux.get())
         if self.cat == "boss":
             def seuil(v):
                 v = v.get()
@@ -668,7 +669,11 @@ class OngletCreer(object):
                         chaque_combat=a.boss_chaque_combat.get(),
                         legacy_tous=a.boss_legacy_tous.get(),
                         seuils={"grottes": seuil(a.seuil_grottes),
-                                "legendes": seuil(a.seuil_legendes)},
+                                "legendes": seuil(a.seuil_legendes),
+                                "wifi": seuil(a.seuil_wifi)},
+                        fins={f: seuil(getattr(a, "fin_" + f))
+                              for f in ("histoire", "grottes", "legendes",
+                                        "wifi")},
                         blob=(a.monstres.get()
                               and a.apparitions.get() == "aleatoire"))
         if self.cat == "boutiques":
@@ -687,7 +692,8 @@ class OngletCreer(object):
             return dict(chaos=a.stats_chaos.get(),
                         combat=a.stats_combat.get())
         if self.cat == "points":
-            return dict(par_rang=a.points_par_rang.get())
+            return dict(par_rang=a.points_par_rang.get(),
+                        livres_rares=a.points_livres.get())
         if self.cat == "monstres":
             # LE MODE CHOISI DANS L'ONGLET, pas celui de l'onglet Monstres
             # (joueur, 20/10/2026 : les deux sont separes)

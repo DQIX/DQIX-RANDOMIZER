@@ -113,6 +113,30 @@ those 16 are then loaded (§105.3). Checked by emulation (unicorn, 200 pools
 of 16 to 127 items: 16 distinct items of the pool every time, structure
 written, registers and stack preserved).
 
+### 105.5 Every ordinary item on every map: two `0x68` opcodes (ZER-98, 28 October 2026)
+
+The player wants each pickup drawn among **all** 143 ordinary items, not a
+127-item window per map. One opcode carries at most 127 items (128
+parameters, §105.1), so a pool above 127 is split into **two** `0x68`
+opcodes, and parameter 0 (the save group, unused since ZER-97) tells the
+handler what to do: low byte = first table slot to fill (0 = allocate a new
+table), second byte = how many items to draw (0 = 16). One opcode keeps
+`p0 = 0` (draw 16, the earlier behaviour, same script bytes); two halves use
+`0x0800` (new table, 8 items from the first half) then `0x0808` (slots
+8-15, 8 items from the second). With 72 + 71 items, each item comes out at
+1/144 or 1/142 per pickup.
+
+The handler is rewritten again in exactly its 29 instructions: parameter
+values are read directly (`[entry + 4]`, every parameter we write is an
+integer, type 1, as `0x02030B1C` reads them) and the structure address comes
+from the game's own literal at `0x0208E4C8` (`0x02108FE4`, kept). Checked by
+emulation (`patch_points.verifier_gestionnaire`, unicorn, 300 pools of 16 to
+254 items in one or two opcodes: one allocation, 16 distinct items, halves
+not mixed, registers and stack preserved; a sabotaged handler is caught).
+With `--points-brillants-livres-rares`, each half carries the 117 non-book
+items plus one book (two different books): every ordinary item keeps the
+same chance and a book comes out once in 118 pickups.
+
 ### 105.2 The randomizer
 
 `scripts/patch_points.py`, `--points-brillants` (default: **drawn at each

@@ -160,9 +160,13 @@ MERES = {"groupes": "monstres", "app_aleatoire": "monstres",
          "actions_fixes": "sorts_monstres",
          "garder_hexacorne": "boss", "boss_familles_egales": "boss",
          "boss_histoire": "boss", "boss_mixte": "boss",
+         "escortes_permutees": "boss",
          "boss_legacy_tous": "boss",
          "seuil_grottes": "boss", "seuil_legendes": "boss",
+         "seuil_wifi": "boss", "fin_histoire": "boss", "fin_grottes": "boss",
+         "fin_legendes": "boss", "fin_wifi": "boss",
          "boss_chaque_combat": "boss", "boss_terrain": "monstres",
+         "embuscades": "monstres",
          "equilibrer_conso": "objets", "objets_chaos": "objets",
          "rouges_libres": "objets", "butin_libre": "butin",
          "prix_libres": "boutiques", "boutiques_chaos": "boutiques",
@@ -170,9 +174,10 @@ MERES = {"groupes": "monstres", "app_aleatoire": "monstres",
          "aptitudes_arme_origine": "aptitudes",
          "medailles_chaos": "medailles",
          "medailles_seuils_vanilla": "medailles",
+         "medailles_genereux": "medailles",
          "stats_chaos": "stats", "stats_combat": "stats",
          "stats_boss_chaos": "stats_boss", "stats_boss_combat": "stats_boss",
-         "points_par_rang": "points"}
+         "points_par_rang": "points", "points_livres": "points"}
 
 
 class Application(object):
@@ -239,17 +244,27 @@ class Application(object):
             memoriser_langue(code)
 
     # LES SEUILS DE BOSS (ZER-80) : une liste deroulante, « le debut », les
-    # 30 boss d'histoire numerotes dans l'ordre du scenario, « jamais ».
-    def _choix_seuil(self):
+    # 30 boss d'histoire numerotes dans l'ordre du scenario, « jamais ». Une
+    # FIN (ZER-107) : les 30 boss, puis « jamais » (pas de fin, le defaut).
+    def _choix_seuil(self, fin=False):
         import categories_boss as CB
         noms = L.NOMS_BOSS_HISTOIRE[self.langue]
-        return ([(CB.DEBUT, self._t("seuil_debut"))]
-                + [(str(e), "%d. %s" % (k + 1, noms[k]))
-                   for k, e in enumerate(CB.ORDRE_HISTOIRE)]
+        boss = [(str(e), "%d. %s" % (k + 1, noms[k]))
+                for k, e in enumerate(CB.ORDRE_HISTOIRE)]
+        if fin:
+            return [(CB.JAMAIS, self._t("seuil_sans_fin"))] + boss
+        return ([(CB.DEBUT, self._t("seuil_debut"))] + boss
                 + [(CB.JAMAIS, self._t("seuil_jamais"))])
 
+    def _seuils(self):
+        """Les listes « a partir de » (ZER-80, ZER-100), puis les fins."""
+        return [getattr(self, c) for c in L.LISTES if c.startswith("seuil_")]
+
+    def _fins(self):
+        return [getattr(self, c) for c in L.LISTES if c.startswith("fin_")]
+
     def _remplir_liste(self, menu, variable):
-        choix = self._choix_seuil()
+        choix = self._choix_seuil(fin=variable in self._fins())
         menu.configure(values=[t for _v, t in choix])
         menu.set(dict(choix).get(variable.get(), choix[0][1]))
 
@@ -264,7 +279,7 @@ class Application(object):
 
         def choisi(_evenement=None):
             texte = menu.get()
-            for v, txt in self._choix_seuil():
+            for v, txt in self._choix_seuil(fin=variable in self._fins()):
                 if txt == texte:
                     variable.set(v)
             self.choix_manuel()
@@ -311,9 +326,8 @@ class Application(object):
             if cle == "actions_fixes":
                 actif = (self.sorts_monstres.get()
                          or self.techniques_monstres.get())
-            if (cle in ("boss_familles_egales", "boss_legacy_tous",
-                        "seuil_grottes", "seuil_legendes")
-                    and self.boss_histoire.get()):
+            if ((cle in ("boss_familles_egales", "boss_legacy_tous")
+                 or cle in L.LISTES) and self.boss_histoire.get()):
                 actif = False
             if isinstance(c, ttk.Combobox):
                 c.configure(state="readonly" if actif else "disabled")
@@ -437,12 +451,18 @@ class Application(object):
         # L'ALCHIMIE (ZER-53) : dans les deux prereglages depuis sa validation
         # en jeu (joueur, 14/10/2026).
         self.alchimie = tk.BooleanVar(value=False)
+        # LES RECETTES DES BIBLIOTHEQUES (ZER-105) : decochee, hors des
+        # prereglages, independante de l'alchimie.
+        self.bibliotheques = tk.BooleanVar(value=False)
         # LE CAPITAINE ZAC AMEDAI (ZER-55) : dans les deux prereglages depuis
         # sa validation en jeu (joueur, 15/10/2026) ; le chaos leve la bande
         # d'etoiles.
         self.medailles = tk.BooleanVar(value=False)
         self.medailles_chaos = tk.BooleanVar(value=False)
         self.medailles_seuils_vanilla = tk.BooleanVar(value=False)
+        # LES PALIERS GENEREUX (ZER-106) : une borne, dans les deux
+        # prereglages (joueur, 28/10/2026).
+        self.medailles_genereux = tk.BooleanVar(value=False)
         self.boss = tk.BooleanVar(value=False)
         # COCHEE PAR DEFAUT, et c'est voulu : hexacorne est le seul boss qu'on
         # affronte sans equipe, et n'importe quel autre a sa place peut rendre
@@ -467,6 +487,8 @@ class Application(object):
         self.techniques_monstres = tk.BooleanVar(value=False)
         self.techniques_monstres_ajout = tk.BooleanVar(value=False)
         self.actions_fixes = tk.BooleanVar(value=False)
+        # LES BOSS AUSSI (ZER-109) : decochee, hors des prereglages.
+        self.actions_boss = tk.BooleanVar(value=False)
         self.sorts = tk.BooleanVar(value=False)
         self.sorts_chaos = tk.BooleanVar(value=False)
         self.aptitudes = tk.BooleanVar(value=False)
@@ -480,6 +502,9 @@ class Application(object):
         self.stats_boss_combat = tk.BooleanVar(value=False)
         self.points = tk.BooleanVar(value=False)
         self.points_par_rang = tk.BooleanVar(value=False)
+        # LES LIVRES A 1 % (ZER-99) : une borne, dans les deux prereglages
+        # (joueur, 28/10/2026).
+        self.points_livres = tk.BooleanVar(value=False)
         # LA 1.6. Le mode d'apparition (ZER-73) est un choix exclusif, pas une
         # case : trois boutons sous « Monstres du terrain ». Les groupes
         # (ZER-67) sont un correctif, coches par defaut ; le reste est en
@@ -495,12 +520,25 @@ class Application(object):
         # d'un boss d'histoire, en texte.
         self.seuil_grottes = tk.StringVar(value="debut")
         self.seuil_legendes = tk.StringVar(value="debut")
+        self.seuil_wifi = tk.StringVar(value="debut")
+        # A PARTIR DE QUEL BOSS UNE FAMILLE S'ARRETE (ZER-107) : "jamais"
+        # (pas de fin) ou l'espece d'un boss d'histoire.
+        self.fin_histoire = tk.StringVar(value="jamais")
+        self.fin_grottes = tk.StringVar(value="jamais")
+        self.fin_legendes = tk.StringVar(value="jamais")
+        self.fin_wifi = tk.StringVar(value="jamais")
         self._listes = []
         self.boss_mixte = tk.BooleanVar(value=False)
+        # LES ESCORTES DES BOSS (ZER-104) : tirees dans le bestiaire par
+        # defaut ; la case rend la permutation d'avant.
+        self.escortes_permutees = tk.BooleanVar(value=False)
         self.boss_chaque_combat = tk.BooleanVar(value=False)
         # LES BOSS SUR LE TERRAIN (ZER-63) : dans la fenetre depuis le
         # 11/10/2026, a la demande du joueur, decoches et hors des prereglages.
         self.boss_terrain = tk.BooleanVar(value=False)
+        # LES COFFRES-EMBUSCADES (ZER-108) : n'importe quel monstre ;
+        # decochee, hors des prereglages, mode aleatoire seulement.
+        self.embuscades = tk.BooleanVar(value=False)
         self.aptitudes_arme_origine = tk.BooleanVar(value=False)
         self._applique = False
         # L'ORDRE ET LES TEXTES DES CASES viennent de `langues_interface` ;
@@ -518,7 +556,8 @@ class Application(object):
                     c = self._liste(page, cle, getattr(self, cle), retrait)
                 else:
                     c = self._case(page, cle, getattr(self, cle), retrait)
-                if cle in ("groupes", "boss_chaque_combat", "boss_terrain"):
+                if cle in ("groupes", "boss_chaque_combat", "boss_terrain",
+                           "embuscades"):
                     self._cases_blob.append(c)
                 if cle in MERES:
                     self._cases_filles.append((cle, c))
@@ -644,22 +683,28 @@ class Application(object):
         "--boss-histoire": "boss_histoire",
         "--boss-legacy-tous": "boss_legacy_tous",
         "--boss-mixte": "boss_mixte",
+        "--boss-escortes-permutees": "escortes_permutees",
         "--boss-chaque-combat": "boss_chaque_combat",
-        "--boss-terrain": "boss_terrain", "--sorts": "sorts",
+        "--boss-terrain": "boss_terrain",
+        "--embuscades-tout-monstre": "embuscades", "--sorts": "sorts",
         "--sorts-chaos": "sorts_chaos", "--aptitudes": "aptitudes",
         "--aptitudes-chaos": "aptitudes_chaos",
         "--aptitudes-arme-origine": "aptitudes_arme_origine",
         "--points-brillants": "points",
         "--points-brillants-par-rang": "points_par_rang",
+        "--points-brillants-livres-rares": "points_livres",
         "--alchimie": "alchimie", "--medailles": "medailles",
+        "--alchimie-bibliotheques": "bibliotheques",
         "--medailles-chaos": "medailles_chaos",
         "--medailles-seuils-vanilla": "medailles_seuils_vanilla",
+        "--medailles-genereux": "medailles_genereux",
         "--butin-combat": "butin", "--butin-combat-libre": "butin_libre",
         "--sorts-monstres": "sorts_monstres",
         "--sorts-monstres-ajout": "sorts_monstres_ajout",
         "--techniques-monstres": "techniques_monstres",
         "--techniques-monstres-ajout": "techniques_monstres_ajout",
         "--actions-fixes": "actions_fixes", "--vocations": "vocations",
+        "--actions-boss": "actions_boss",
         "--vocations-embauche": "vocations_embauche",
         "--vocation-depart": "vocation_depart",
         "--vocations-bloquees": "vocations_bloquees", "--stats": "stats",
@@ -673,7 +718,12 @@ class Application(object):
     # drapeaux a valeur
     VALEURS = {"--seed": None, "--langue": None, "--apparitions": None,
                "--boss-grottes-des": "seuil_grottes",
-               "--boss-legendes-des": "seuil_legendes"}
+               "--boss-legendes-des": "seuil_legendes",
+               "--boss-wifi-des": "seuil_wifi",
+               "--boss-histoire-fin": "fin_histoire",
+               "--boss-grottes-fin": "fin_grottes",
+               "--boss-legendes-fin": "fin_legendes",
+               "--boss-wifi-fin": "fin_wifi"}
 
     def appliquer_arguments(self, opts):
         """Coche les cases d'une ligne de commande (celle qu'`arguments`
@@ -686,8 +736,10 @@ class Application(object):
             getattr(self, var).set(True)
         self.monstres.set(True)
         self.apparitions.set("aleatoire")
-        for var in (self.seuil_grottes, self.seuil_legendes):
+        for var in self._seuils():
             var.set("debut")
+        for var in self._fins():
+            var.set("jamais")
         if all(x in opts for x in GREFFES_MONSTRES):
             self.apparitions.set("aleatoire")
         i = 0
@@ -879,9 +931,11 @@ class Application(object):
         # (decision du joueur, 11/10/2026) ; cases au choix du joueur.
         for var in (self.sorts_monstres, self.sorts_monstres_ajout,
                     self.techniques_monstres, self.techniques_monstres_ajout,
-                    self.actions_fixes,
+                    self.actions_fixes, self.actions_boss,
                     self.medailles_seuils_vanilla):
             var.set(False)
+        # LES PALIERS GENEREUX DANS LES DEUX (ZER-106, joueur, 28/10/2026).
+        self.medailles_genereux.set(True)
         # LE CAPITAINE DANS LES DEUX ; le chaos leve la bande d'etoiles
         # (ZER-55, joueur, 15/10/2026).
         self.medailles.set(True)
@@ -898,18 +952,23 @@ class Application(object):
         # « proches de l'origine » reste au choix.
         self.points.set(True)
         self.points_par_rang.set(False)
+        # LES LIVRES RARES DANS LES DEUX (ZER-99, joueur, 28/10/2026).
+        self.points_livres.set(True)
         # LA 1.6 : le mode aleatoire et ses groupes dans les deux ; les
         # options neuves restent au choix du joueur.
         self.apparitions.set("aleatoire")
         self.groupes.set(True)
-        for var in (self.seuil_grottes, self.seuil_legendes):
+        for var in self._seuils():
             var.set("debut")
+        for var in self._fins():
+            var.set("jamais")
         for menu, variable in self._listes:
             self._remplir_liste(menu, variable)
         for var in (self.boss_familles_egales, self.boss_histoire,
                     self.boss_legacy_tous, self.boss_mixte,
+                    self.escortes_permutees,
                     self.boss_chaque_combat, self.boss_terrain,
-                    self.aptitudes_arme_origine):
+                    self.embuscades, self.aptitudes_arme_origine):
             var.set(False)
         self._etat_cases_blob()
         self._applique = False
@@ -960,6 +1019,8 @@ class Application(object):
                 args.append("--sans-groupes")
             if self.boss_terrain.get():
                 args.append("--boss-terrain")
+            if self.embuscades.get():
+                args.append("--embuscades-tout-monstre")
         else:
             args += ["--apparitions", self.apparitions.get()]
         if self.objets.get():
@@ -990,13 +1051,16 @@ class Application(object):
             elif self.boss_legacy_tous.get():
                 args.append("--boss-legacy-tous")
             if not self.boss_histoire.get():
-                for opt, var in (("--boss-grottes-des", self.seuil_grottes),
-                                 ("--boss-legendes-des",
-                                  self.seuil_legendes)):
-                    if var.get() != "debut":
-                        args += [opt, var.get()]
+                for opt, var in self.VALEURS.items():
+                    if not (var or "").startswith(("seuil_", "fin_")):
+                        continue
+                    defaut = "debut" if var.startswith("seuil_") else "jamais"
+                    if getattr(self, var).get() != defaut:
+                        args += [opt, getattr(self, var).get()]
             if self.boss_mixte.get():
                 args.append("--boss-mixte")
+            if self.escortes_permutees.get():
+                args.append("--boss-escortes-permutees")
             if self.boss_chaque_combat.get() and aleatoire:
                 args.append("--boss-chaque-combat")
         if self.sorts.get():
@@ -1013,14 +1077,20 @@ class Application(object):
             args.append("--points-brillants")
             if self.points_par_rang.get():
                 args.append("--points-brillants-par-rang")
+            if self.points_livres.get():
+                args.append("--points-brillants-livres-rares")
         if self.alchimie.get():
             args.append("--alchimie")
+        if self.bibliotheques.get():
+            args.append("--alchimie-bibliotheques")
         if self.medailles.get():
             args.append("--medailles")
             if self.medailles_chaos.get():
                 args.append("--medailles-chaos")
             if self.medailles_seuils_vanilla.get():
                 args.append("--medailles-seuils-vanilla")
+            if self.medailles_genereux.get():
+                args.append("--medailles-genereux")
         if self.butin.get():
             args.append("--butin-combat")
             if self.butin_libre.get():
@@ -1036,6 +1106,9 @@ class Application(object):
         if self.actions_fixes.get() and (self.sorts_monstres.get()
                                          or self.techniques_monstres.get()):
             args.append("--actions-fixes")
+        # LES BOSS : une option a part, valable seule (joueur, 28/10/2026)
+        if self.actions_boss.get():
+            args.append("--actions-boss")
         if self.vocations.get():
             args.append("--vocations")
         if self.vocations_embauche.get():

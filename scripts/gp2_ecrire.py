@@ -256,6 +256,78 @@ def reecrire_index(d, remplacements, brut=True):
     return bytes(out)
 
 
+def ajouter(d, nouveaux, remplacements=None):
+    """Rend une archive neuve ou les membres `nouveaux` ({nom: octets
+    clairs}) s'ajoutent aux anciens, et `remplacements` en remplacent.
+    L'archive est REFAITE ENTIERE (research §111) :
+
+    - membres dans l'ordre des decalages, les anciens recopies tels quels
+      (bloc compresse inchange), les nouveaux a la suite en type 1 ; entre
+      deux membres, 1 a 4 octets nuls jusqu'au mot (comme les archives de
+      dialogue : le champ taille couvre le bloc, pas le bourrage) ;
+    - noms : les chaines a la suite dans l'ordre des membres, en type 1 ;
+    - index EN CLAIR (type 0, le couple index 0 / noms 1 de 1 243 archives du
+      jeu) : (crc32 du nom, decalage en mots, taille), TRIE PAR HASH (le jeu
+      cherche par dichotomie), et les octets de poids fort de decalage et
+      taille portent le DECALAGE DU NOM dans la table des noms (mesure :
+      `itemname_en.nat` a 16, juste apres `itemname_de.nat\\0`) ;
+    - en-tete : bits 12-15 du nombre = plancher(log2 n) + 1 (verifie sur
+      C01B0, C01Q0, M07Q0, itemname)."""
+    import zlib
+    remplacements = remplacements or {}
+    arc = gp2.GP2("<memoire>", donnees=d)
+    ordre = sorted(range(arc.nb), key=lambda i: arc.entrees[i][1] & 0xFFFFFF)
+    base = arc.first_file * 4
+    membres = []                        # (nom, bloc, taille)
+    for rang, i in enumerate(ordre):
+        nom = arc.noms[rang]
+        if nom in nouveaux:
+            raise ValueError("membre deja present : " + nom)
+        if nom in remplacements:
+            b = bloc(remplacements[nom])
+            membres.append((nom, b, len(b)))
+        else:
+            pos = base + (arc.entrees[i][1] & 0xFFFFFF) * 4
+            taille = arc.entrees[i][2] & 0xFFFFFF
+            membres.append((nom, d[pos:pos + taille], taille))
+    for nom, clair in nouveaux.items():
+        b = bloc(clair)
+        membres.append((nom, b, len(b)))
+    corps = bytearray()
+    plat = bytearray()
+    index = []
+    for nom, b, taille in membres:
+        off_nom = len(plat)
+        if off_nom > 0xFFFF:
+            raise ValueError("table de noms trop longue")
+        plat += nom.encode("latin1") + b"\0"
+        index.append((zlib.crc32(nom.encode("latin1")),
+                      (len(corps) // 4) | ((off_nom & 0xFF) << 24),
+                      taille | ((off_nom >> 8) << 24)))
+        corps += b
+        corps += b"\0" * (4 - len(b) % 4)
+    index.sort()
+    if len(set(h for h, _o, _t in index)) != len(index):
+        raise ValueError("deux noms de meme hash")
+    n = len(index)
+    b_index = bloc(b"".join(struct.pack("<III", *e) for e in index), 0)
+    b_index += b"\0" * (-len(b_index) % 4)
+    b_noms = bloc(bytes(plat), 1)
+    tete = arc.header_len * 4
+    debut_noms = tete + len(b_index)
+    premier = debut_noms + len(b_noms)
+    premier += -premier % 16
+    out = bytearray(d[:tete]) + b_index + b_noms
+    out += b"\0" * (premier - len(out))
+    out += corps
+    struct.pack_into("<H", out, 4, n | ((n.bit_length()) << 12))
+    struct.pack_into("<HHHH", out, 8, debut_noms // 4, premier // 4,
+                     (n * 12 + 3) >> 2, (len(plat) + 3) >> 2)
+    struct.pack_into("<I", out, OFF_TOTAL,
+                     (arc.total & 0xF0000000) | (len(corps) // 4))
+    return bytes(out)
+
+
 def verifier_aller_retour(d):
     """Reecrire sans rien remplacer doit rendre l'archive d'origine."""
     refaite = reecrire(d, {})

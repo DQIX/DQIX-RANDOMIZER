@@ -219,8 +219,10 @@ Field 7 of an `eventbattle.bin` record is the **battle music**. Values on the
 vanilla ROM: 23 an ordinary battle (and Aquila's cutscene fight, record 12),
 24 every story and grotto boss, 26 Corvus (record 32), 27–38 one theme per
 legacy boss, shared by its three levels (Dragonlord 27 … Rhapthorne 38;
-Mortamor, both claws and Nocturnus all 35). Field 8 looks like the
-backdrop (30xxx, 0 in grottos). Record 97 holds `0xFFFFFFFF` in fields 7–8.
+Mortamor, both claws and Nocturnus all 35). Field 8 is the
+**backdrop** (30xxx, 0 in grottos), CONFIRMED 30 October 2026 on a new record
+(battle 144, research §112): 0 gives the plains, 30305 (Aquila) the Temple of the
+Almighty, 30709 / 30711 (Corvus, Barbarus) their skies. Record 97 holds `0xFFFFFFFF` in fields 7–8.
 
 So the music belongs to the **battle**, not to the species: before ZER-94,
 a boss moved by `--boss` played the music of the battle it landed in.

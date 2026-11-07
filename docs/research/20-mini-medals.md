@@ -52,3 +52,31 @@ and divide every count by 4 instead.
 **Checked in play (CONFIRMED, player, 15 October 2026, v17f):** with a save copy set to
 12 medals handed over and 10 in the bag, handing them over gave the three randomized
 milestones at 13, 16 and 20, then the Cap'n's Curtsy and the shop announcement; buying from the shop works too.
+
+### 103.1 The hand-over routine, and a medal back per milestone (ZER-106, 27 October 2026)
+
+**Withdrawn on 28 October 2026.** With the generous milestones now at 1, 2, 3 … 10
+medals, a medal back per milestone would let a single medal unlock all ten; the player
+wants ten medals for ten milestones. `--medailles-genereux` now only changes the counts
+and the star band; no code is written to overlay 4. The routine described below
+stays as a measured fact.
+
+**Measured (disassembly of overlay 4).** `0x02167ADC` is the hand-over: it reads the
+next milestone (`0x0216794C`); if total handed over + bag reaches it, it calls
+`0x02167A0C(ctx, needed)` then `0x02167A6C(ctx, item)` (gives the milestone item,
+`0x0207D310`); otherwise `0x02167A0C(ctx, bag)`. `0x02167A0C` removes the medals one by
+one (`0x02086D98(save, 22039)`, the literal at `0x02167A68`) and adds the count to the
+total at `save+0xF74`, capped at 500. The shop (`0x02168458`) calls it with the price,
+so purchases count toward the total. None of the three callers reads its return value.
+The bag add routine is `0x020A096C(save, item, count)` (capped at 99).
+
+**`--medailles-genereux`** (off by default): milestone items are drawn among 3- to 5-star
+items (the thief's key stays first; the shop is drawn as without the option), and each
+milestone leaves one medal in the bag. No free space in overlay 4: `0x02167A0C` is
+rewritten identically but shorter (no sign extension of the total, no `mov r0, #0`),
+with a second entry `0x02167A18` that starts its counter at 1; the milestone call at
+`0x02167B40` targets it. Handing over N medals then removes N - 1 and still adds N.
+`patch_medailles.verifier_remise()` proves both entries by emulation (unicorn, 78
+cases). Expected on the reference save (12 handed over, 10 in the bag, counts divided by
+4): milestones 13, 16, 20, and **5** medals left in the bag instead of 2. Not yet
+checked in play.

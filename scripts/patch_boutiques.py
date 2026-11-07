@@ -88,7 +88,7 @@ RARES = {33, 35, 37}
 #   20408 baton du deluge   (watermaul wand)   Finefleur et Ouadi, armes
 #   13329 robe flottante    (flowing dress)    Dracocardis et Kilimagmaro, armures
 #   21294 bouclier d'argent (silver shield)    Ablithia armures 2 -- une
-#         boutique du rare, a 800 % : le bouclier (2 etoiles) y garde sa
+#         boutique du rare, a PCT_RARE : le bouclier (2 etoiles) y garde sa
 #         place ; sa revente reste celle du jeu (15 250) et son prix d'achat
 #         est ecrit EN CLAIR, divise par le pourcentage, pour s'y afficher a
 #         son prix d'origine (`PRIX_QUETE`, decision du joueur du 13/10/2026).
@@ -116,12 +116,14 @@ def prix_quete(rom):
 ETOILES_ORDINAIRE_MAX = 3
 ETOILES_RARE_MIN = 4
 
-# POURCENTAGE DE CHAQUE BOUTIQUE DU RARE, choisi par le joueur apres essai en
-# jeu : 800 % partout. Les 2000 % de l'essai du million donnaient des prix
-# demesures a cote du reste du jeu. Un dictionnaire plutot qu'une constante :
-# les trois ont deja eu des valeurs differentes, et en reprendre une seule se
-# fait ici, sur une ligne.
-PCT_RARE = {33: 800, 35: 800, 37: 800}
+# POURCENTAGE DE CHAQUE BOUTIQUE DU RARE, choisi par le joueur : 200 %
+# partout depuis le 27/10/2026 (ZER-111 : 800 % restait trop cher ; avant,
+# les 2000 % de l'essai du million). Les regles des prix fabriques
+# (patch_prix : livres, graines, 5 etoiles) ne bougent pas, le pourcentage
+# s'applique ; le bouclier d'argent se recalcule (prix_quete). Un
+# dictionnaire plutot qu'une constante : les trois ont deja eu des valeurs
+# differentes.
+PCT_RARE = {33: 200, 35: 200, 37: 200}
 
 
 class Pioche(object):

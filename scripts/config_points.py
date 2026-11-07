@@ -119,9 +119,11 @@ def exporter(rom, langue="en"):
                            "objet_nom": nm.get(l["objet"], "")} for l in t]}
 
 
-def tirer_section(rom, graine, langue="en", par_rang=False, ramassage=True):
-    """Comme --points-brillants[-par-rang] (et -fixes)."""
-    PP.patcher(rom, graine, par_rang=par_rang, ramassage=ramassage)
+def tirer_section(rom, graine, langue="en", par_rang=False, ramassage=True,
+                  livres_rares=False):
+    """Comme --points-brillants[-par-rang] (et -fixes, -livres-rares)."""
+    PP.patcher(rom, graine, par_rang=par_rang, ramassage=ramassage,
+               livres_rares=livres_rares)
     return exporter(rom, langue)
 
 

@@ -96,6 +96,12 @@ def main():
         "--collect-all", "tkinterdnd2",
         "--collect-binaries", "keystone",
         "--collect-binaries", "capstone",
+        # LE BOSS SECRET (1.8) : ses donnees converties (animations, textures,
+        # sons), lues par zenus_mon.donnee() dans sys._MEIPASS/data/zenus ;
+        # et ndspy AVEC ses sources (hooks_exe/hook-ndspy.py) : son_pas
+        # corrige SDAT.save a partir de sa source.
+        "--add-data", os.path.join(SCRIPTS, "data", "zenus") + os.pathsep + os.path.join("data", "zenus"),
+        "--additional-hooks-dir", os.path.join(SCRIPTS, "hooks_exe"),
     ]
     for m in modules_caches():
         args += ["--hidden-import", m]

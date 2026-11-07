@@ -122,7 +122,7 @@ def verifier_table(rom):
     a elle-meme."""
     import categories_boss as CB
     from prmtable import PrmTable
-    boss = CB.HISTOIRE | CB.GROTTES | CB.LEGENDES
+    boss = CB.TOUS
     if set(MUSIQUES) != boss:
         raise AssertionError("musique : %d boss dans la table, %d attendus"
                              % (len(MUSIQUES), len(boss)))

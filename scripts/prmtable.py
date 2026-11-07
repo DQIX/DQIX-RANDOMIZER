@@ -49,7 +49,14 @@ class Record:
 
 
 class PrmTable:
-    def __init__(self, path_or_bytes):
+    def __init__(self, path_or_bytes, selon_entete=False):
+        """`selon_entete` : lire aussi le DERNIER enregistrement quand il est
+        suivi du pool de chaines (0xFFFFFFFF ou date « 2010/ »), que la
+        detection par tag suivant ne reconnait pas. Le compte de l'en-tete
+        (`nb`) dit alors combien il en manque. Option, pas defaut : 60
+        tables perdent leur dernier enregistrement (str_sklc : l'arbre 26 du
+        ranger, ZER-103) et les tirages existants en dependent peut-etre ;
+        `nb` compte aussi l'enregistrement 0x66 de tete."""
         if isinstance(path_or_bytes, (str, bytes)) and not isinstance(path_or_bytes, bytearray):
             if isinstance(path_or_bytes, str):
                 with open(path_or_bytes, "rb") as f:
@@ -64,6 +71,7 @@ class PrmTable:
         self.body = 0x20 if (0x20 + self.data_size == len(d)) else 0x10
         self.records = []
         self.trailing = b""
+        self._selon_entete = selon_entete
         self._parse()
 
     def _parse(self):
@@ -104,6 +112,17 @@ class PrmTable:
                     if t2 in TAGS and 1 <= d[q + 2] <= 64:
                         desc_size = cand
                         break
+            # LE DERNIER ENREGISTREMENT, colle au pool : apres lui viennent
+            # 0xFFFFFFFF ou la date de construction (« 2009/ », « 2010/ »).
+            # Le compte de l'en-tete ne suffit pas a le reconnaitre : il
+            # inclut, selon les fichiers, les entrees 0x64/0x65 de tete
+            # (spelltable : nb = 175 pour 173 enregistrements lus).
+            q = p + calcule + 4 * ncham
+            if (desc_size is None and self._selon_entete
+                    and len(self.records) < self.nb and q <= n
+                    and (q == n or d[q:q + 4] == b"\xff\xff\xff\xff"
+                         or d[q:q + 2] == b"20")):
+                desc_size = calcule
             if desc_size is None:
                 break
             total = desc_size + 4 * ncham

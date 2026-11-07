@@ -384,6 +384,15 @@ def bl(src, dst):
 
 # --------------------------------------------------------------------------
 
+# GARDENT LE CAS GENERIQUE de default.bact (kit fixe et variantes rnd/),
+# jamais un cas copie d'un modele.
+# 0x151 (« fait grimper sa tension toujours plus », la Tension des monstres) :
+# son seul donneur retenu (b016a) montrait l'aura sans texte ni animation,
+# camera qui se promene (joueur, ZER-115, 29/10) ; le cas 161 est celui de
+# la Tension elle-meme.
+GENERIQUES = frozenset({0x151})
+
+
 def repartir(rom, rattache=None, par_variante=PAR_VARIANTE, seed=0):
     """Repartit le pool en variantes. `rattache` = {cas generique: [ids]},
     le pool de patch_actions (le meme que sa table de tirage) ; a defaut, il
@@ -398,7 +407,8 @@ def repartir(rom, rattache=None, par_variante=PAR_VARIANTE, seed=0):
     perso = cas_personnages(rom)
     reels, sans = [], []
     for a in pool:
-        b = meilleur_cas(donneurs.get(a, [])) or meilleur_cas(perso.get(a, []))
+        b = None if a in GENERIQUES else (
+            meilleur_cas(donneurs.get(a, [])) or meilleur_cas(perso.get(a, [])))
         (reels if b else sans).append((a, b))
     k = max(1, -(-len(reels) // par_variante))
     groupes = [[[], 0, {}] for _ in range(k)]

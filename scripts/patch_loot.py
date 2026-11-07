@@ -232,6 +232,50 @@ OR_COFFRES = (1, 10000)
 OR_POTS = (1, 1000)
 
 
+# LES EMBUSCADES PARTOUT (ZER-108, decision du joueur du 26/09 : « une
+# embuscade doit pouvoir arriver sur n'importe quel coffre ») : avec
+# `embuscades=True`, chaque rang de coffre bleu ou de grotto qui n'a pas de
+# ligne d'embuscade en recoit une a EMBUSCADE_PCT %, prise sur la plus grosse
+# ligne d'objet (1 % a la fois, jamais sous 1 %) ; table pleine, la plus
+# petite ligne d'objet du rang est convertie. Espece 38 : c'est la greffe du
+# blob qui tire le monstre. Les coffres rouges (un coffre piege perdrait son
+# objet) et les pots restent sans. Repris de la 1.6 (d53e357, ZER-21).
+EMBUSCADE_PCT = 5
+EMBUSCADE_ESPECE = 38
+
+
+def ajouter_embuscades(lignes, plafond=None):
+    """Une embuscade de plus par rang qui n'en a pas. Rend le nombre de
+    rangs servis. A appeler AVANT le recensement des emplacements."""
+    ajoutees = 0
+    for rang in sorted({o["rang"] for o in lignes}):
+        lot = [o for o in lignes if o["rang"] == rang]
+        objs = [o for o in lot if o["loot"] == T.TYPE_OBJET]
+        if any(o["loot"] == T.TYPE_EMBUSCADE for o in lot) or len(objs) < 2:
+            continue
+        if plafond is not None and len(lignes) >= plafond:
+            neuve = min(objs, key=lambda o: o["pct"])
+            objs.remove(neuve)
+            reste = EMBUSCADE_PCT - neuve["pct"]
+            neuve.update(loot=T.TYPE_EMBUSCADE, id=EMBUSCADE_ESPECE,
+                         pct=EMBUSCADE_PCT)
+        else:
+            reste = EMBUSCADE_PCT
+            lignes.append(dict(pct=EMBUSCADE_PCT, id=EMBUSCADE_ESPECE,
+                               loot=T.TYPE_EMBUSCADE, rang=rang))
+        while reste > 0:
+            gros = max(objs, key=lambda o: o["pct"])
+            if gros["pct"] <= 1:
+                raise ValueError("rang %d : pas assez de poids pour une "
+                                 "embuscade" % rang)
+            gros["pct"] -= 1
+            reste -= 1
+        if reste < 0:
+            max(objs, key=lambda o: o["pct"])["pct"] -= reste
+        ajoutees += 1
+    return ajoutees
+
+
 def tirer_or(rng, table=None):
     """Un montant d'or pour une ligne de `table`, ou pour un coffre rouge."""
     bas, haut = OR_POTS if table == T.TABLE_POTS else OR_COFFRES
@@ -240,7 +284,8 @@ def tirer_or(rng, table=None):
 
 def patcher(rom, rng, langue="en", journal=None,
             tables=True, coffres_rouges=True, drops=True, etendre=True,
-            chaos=False, consommables=True, rang_rouges=True, montants_or=True):
+            chaos=False, consommables=True, rang_rouges=True, montants_or=True,
+            embuscades=False):
     """Reecrit le loot dans la ROM chargee. Rend un dictionnaire de comptes.
 
     Trois temps : on RECENSE tous les emplacements (lignes de tables, coffres
@@ -299,7 +344,7 @@ def patcher(rom, rng, langue="en", journal=None,
     membres = T.membres_narc(bytes(arc))
     comptes = dict(outcomes=0, coffres=0, coffres_gardes=0, or_intact=0,
                    or_tire=0, embuscades_intactes=0, drops=0,
-                   coffres_bleus_deplaces=0)
+                   coffres_bleus_deplaces=0, embuscades=0)
     # UN HASARD A PART POUR L'OR, derive de l'etat sans le consommer : les
     # objets, les boutiques et la suite tirent exactement comme sans lui.
     rng_or = random.Random(str(rng.getstate())) if montants_or else None
@@ -322,6 +367,12 @@ def patcher(rom, rng, langue="en", journal=None,
                 comptes["coffres_bleus_deplaces"] = jumeler(arc, membres,
                                                             vanilla, note)
             lignes = repartir(vanilla, etendre)
+            if embuscades and table in (T.TABLE_COFFRES_BLEUS,
+                                        T.TABLE_GROTTOS):
+                # AVANT le recensement : une ligne convertie n'est pas une
+                # place d'objet (ZER-108)
+                comptes["embuscades"] += ajouter_embuscades(
+                    lignes, plafond=MAX_PAR_TABLE)
             lignes_tables[table] = (lignes_tables[table][0], lignes)
             for k, o in enumerate(lignes):
                 if o["loot"] == T.TYPE_OBJET:
@@ -697,7 +748,12 @@ def verifier(rom):
     if {o["rang"] for o in lot} != set(range(1, 11)):
         raise AssertionError("randTD.bin : rangs %s, il en faut 1 a 10"
                              % sorted({o["rang"] for o in lot}))
-    if sorted(o["id"] for o in lot if o["loot"] == T.TYPE_EMBUSCADE) !=             [38, 39, 39, 39, 39, 40, 40, 40]:
+    # celles d'origine, plus des canniboites (38) avec les embuscades
+    # partout (ZER-108)
+    reste = collections.Counter(o["id"] for o in lot
+                                if o["loot"] == T.TYPE_EMBUSCADE)
+    reste.subtract(collections.Counter([38, 39, 39, 39, 39, 40, 40, 40]))
+    if any(v < 0 for v in reste.values()) or set(+reste) - {38}:
         raise AssertionError("randTD.bin : embuscades modifiees")
 
     # la Magic key doit encore etre dans un coffre rouge

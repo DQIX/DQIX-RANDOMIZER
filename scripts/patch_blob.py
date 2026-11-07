@@ -176,6 +176,24 @@ SITE_TIRAGE_REPLI = 0x021A24CC    # `bl TIREUR`, overlay 17
 # greffe ici, avec `sifflet` seulement.
 SITE_PORTIER1_SIFFLET = 0x021A24E8
 ORIGINE_PORTIER1_SIFFLET = 0xEBFB3404    # bl 0x0206F500
+# LE COFFRE-EMBUSCADE (ZER-108, mesure au banc le 29/10/2026 : savestate du
+# joueur devant un coffre). La machine a etats de l'overlay 17 appelle le
+# wrapper d'apparition en 0x021C296C avec r3 = l'espece du coffre (38-40,
+# canniboite, imitapeur, boite de Pandore ; [objet+0x18]), r2 = 0. Le
+# wrapper rend 0 -- pas de monstre, pas de combat, le coffre a joue son
+# animation -- si l'espece n'est pas dans le conteneur de la carte ou si son
+# modele n'est pas pret, ce qui arrive avec le blob : le defaut rapporte.
+# Une espece NEGATIVE fait tirer le wrapper lui-meme (repli `tirage_unique`,
+# qui charge le modele) : un monstre au hasard, combat normal (engrenoiseau,
+# banc). Mais apres le drapeau 0x79A, les cartes 0x190-0x199 n'acceptent que
+# 38-40 (0x021A2464). La greffe essaie donc deux fois : l'espece du coffre
+# puis un tirage (mode « repli »), ou un tirage puis l'espece du coffre (mode
+# « tout » : n'importe quel monstre en embuscade).
+SITE_EMBUSCADE = 0x021C296C
+ORIGINE_EMBUSCADE = 0xEBFF7E9C           # bl 0x021A23E4
+WRAPPER_PONTE = 0x021A23E4
+DEBUT_SITES6 = 0x021C2960                # une ligne de cache, alignee
+PLAGE_SITES6 = 0x20
 ESSAIS_UNIQUE = 8                 # puis -1 : pas d'apparition a cette image
 BATIR_NOEUDS = 0x0206EE90         # (conteneur, tas, donnees, taille, especes, n)
 #   Analyse `data/prm/fld_mondata.bin` -- 441 enregistrements, un par espece --
@@ -380,7 +398,8 @@ SITES_PATCHES = (SITE_VIDE, SITE_TABLEAU, SITE_DEPART, SITE_ESPECE,
                  SITE_PORTIER1_PRECH, SITE_PORTIER2_SPAWN, SITE_PORTIER2_RELU,
                  SITE_PORTIER2_PRECH, SITE_MODELE_ALLOC, SITE_TABLEAU_ALLOC,
                  SITE_TIRAGE_TIC, SITE_TIRAGE_REPLI, SITE_ANTRE,
-                 SITE_GROUPE, SITE_PORTIER1_SIFFLET, SITE_MUSIQUE)
+                 SITE_GROUPE, SITE_PORTIER1_SIFFLET, SITE_MUSIQUE,
+                 SITE_EMBUSCADE)
 
 EMPLACEMENTS = 12
 PLAFOND = 5
@@ -455,8 +474,12 @@ NOEUD_N = NOEUDS * NOEUD_MOTS + 1 # les huit noeuds, puis le tour de rotation
 
 def construire(plafond=PLAFOND, site_declencheur=0, originaux=None,
                boss=False, antres=None, tirage=None, groupes=False,
-               sifflet=False):
+               sifflet=False, embuscades=None):
     """Rend (octets du blob, deplacement de l'installateur).
+
+    `embuscades` : None (le coffre tel quel, blob d'avant), "repli"
+    (l'espece du coffre, puis un tirage si elle echoue) ou "tout" (un
+    tirage, puis l'espece du coffre) -- ZER-108.
 
     `site_declencheur` est l'adresse du `mov r0, r0` d'`emprunt` a transformer en
     `bl` vers le declencheur. Zero pour n'en pas poser.
@@ -484,6 +507,15 @@ def construire(plafond=PLAFOND, site_declencheur=0, originaux=None,
     def saut(cible):
         return ["ldr pc, [pc, #%s]" % lit(cible)]
 
+    def plage6():
+        """Vider les caches sur le site du coffre, s'il est pose."""
+        if not embuscades:
+            return []
+        return ["ldr r0, [pc, #%s]" % lit(DEBUT_SITES6),
+                "mov r1, #%d" % PLAGE_SITES6] + appel(DC_FLUSH) + [
+                "ldr r0, [pc, #%s]" % lit(DEBUT_SITES6),
+                "mov r1, #%d" % PLAGE_SITES6] + appel(IC_INVALIDE)
+
     def plage5():
         """Vider les caches sur le site des groupes, s'il est pose. Rien
         sinon : le blob sans --groupes reste octet pour octet le meme."""
@@ -497,6 +529,9 @@ def construire(plafond=PLAFOND, site_declencheur=0, originaux=None,
     # UNE ENTREE DE PLUS dans la table des sites pour la greffe des groupes.
     # Une autre pour la recherche de fiche du Sifflet (ZER-68).
     entrees = TABLE_ENTREES + (1 if groupes else 0) + (1 if sifflet else 0)
+    if embuscades not in (None, "repli", "tout"):
+        raise ValueError(embuscades)
+    entrees += 1 if embuscades else 0
     # LA MUSIQUE DU BOSS TIRE (ZER-94), avec tout tirage de boss : une
     # entree de plus, et la plage de cache de l'amorce allongee jusqu'a son
     # site. Sans boss, le blob reste octet pour octet celui d'avant.
@@ -607,7 +642,7 @@ def construire(plafond=PLAFOND, site_declencheur=0, originaux=None,
     ] + appel(DC_FLUSH) + [
         "ldr r0, [pc, #%s]" % lit(DEBUT_SITES4),
         "mov r1, #%d" % PLAGE_SITES4,
-    ] + appel(IC_INVALIDE) + plage5() + [
+    ] + appel(IC_INVALIDE) + plage5() + plage6() + [
         # ET L'AMORCE ELLE-MEME. Sans cela, une reecriture de son code -- un patch
         # RAM de banc, par exemple -- reste invisible au processeur, qui continue
         # a servir l'ancienne instruction depuis son cache (la taille du tampon
@@ -696,7 +731,7 @@ def construire(plafond=PLAFOND, site_declencheur=0, originaux=None,
     ] + appel(DC_FLUSH) + [
         "ldr r0, [pc, #%s]" % lit(DEBUT_SITES4),
         "mov r1, #%d" % PLAGE_SITES4,
-    ] + appel(IC_INVALIDE) + plage5() + [
+    ] + appel(IC_INVALIDE) + plage5() + plage6() + [
         # ET L'AMORCE ELLE-MEME. Sans cela, une reecriture de son code -- un patch
         # RAM de banc, par exemple -- reste invisible au processeur, qui continue
         # a servir l'ancienne instruction depuis son cache (la taille du tampon
@@ -1035,14 +1070,14 @@ def construire(plafond=PLAFOND, site_declencheur=0, originaux=None,
         "ldrh r0, [r2]",                    # compte de la famille
     ] + appel(RAND) + [
         "add r0, r0, r4",
-        "ldrh r2, [r5, #10]",
+        "ldrh r2, [r5, #12]",               # les especes (ZER-100 : +12)
         "add r2, r5, r2",
         "mov r0, r0, lsl #1",
         "ldrh r7, [r2, r0]",
         "b #{@bt_retenir}",
         "bt_monstre:",
-        "ldrh r4, [r5, #12]",
-        "add r4, r5, r4",                   # le bitmap des monstres
+        "ldrh r4, [r5, #14]",
+        "add r4, r5, r4",                   # le bitmap des monstres (+14)
         "bt_encore:",
         "mov r0, #%d" % (8 * 48),
     ] + appel(RAND) + [
@@ -1062,6 +1097,35 @@ def construire(plafond=PLAFOND, site_declencheur=0, originaux=None,
         "strh r0, [r1, #2]",
         "bx lr",
     ]
+
+    # --- greffe du coffre-embuscade (ZER-108) : deux essais du wrapper ---
+    #
+    # Remplace `bl 0x021A23E4` en 0x021C296C (overlay 17) ; memes registres
+    # (r0-r3 les arguments, lr le retour). Une espece hors 38-40 (le Sifflet
+    # passe -1) va droit au wrapper.
+    if embuscades:
+        lignes += [
+            "greffe_embuscade:",
+            "sub ip, r3, #0x26",
+            "cmp ip, #2",
+            "ldrhi pc, [pc, #%s]" % lit(WRAPPER_PONTE),
+            "push {r4, r5, r6, r7, r8, lr}",
+            "mov r4, r0",
+            "mov r5, r1",
+            "mov r6, r2",
+            "mov r7, r3",
+            "mvn r8, #0",                   # le tirage : espece -1
+        ] + (["mov r3, r8"] if embuscades == "tout" else []) + appel(
+            WRAPPER_PONTE) + [
+            "cmp r0, #0",
+            "popne {r4, r5, r6, r7, r8, pc}",
+            "mov r0, r4",
+            "mov r1, r5",
+            "mov r2, r6",
+            "mov r3, r7" if embuscades == "tout" else "mov r3, r8",
+        ] + appel(WRAPPER_PONTE) + [
+            "pop {r4, r5, r6, r7, r8, pc}",
+        ]
 
     # --- greffe des groupes : une meneuse de la zone pour gabarit (ZER-67) ---
     #
@@ -1851,6 +1915,10 @@ def construire(plafond=PLAFOND, site_declencheur=0, originaux=None,
     paires += [(SITE_MUSIQUE, etiq["greffe_musique"])] if musique else []
     paires += [(SITE_GROUPE, etiq["greffe_groupe"])] if groupes else []
     paires += [(SITE_PORTIER1_SIFFLET, etiq["portier1"])] if sifflet else []
+    paires += [(SITE_EMBUSCADE, etiq["greffe_embuscade"])] if embuscades else []
+    if embuscades and originaux[SITE_EMBUSCADE] != ORIGINE_EMBUSCADE:
+        raise SystemExit(f"{SITE_EMBUSCADE:#010x} : attendu `bl 0x021A23E4`, "
+                         f"lu {originaux[SITE_EMBUSCADE]:#010x}")
     if sifflet and originaux[SITE_PORTIER1_SIFFLET] != ORIGINE_PORTIER1_SIFFLET:
         raise SystemExit(f"{SITE_PORTIER1_SIFFLET:#010x} : attendu `bl "
                          f"0x0206F500`, lu {originaux[SITE_PORTIER1_SIFFLET]:#010x}")

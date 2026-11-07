@@ -114,3 +114,53 @@ compressor being a little less tight than the game's), monster machinery identic
 strong medicine (medicinal herb ×2) no longer works, the new one (2 × an equipment piece)
 does, and an unlearned recipe can be made blind with its new ingredients. The game reads
 the ingredients from `recipe.gp2` and nothing else.
+
+### 102.2 Bookshelf scripts and the bookshelf randomizer (ZER-105, 27 October 2026)
+
+**Format (measured).** Each `htana<X>_<lg>.bin` is a Nitro script
+(`treasure.lire_script`); one bookshelf is one opcode `0x66`:
+
+| param | type | meaning |
+|---|---|---|
+| p0 | int | shelf id (5704, 5902, 6001...) |
+| p1–p3 | int | p1 shelf index in the room; p2 = 1 if the shelf teaches; **p3 = book number**, the "read" flag (see below) |
+| p4 | string | "There don't seem to be any books of particular interest." (shared, offset 27) |
+| p5 | string | the book: title page, a flavour page (often an ingredient hint), then pages of three product names, each ending with `<SE_RECIPE>` |
+| p6 | string | the same title and flavour, then "`<LEADER>` already knows the recipes in this book." |
+| p7… | int | **the recipes learned**: `recipe.gp2` ids (`recettes.py` `id`) |
+
+String parameters are offsets into the script's data area; the text is ASCII with tags
+(`<1>` apostrophe, `<'e>` é, `<PAGE>`, `<Cap>`, `<LEADER>`). The ids are identical in the
+five languages. 58 shelves teach something: 105 books, 345 slots, 327 distinct recipes
+(18 are in two books). Checked: `htanaS` first book = recipes 204, 206, 318 (ogre shield,
+big boss shield, mythril helm), as its text says.
+
+**The randomizer** (`scripts/patch_bibliotheques.py`, `--alchimie-bibliotheques`, off
+by default, independent of `--alchimie`): 345 recipes drawn without replacement from the
+448 base recipes (great-success variants excluded), same draw in the five languages,
+each book keeps its count. p5 and p6 are rewritten **in place**, shorter: title page,
+then the drawn products by name, three per page, each page ending with `<SE_RECIPE>`
+("`<LEADER>` finds these recipes`<:>` A`<,>` B`<,>` C."; names from `itemname` with
+their tags, German inflection marks `[gs]` removed; `<:>` is the game's colon). The hint
+page goes. A message that would not fit, or that two shelves with different draws
+share, keeps a generic line ("`<LEADER>` learns the recipes in this book."): 4 of 54
+in every language. The rest of the old string is zeroed. No member changes size.
+Own generator (`random.Random("bibliotheques:<seed>")`). `verifier()` and the matrix
+essai "bibliotheques" check it. **Not measured yet**: whether the game picks p5 or p6
+from the p3 flag or from the recipes already known (a read shelf on an advanced save
+might not teach its new recipes).
+
+**The "already read" flag (read in the code, measured, 29 October 2026).** The shelf
+handler of overlay 17 (state 5, `0x021AC7FC`) first checks game flag `0x777`, then, if
+the shelf teaches (node `+0x14` = 1), game flag **`0x114C + p3`** (node `+0x15`). Flag
+set: the p6 text, nothing learned. Flag clear: the recipes are learned (`0x020AC2E4`,
+node `+0x16` = count) and the flag is set (`0x0206DF7C`). Game flags are a bit field
+at the game object `0x02108844` + `0x8C` (byte `n >> 3`, bit `n & 7`; getter
+`0x0206DFC0`), i.e. **+11724 in each 32 KB save slot** (found by matching RAM and
+save). Ablithia's book (p3 = 2): flag `0x114E`, RAM byte `0x02108AF9` bit 6, save
+`+12277` bit 6. Bench (`scripts/lua/etagere_drapeau.lua`, the player's Ablithia
+savestate): that bit cleared and the recipe list emptied, the shelf teaches its 3
+recipes; bit 5 cleared instead (control), nothing. The recipes already known play no
+part. So **on a save where a book was read, the randomized shelf teaches nothing new**;
+on a new game every shelf works. The 58 teaching shelves use 54 book numbers (1–55,
+not 8); the player's late-game save had 53 of them set.

@@ -462,7 +462,9 @@ def _noms_arbres(rom, langue):
     m = _objets._membre_archive(rom, CHEMIN_ARBRES, "str_sklc_%s.bin" % langue)
     pool = struct.unpack_from("<I", m, 4)[0]
     out = {}
-    for r in PrmTable(m).records:
+    # selon_entete : l'arbre 26 (ranger) est le dernier enregistrement,
+    # colle au pool (ZER-103)
+    for r in PrmTable(m, selon_entete=True).records:
         if r.tag == 0x67 and len(r.fields) == 2 and r.fields[1] != 0xFFFFFFFF:
             o = pool + r.fields[1]
             out[r.fields[0]] = bytes(m[o:m.find(b"\0", o)])

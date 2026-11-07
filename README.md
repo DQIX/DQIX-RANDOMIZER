@@ -1,10 +1,11 @@
 # Dragon Quest IX Randomizer
 
-Version 1.7
+Version 1.8
 
 A randomizer for **Dragon Quest IX: Sentinels of the Starry Skies** (Nintendo DS).
 Drop your ROM on the application, pick what to shuffle, and play a new game:
 other monsters, other bosses, other loot, other shops, other spells.
+Since 1.8, every ROM also hides a **secret boss**, with a quest of its own.
 
 **Demo video:** https://www.youtube.com/watch?v=1gUc4pJak4o
 
@@ -161,6 +162,8 @@ ROM untouched.
 * The **chronocrystal shop**, and the **prologue** fight.
 * Four- and five-star items are only sold in Dourbridge's secret shop and the
   two Stornway stalls that open after the final boss, in every mode.
+* The **secret boss**, its skills and its weapon are its own: no option ever
+  puts them anywhere else.
 
 ## Troubleshooting
 

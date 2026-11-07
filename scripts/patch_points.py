@@ -30,7 +30,9 @@ DEUX MODES :
                       (research §105) : on etend son mecanisme a toutes les
                       cartes --
                         * chaque membre Fxx recoit un opcode 0x68 : son pool
-                          (16 a 127 objets), et ses opcodes 0x64 (vides)
+                          (16 a 127 objets) -- ou DEUX, chacun la moitie du
+                          pool, au-dela de 127 (ZER-98 : les 143 objets
+                          courants dans chaque carte) --, et ses opcodes 0x64 (vides)
                           deviennent des 0x65 (vides aussi), fldbias compris ;
                         * l'entree 0x64 des tables d'opcodes des cartes et des
                           minuteries devient 0x68 (le gestionnaire de table
@@ -38,7 +40,8 @@ DEUX MODES :
                           minuteries) ;
                         * le gestionnaire 0x68 est REECRIT EN PLACE : a chaque
                           entree sur la carte, il tire 16 objets sans doublon
-                          parmi le pool, dans la table de 16 d'origine (plus
+                          parmi le pool (8 + 8 en deux moities), dans la
+                          table de 16 d'origine (plus
                           de test du groupe de partie) ; le tirage au
                           ramassage tire parmi ces 16 (au lieu de 8 avant le
                           chapitre 0x13) ;
@@ -56,6 +59,12 @@ DEUX MODES :
   par rang            (les deux modes) un objet a une etoile pres de celui
                       d'origine ; au ramassage, le pool d'une carte est
                       l'union des bandes de ses groupes.
+  livres rares        (les deux modes, ZER-99, option) les 26 livres
+                      (22265-22290, 18 % du pool, chers a la revente) ne
+                      sortent qu'une fois sur cent : au ramassage, un pool de
+                      100 objets dont UN livre (le jeu tire 16 parametres
+                      sans remise puis un des 16 : chaque parametre sort une
+                      fois sur 100) ; en fixe, un groupe sur cent.
 
 Le tirage a SON PROPRE generateur, derive de la graine. Le mode ramassage
 change la taille de flditem.pac et d'izmitm.bin (savestates invalides).
@@ -92,6 +101,10 @@ TAILLE_TABLE = 16
 # ensuite. Au moins 16 objets par pool (complete par repetition sinon).
 POOL_MIN, POOL_MAX = TAILLE_TABLE, 127
 TAILLE_POOL = POOL_MAX
+# LES LIVRES (ZER-99) : « L'Epee en Resume » a « Livre de la Sommite ».
+LIVRES = frozenset(range(22265, 22291))
+POOL_LIVRES = 100               # un livre par pool de 100 : 1 % par ramassage
+PART_LIVRES = 0.01
 
 BASE_ARM9 = 0x02000000
 # LE GESTIONNAIRE DE L'OPCODE 0x68 (0x0208E454..0x0208E4C4, 29 instructions,
@@ -109,48 +122,156 @@ LIRE_PARAM = 0x02030B1C
 RAND_BELOW = 0x02032380         # r0 = [0, r0[
 
 
+# TOUS LES OBJETS COURANTS (ZER-98, joueur, 28/10/2026) : un opcode ne porte
+# que 127 objets (l'interpreteur lit 128 parametres), les 143 objets d'une
+# carte vont donc en DEUX opcodes 0x68. Le parametre 0 (le groupe de partie
+# du jeu, inutilise depuis ZER-97) dit ce que fait l'opcode :
+#   octet bas  = la premiere case de la table a remplir (0 : table neuve) ;
+#   octet 2    = combien d'objets tirer (0 : 16, l'opcode unique d'avant).
+# Un pool en deux moities : P0_MOITIE_1 tire 8 objets de la premiere dans
+# une table neuve, P0_MOITIE_2 en tire 8 de la seconde dans les cases 8-15.
+# Chaque objet sort donc a 8/n puis 1/16 au ramassage : 1/144 ou 1/142 pour
+# 72 + 71 objets.
+P0_UNIQUE, P0_MOITIE_1, P0_MOITIE_2 = 0, 0x0800, 0x0808
+POOL_DOUBLE = 2 * POOL_MAX
+STRUCTURE = 0x02108FE4          # le litteral du jeu en FIN_GESTIONNAIRE
+
+
 def code_gestionnaire():
+    """Le gestionnaire 0x68 (29 instructions, la place exacte) : r0 = les
+    parametres, 8 o chacun (type, valeur en +4 ; nos parametres sont
+    entiers), r1 = leur nombre. Tire sans remise (le tire echange avec le
+    dernier, dans le tampon de l'interpreteur qui ne sert plus apres)."""
     from patch_hasard import assembler
     a = GESTIONNAIRE
     lignes = [
         "push {r4, r5, r6, r7, r8, lr}",
-        "mov r6, r0",
-        "sub r7, r1, #1",                       # objets restants (1..r7)
-        "bl #%d" % DONNE_STRUCTURE,
-        "mov r5, r0",
+        "ldr r8, [r0, #4]",                     # parametre 0
+        "add r6, r0, #12",                      # valeur du parametre 1
+        "sub r7, r1, #1",                       # objets restants
+        "ldr r5, [pc, #{L0}]",                  # le litteral du jeu
+        "ands r0, r8, #0xff",                   # premiere case
+        "ldrne r4, [r5, #0xc]",                 # la table existe deja
+        "addne r4, r4, r0, lsl #1",
+        "bne #{@tirage}",
         "bl #%d" % TAS_POINTS,
         "add r0, r0, #0x1a0",
         "mov r1, #0x20",
         "bl #%d" % ALLOUER,
         "mov r4, r0",
         "str r4, [r5, #0xc]",
-        "mov r5, #%d" % TAILLE_TABLE,
+        "tirage:",
+        "lsrs r5, r8, #8",                      # combien
+        "moveq r5, #%d" % TAILLE_TABLE,
         "boucle:",
         "mov r0, r7",
         "bl #%d" % RAND_BELOW,
-        "add r8, r6, r0, lsl #3",
-        "add r8, r8, #8",                       # &parametre[1 + k]
-        "mov r0, r8",
-        "bl #%d" % LIRE_PARAM,
+        "mov r8, r0",
+        "ldr r0, [r6, r8, lsl #3]",
         "strh r0, [r4], #2",
-        "add r2, r6, r7, lsl #3",               # &parametre[r7], le dernier
-        "ldr r3, [r2]",
-        "str r3, [r8]",
-        "ldr r3, [r2, #4]",
-        "str r3, [r8, #4]",
         "sub r7, r7, #1",
+        "ldr r3, [r6, r7, lsl #3]",             # le dernier prend sa place
+        "str r3, [r6, r8, lsl #3]",
         "subs r5, r5, #1",
         "bne #{@boucle}",
         "mov r0, #1",
         "pop {r4, r5, r6, r7, r8, pc}",
     ]
-    code = assembler(lignes, a)
+    # 29 instructions pile : le pool de l'assembleur tombe sur le litteral
+    # d'origine (0x0208E4C8), qui garde sa valeur ; on ne rend que le code
     place = FIN_GESTIONNAIRE - GESTIONNAIRE
-    assert len(code) <= place, len(code)
-    if len(code) < place:
-        code += assembler(["mov r0, r0"] * ((place - len(code)) // 4),
-                          a + len(code))
-    return code
+    code = assembler(lignes, a, litteraux=(STRUCTURE,))
+    assert len(code) == place + 4, len(code)
+    assert code[place:] == struct.pack("<I", STRUCTURE)
+    return code[:place]
+
+
+def opcodes_pool(pool):
+    """Les valeurs des opcodes 0x68 d'un pool : un seul jusqu'a POOL_MAX
+    objets (parametre 0 nul, comme avant ZER-98), deux moities au-dela."""
+    if not POOL_MIN <= len(pool) <= POOL_DOUBLE:
+        raise ValueError("pool de %d objets (%d a %d)"
+                         % (len(pool), POOL_MIN, POOL_DOUBLE))
+    if len(pool) <= POOL_MAX:
+        return [[P0_UNIQUE] + list(pool)]
+    m = (len(pool) + 1) // 2
+    return [[P0_MOITIE_1] + list(pool[:m]), [P0_MOITIE_2] + list(pool[m:])]
+
+
+def verifier_gestionnaire(essais=300):
+    """Emule le gestionnaire (unicorn) sur des pools d'un et de deux
+    opcodes : la table de 16 porte des objets distincts de chaque moitie
+    (8 + 8) ou du pool (16), la structure pointe la table, registres et pile
+    rendus. Leve sinon ; rend le nombre d'essais."""
+    import unicorn as U
+    from unicorn import arm_const as A
+    STRUCT, TAS, PILE, RET, PARAMS = (0x02108FE4, 0x02300000, 0x02380000,
+                                      0x02200000, 0x02310000)
+    code = code_gestionnaire() + struct.pack("<I", STRUCT)
+    rng = random.Random(98)
+    for n_essai in range(essais):
+        uc = U.Uc(U.UC_ARCH_ARM, U.UC_MODE_ARM)
+        uc.mem_map(0x02000000, 0x400000)
+        uc.mem_write(GESTIONNAIRE, code)
+        for adr in (TAS_POINTS, ALLOUER, RAND_BELOW, RET):
+            uc.mem_write(adr, bytes.fromhex("1eff2fe1"))      # bx lr
+        alloue = []
+
+        def crochet(uc, adr, _t, _d):
+            if adr == TAS_POINTS:
+                uc.reg_write(A.UC_ARM_REG_R0, TAS - 0x1a0)
+            elif adr == ALLOUER:
+                assert uc.reg_read(A.UC_ARM_REG_R0) == TAS
+                assert uc.reg_read(A.UC_ARM_REG_R1) == 0x20
+                alloue.append(TAS + 0x40 * len(alloue))
+                uc.reg_write(A.UC_ARM_REG_R0, alloue[-1])
+            elif adr == RAND_BELOW:
+                b = uc.reg_read(A.UC_ARM_REG_R0)
+                assert b > 0
+                uc.reg_write(A.UC_ARM_REG_R0, rng.randrange(b))
+        uc.hook_add(U.UC_HOOK_CODE, crochet)
+        n = rng.choice((16, 17, 100, 127, 128, 143, 200, 236, 254))
+        pool = [20000 + k for k in range(n)]
+        rng.shuffle(pool)
+        ops = opcodes_pool(pool)
+        for vals in ops:
+            buf = b"".join(struct.pack("<II", 1, v) for v in vals)
+            uc.mem_write(PARAMS, buf)
+            uc.reg_write(A.UC_ARM_REG_SP, PILE)
+            uc.reg_write(A.UC_ARM_REG_LR, RET)
+            uc.reg_write(A.UC_ARM_REG_R0, PARAMS)
+            uc.reg_write(A.UC_ARM_REG_R1, len(vals))
+            for r in (A.UC_ARM_REG_R4, A.UC_ARM_REG_R5, A.UC_ARM_REG_R6,
+                      A.UC_ARM_REG_R7, A.UC_ARM_REG_R8):
+                uc.reg_write(r, 0xDEAD0000 + r)
+            uc.emu_start(GESTIONNAIRE, RET, count=100000)
+            if [uc.reg_read(r) for r in (A.UC_ARM_REG_R4, A.UC_ARM_REG_R5,
+                                         A.UC_ARM_REG_R6, A.UC_ARM_REG_R7,
+                                         A.UC_ARM_REG_R8)] != [
+                    0xDEAD0000 + r for r in (
+                        A.UC_ARM_REG_R4, A.UC_ARM_REG_R5, A.UC_ARM_REG_R6,
+                        A.UC_ARM_REG_R7, A.UC_ARM_REG_R8)]:
+                raise AssertionError("registres non rendus")
+            if uc.reg_read(A.UC_ARM_REG_SP) != PILE or \
+                    uc.reg_read(A.UC_ARM_REG_R0) != 1:
+                raise AssertionError("pile ou retour")
+        if len(alloue) != 1:
+            raise AssertionError("%d allocations pour %d opcodes"
+                                 % (len(alloue), len(ops)))
+        if struct.unpack("<I", uc.mem_read(STRUCT + 0xC, 4))[0] != alloue[0]:
+            raise AssertionError("structure+0xC")
+        table = list(struct.unpack("<16H", uc.mem_read(alloue[0], 32)))
+        if struct.unpack("<16H", uc.mem_read(alloue[0] + 32, 32)) != (0,) * 16:
+            raise AssertionError("ecriture hors de la table")
+        attendu = [v & 0xFFFF for vals in ops for v in vals[1:]]
+        if len(set(table)) != 16 or not set(table) <= set(attendu):
+            raise AssertionError("pool %d : table %s" % (n, table))
+        if len(ops) == 2:
+            m1 = {v & 0xFFFF for v in ops[0][1:]}
+            if sum(1 for v in table[:8] if v in m1) != 8 or \
+                    any(v in m1 for v in table[8:]):
+                raise AssertionError("pool %d : moities melangees" % n)
+    return essais
 
 
 # (adresse, instruction d'origine, instruction posee)
@@ -166,6 +287,75 @@ ENTREES = (
 )
 OVL_RAMASSAGE = 17
 SITE_RAMASSAGE = (0x02198A00, "blo #0x2198a28", "mov r0, r0")
+
+
+# LA REAPPARITION RAPIDE (ZER-114) : un OUTIL D'ESSAI, jamais livre (joueur,
+# 28/10/2026 : « c'est juste pour nos tests, on le livre pas du tout ») --
+# aucune option ; une ROM de test l'appelle. La ROM d'essai v17z3 l'a valide
+# en jeu le 20/10.
+# Un delai de point (30..360) est un nombre de MINUTES de jeu : palier =
+# delai / 30, recharge a palier x 30 au ramassage et a la reapparition, un
+# tic par 60 s (research 105.1). Ici palier x 1 et un tic par 6 s : 30 -> 6 s,
+# 360 -> 72 s. Trois mots ; independant du tirage des objets.
+RAPIDE_ARM9 = (
+    (0x0208EFC0, "mov r1, #0x1e", "mov r1, #1"),        # la reapparition
+)
+RAPIDE_TIC = (0x0208F048, 60.0, 6.0)                    # secondes par tic (float)
+RAPIDE_OVL = (0x0219899C, "mov r0, #0x1e", "mov r0, #1")  # ov17, le ramassage
+
+
+def poser_rapide(rom, retirer=False):
+    """Pose (ou retire) la reapparition rapide. Leve si un site n'est ni
+    l'origine ni le notre."""
+    import ndspy.code
+    import ndspy.codeCompression as cc
+    from patch_hasard import assembler, COMPRESSED_END
+    k = 1 if retirer else 2
+    arm9 = bytearray(cc.decompress(bytes(rom.arm9)))
+    for site in RAPIDE_ARM9:
+        adr = site[0]
+        o = adr - BASE_ARM9
+        if _desas(arm9[o:o + 4], adr) not in site[1:]:
+            raise SystemExit("points rapides : ARM9 %#010x inattendu" % adr)
+        arm9[o:o + 4] = assembler([site[k]], adr)
+    adr = RAPIDE_TIC[0]
+    o = adr - BASE_ARM9
+    if struct.unpack_from("<f", arm9, o)[0] not in RAPIDE_TIC[1:]:
+        raise SystemExit("points rapides : ARM9 %#010x inattendu" % adr)
+    struct.pack_into("<f", arm9, o, RAPIDE_TIC[k])
+    struct.pack_into("<I", arm9, COMPRESSED_END, 0)
+    rom.arm9 = bytes(arm9)
+    ovl = rom.loadArm9Overlays()
+    ov = ovl[OVL_RAMASSAGE]
+    d = bytearray(ov.data)
+    adr = RAPIDE_OVL[0]
+    o = adr - ov.ramAddress
+    if _desas(d[o:o + 4], adr) not in RAPIDE_OVL[1:]:
+        raise SystemExit("points rapides : overlay 17 %#010x inattendu" % adr)
+    d[o:o + 4] = assembler([RAPIDE_OVL[k]], adr)
+    ov.data = bytes(d)
+    rom.files[ov.fileID] = ov.save(compress=True)
+    rom.arm9OverlayTable = ndspy.code.saveOverlayTable(ovl)
+
+
+def rapide_pose(rom):
+    """Vrai si les trois sites portent la reapparition rapide, faux s'ils
+    portent l'origine ; leve sur un melange."""
+    import ndspy.codeCompression as cc
+    from patch_hasard import assembler
+    arm9 = bytes(cc.decompress(bytes(rom.arm9)))
+    ov = rom.loadArm9Overlays()[OVL_RAMASSAGE]
+    lus = [arm9[a - BASE_ARM9:a - BASE_ARM9 + 4] == assembler([n], a)
+           for a, _v, n in RAPIDE_ARM9]
+    lus.append(struct.unpack_from("<f", arm9, RAPIDE_TIC[0] - BASE_ARM9)[0]
+               == RAPIDE_TIC[2])
+    a = RAPIDE_OVL[0]
+    lus.append(bytes(ov.data[a - ov.ramAddress:a - ov.ramAddress + 4])
+               == assembler([RAPIDE_OVL[2]], a))
+    if any(lus) and not all(lus):
+        raise AssertionError("points rapides : %d sites sur %d poses"
+                             % (sum(lus), len(lus)))
+    return all(lus)
 
 
 def generateur(seed):
@@ -256,13 +446,21 @@ def _bande(p, et, vanilla):
 
 # --- mode fixe -----------------------------------------------------------------
 
-def tirer(rom, rng, par_rang=False):
+def tirer(rom, rng, par_rang=False, livres_rares=False):
     """Rend (groupes, tables) tires, sans ecrire (mode fixe)."""
     groupes, tables = lire(rom)
     p = pool(rom)
     et = objets.raretes(rom, "en")
     for l in groupes + tables:
-        l["objet"] = rng.choice(_bande(p, et, l["objet"]) if par_rang else p)
+        cand = _bande(p, et, l["objet"]) if par_rang else p
+        if livres_rares:
+            sans = [i for i in cand if i not in LIVRES]
+            avec = [i for i in cand if i in LIVRES]
+            if avec and (not sans or rng.random() < PART_LIVRES):
+                cand = avec
+            else:
+                cand = sans
+        l["objet"] = rng.choice(cand)
     return groupes, tables
 
 
@@ -330,14 +528,15 @@ def _compter(ajout):
 
 
 def _remplir(rng, candidats):
-    """Un pool de POOL_MIN a POOL_MAX objets tires de `candidats` (sans
-    doublon, melanges) ; moins de POOL_MIN candidats se repetent."""
+    """Un pool de POOL_MIN a POOL_DOUBLE objets tires de `candidats` (sans
+    doublon, melanges) ; moins de POOL_MIN candidats se repetent. Au-dela de
+    POOL_MAX, le pool part en deux opcodes (ZER-98)."""
     c = sorted(set(candidats))
     if not c:
         raise ValueError("pool vide")
     rng.shuffle(c)
-    if len(c) >= POOL_MAX:
-        return c[:POOL_MAX]
+    if len(c) >= POOL_DOUBLE:
+        return c[:POOL_DOUBLE]
     out = list(c)
     while len(out) < POOL_MIN:
         out.append(c[len(out) % len(c)])
@@ -392,16 +591,13 @@ def poser_ramassage(rom, pools, pool_special, objets_groupes=None):
                                      objets_groupes[k_groupe])
                 k_groupe += 1
         p = pools.get(nom[:3])
-        ajout = _instruction(OP_TABLE, [0] + list(p)) if p else b""
-        if p and not POOL_MIN <= len(p) <= POOL_MAX:
-            raise ValueError("pool de %s : %d objets (%d a %d)"
-                             % (nom[:3], len(p), POOL_MIN, POOL_MAX))
+        ajout = b"".join(_instruction(OP_TABLE, v)
+                         for v in opcodes_pool(p)) if p else b""
         narc.files[i] = _reecrire_script(bytes(d), ajout)
     rom.files[rom.filenames.idOf(PAC)] = narc.save()
-    if not POOL_MIN <= len(pool_special) <= POOL_MAX:
-        raise ValueError("pool special : %d objets" % len(pool_special))
     rom.files[rom.filenames.idOf(IZM)] = _reecrire_script(
-        izm0, _instruction(OP_TABLE, [0] + list(pool_special)),
+        izm0, b"".join(_instruction(OP_TABLE, v)
+                       for v in opcodes_pool(pool_special)),
         sans_tables=True)
 
     arm9 = bytearray(cc.decompress(bytes(rom.arm9)))
@@ -483,18 +679,61 @@ def lire_ramassage(rom):
     for nom, deb, fin in _membres(pac):
         if _est_carte(nom):
             for x in T.lire_script(pac[deb:fin], 0)[1]:
-                if x.op == OP_TABLE:
-                    pools[nom[:3]] = list(x.valeurs[1:])
+                if x.op == OP_TABLE:            # une ou deux moities, ZER-98
+                    pools.setdefault(nom[:3], []).extend(x.valeurs[1:])
     izm = bytes(rom.files[rom.filenames.idOf(IZM)])
     special = [v for x in T.lire_script(izm, 0)[1] if x.op == OP_TABLE
                for v in x.valeurs[1:]]
     return dict(actif=actif, pools=pools, special=special)
 
 
-def tirer_ramassage(rom, rng, par_rang=False, candidats=None):
+def _livre_rare(rng, pl, cand):
+    """ZER-99 : `pl` sans livre, ramene a POOL_LIVRES - 1 objets (repetes
+    s'il en manque), plus UN livre de `cand` s'il y en a ; melange.
+    ZER-98 : s'il y a au moins POOL_LIVRES - 1 objets sans livre, DEUX
+    moities qui portent chacune TOUS ces objets et un livre (deux livres
+    differents) : chaque objet garde la meme chance, un livre sort une fois
+    sur n + 1 (118 pour les 117 objets courants : 0,85 %)."""
+    sans = [i for i in pl if i not in LIVRES] or [
+        i for i in cand if i not in LIVRES]
+    livres = sorted(set(cand) & LIVRES)
+    if not livres:
+        return pl
+    uniques = sorted(set(sans))
+    if POOL_LIVRES - 1 <= len(uniques) < POOL_MAX:
+        out = []
+        for livre in rng.sample(livres, min(2, len(livres))) * (
+                2 if len(livres) < 2 else 1):
+            moitie = uniques + [livre]
+            rng.shuffle(moitie)
+            out += moitie
+        return out
+    out = [sans[k % len(sans)] for k in range(POOL_LIVRES - 1)]
+    out.append(rng.choice(livres))
+    rng.shuffle(out)
+    return out
+
+
+def tirer_ramassage(rom, rng, par_rang=False, candidats=None,
+                    livres_rares=False):
     """Rend (pools, pool_special) : par carte, POOL_MAX objets au plus parmi
     `candidats` (defaut : le pool), l'union des bandes de ses groupes en
-    par_rang. Le jeu en tire 16 a chaque entree sur la carte."""
+    par_rang. Le jeu en tire 16 a chaque entree sur la carte. Avec
+    `livres_rares` (ZER-99), POOL_LIVRES objets dont un livre."""
+    if livres_rares:
+        pools, special = tirer_ramassage(rom, rng, par_rang, candidats)
+        groupes, tables = lire(rom)
+        p = list(candidats) if candidats is not None else pool(rom)
+        et = objets.raretes(rom, "en")
+
+        def cand(ls):
+            if not par_rang:
+                return p
+            return sorted({i for l in ls for i in _bande(p, et, l["objet"])})
+        pools = {c: _livre_rare(rng, pl, cand(
+            [l for l in groupes if l["carte"] == c]))
+            for c, pl in pools.items()}
+        return pools, _livre_rare(rng, special, cand(tables))
     groupes, tables = lire(rom)
     p = list(candidats) if candidats is not None else pool(rom)
     et = objets.raretes(rom, "en")
@@ -503,25 +742,16 @@ def tirer_ramassage(rom, rng, par_rang=False, candidats=None):
         if l["carte"] not in cartes:
             cartes.append(l["carte"])
     pools = {}
-    # TOUS LES OBJETS QUELQUE PART (joueur, 20/10/2026) : sans par_rang,
-    # chaque carte prend une fenetre glissante de POOL_MAX objets dans une
-    # liste melangee ; les fenetres des cartes successives se suivent, donc
-    # chaque objet du pool tombe dans au moins une carte (en fait presque
-    # toutes : 127 des 143 par carte).
-    melange = list(p)
-    rng.shuffle(melange)
-    for k, c in enumerate(cartes):
+    # TOUS LES OBJETS COURANTS DANS CHAQUE CARTE (ZER-98, joueur, 28/10/2026 ;
+    # avant : une fenetre de 127 des 143). Au-dela de 127, le pool part en
+    # deux opcodes (`opcodes_pool`).
+    for c in cartes:
         if par_rang:
             cand = sorted({i for l in groupes if l["carte"] == c
                            for i in _bande(p, et, l["objet"])})
-            pools[c] = _remplir(rng, cand)
-        elif len(melange) > POOL_MAX:
-            fen = [melange[(k * POOL_MAX + j) % len(melange)]
-                   for j in range(POOL_MAX)]
-            rng.shuffle(fen)
-            pools[c] = fen
         else:
-            pools[c] = _remplir(rng, melange)
+            cand = p
+        pools[c] = _remplir(rng, cand)
     if par_rang:
         cand = sorted({i for l in tables for i in _bande(p, et, l["objet"])})
     else:
@@ -532,13 +762,14 @@ def tirer_ramassage(rom, rng, par_rang=False, candidats=None):
 # --- les deux modes ------------------------------------------------------------
 
 def patcher(rom, seed, par_rang=False, ramassage=True, langue="en",
-            journal=None):
+            journal=None, livres_rares=False):
     """Tire et ecrit. Rend (groupes ou cartes changes, cases ou objets du
     pool special)."""
     rng = generateur(seed)
     nm = objets.noms(rom, langue)
     if ramassage:
-        pools, special = tirer_ramassage(rom, rng, par_rang=par_rang)
+        pools, special = tirer_ramassage(rom, rng, par_rang=par_rang,
+                                         livres_rares=livres_rares)
         poser_ramassage(rom, pools, special)
         if journal is not None:
             import zones
@@ -557,7 +788,7 @@ def patcher(rom, seed, par_rang=False, ramassage=True, langue="en",
                           % len(set(special)))
         return len(pools), len(set(special))
     g0, t0 = lire(rom)
-    g, t = tirer(rom, rng, par_rang=par_rang)
+    g, t = tirer(rom, rng, par_rang=par_rang, livres_rares=livres_rares)
     ecrire(rom, g, t)
     if journal is not None:
         import zones
@@ -581,7 +812,8 @@ def patcher(rom, seed, par_rang=False, ramassage=True, langue="en",
             sum(a["objet"] != b["objet"] for a, b in zip(t0, t)))
 
 
-def verifier(rom, vanilla, par_rang=False, ramassage=True):
+def verifier(rom, vanilla, par_rang=False, ramassage=True,
+             livres_rares=False):
     """Mode ramassage : les sites posent ce qu'il faut, chaque carte a
     groupes porte un pool de TAILLE_POOL objets du pool (bandes en par_rang),
     plus aucun 0x64 dans l'archive lue, les groupes intacts.
@@ -620,11 +852,15 @@ def verifier(rom, vanilla, par_rang=False, ramassage=True):
             raise AssertionError("pools sur %d cartes au lieu de %d"
                                  % (len(lu["pools"]), len(cartes)))
         for c, pl in list(lu["pools"].items()) + [("98/99", lu["special"])]:
-            if not POOL_MIN <= len(pl) <= POOL_MAX:
+            if not POOL_MIN <= len(pl) <= POOL_DOUBLE:
                 raise AssertionError("%s : pool de %d objets" % (c, len(pl)))
             hors = [i for i in pl if i not in p]
             if hors:
                 raise AssertionError("%s : objet %d hors du pool" % (c, hors[0]))
+            n_l = sum(1 for i in pl if i in LIVRES)
+            if livres_rares and n_l > PART_LIVRES * len(pl) + 1e-9:
+                raise AssertionError("%s : %d livres sur %d objets"
+                                     % (c, n_l, len(pl)))
             if par_rang:
                 bandes = {i for l in (g0 if c != "98/99" else t0)
                           if c == "98/99" or l["carte"] == c
@@ -632,11 +868,20 @@ def verifier(rom, vanilla, par_rang=False, ramassage=True):
                 if set(pl) - bandes:
                     raise AssertionError("%s : objet hors des bandes" % c)
         pac = bytes(rom.files[rom.filenames.idOf(PAC)])
-        for nom, deb, fin in _membres(pac):
-            if _est_carte(nom) or nom == "fldbias.bin":
-                if any(x.op == OP_VIDE_A
-                       for x in T.lire_script(pac[deb:fin], 0)[1]):
-                    raise AssertionError("%s : opcode 0x64 restant" % nom)
+        izm = bytes(rom.files[rom.filenames.idOf(IZM)])
+        scripts = [(nom, pac[deb:fin]) for nom, deb, fin in _membres(pac)
+                   if _est_carte(nom) or nom == "fldbias.bin"] + [("izmitm",
+                                                                 izm)]
+        for nom, s in scripts:
+            instrs = T.lire_script(s, 0)[1]
+            if any(x.op == OP_VIDE_A for x in instrs):
+                raise AssertionError("%s : opcode 0x64 restant" % nom)
+            # ZER-98 : un opcode unique (parametre 0 nul) ou deux moities
+            p0 = [x.valeurs[0] for x in instrs if x.op == OP_TABLE]
+            if p0 not in ([], [P0_UNIQUE], [P0_MOITIE_1, P0_MOITIE_2]) or any(
+                    len(x.valeurs) > POOL_MAX + 1
+                    for x in instrs if x.op == OP_TABLE):
+                raise AssertionError("%s : opcodes 0x68 %s" % (nom, p0))
         return len(lu["pools"])
     for chemin in (PAC, IZM):
         if len(rom.files[rom.filenames.idOf(chemin)]) != len(
@@ -655,6 +900,10 @@ def verifier(rom, vanilla, par_rang=False, ramassage=True):
         if par_rang and abs(et.get(a["objet"], 0) - et.get(b["objet"], 0)) > 1:
             raise AssertionError("objet %d : plus d'une etoile d'ecart"
                                  % b["objet"])
+    n_l = sum(1 for b in g + t if b["objet"] in LIVRES)
+    if livres_rares and n_l > max(3, 0.05 * len(g + t)):
+        raise AssertionError("points fixes : %d livres sur %d cases"
+                             % (n_l, len(g + t)))
     return n
 
 

@@ -1,14 +1,20 @@
-"""Les trois familles de boss des combats scriptes (ZER-70, ZER-71).
+"""Les quatre familles de boss des combats scriptes (ZER-70, ZER-71,
+ZER-100).
 
 Les 89 boss de `--boss` (especes des combats scriptes qui ne rodent jamais,
-hors bestiaire) se rangent en trois familles, que `eventbattle.bin` separe
+hors bestiaire) se rangent en quatre familles, que `eventbattle.bin` separe
 lui-meme par le numero d'evenement (champ 0) :
 
-    histoire  evenements 2-33 et 131-138   32 especes  le scenario, les quetes
-                                                        d'apres-jeu (Yore,
-                                                        Nodoph, Rover, les
+    histoire  evenements 2-26, 33, 131-138 26 especes  le scenario et les
                                                         seconds combats des
-                                                        trois gardiens...)
+                                                        trois generaux
+    wifi      evenements 27-32              6 especes  les boss des quetes
+                                                        telechargees (Moby
+                                                        Pick II, Fourax,
+                                                        Medhor, Godefroi,
+                                                        Tyrannamort, Atoner :
+                                                        liste du joueur,
+                                                        27/10/2026)
     grottes   evenements 34-45             12 especes  les boss de grotto
                                                         (Equinocte, Atlas...)
     legendes  evenements 46-84             45 especes  les boss des anciens
@@ -25,15 +31,19 @@ une fois sur trois seulement (mesure sur 40 graines, voir ZER-70).
 Les listes sont ecrites en dur et `verifier()` les recompare a la ROM.
 """
 
-HISTOIRE = frozenset(list(range(300, 321)) + list(range(339, 348))
-                     + [800, 801])
+WIFI = frozenset([347, 339, 341, 342, 343, 340])
+HISTOIRE = frozenset(list(range(300, 321)) + [344, 345, 346, 800, 801])
 GROTTES = frozenset([216, 219, 225, 227, 234, 322, 326, 332, 335, 336, 337,
                      338])
 LEGENDES = frozenset(list(range(500, 515)) + [
     600, 601, 602, 604, 606, 608, 610, 612, 615, 618, 622, 624, 628, 630,
     633, 635, 639, 641, 645, 647, 650, 652, 655, 658,
     770, 773, 776, 777, 778, 779])
-FAMILLES = {"histoire": HISTOIRE, "grottes": GROTTES, "legendes": LEGENDES}
+# L'ORDRE DES FAMILLES est celui de la table de tirage_boss ; wifi en
+# dernier, pour que les trois premieres gardent leur rang.
+FAMILLES = {"histoire": HISTOIRE, "grottes": GROTTES, "legendes": LEGENDES,
+            "wifi": WIFI}
+TOUS = frozenset().union(*FAMILLES.values())
 # LE PREMIER NIVEAU DE CHAQUE LEGENDE (ZER-76) : les especes des evenements
 # 46-58, un combat par boss (Mortamor : 510 et ses pinces 508/509, puis 514).
 # Les niveaux 2 et 3 (evenements 59-84) ne sont plus tires par defaut :
@@ -42,20 +52,24 @@ LEGENDES_PREMIERES = frozenset(range(500, 515))
 LEGENDES_HAUTES = LEGENDES - LEGENDES_PREMIERES
 EVT_LEGENDES_PREMIERES = range(46, 59)
 
+EVT_WIFI = range(27, 33)
 EVT_GROTTES = range(34, 46)
 EVT_LEGENDES = range(46, 85)
 
-# L'ORDRE DU SCENARIO (ZER-80) : les 30 boss d'histoire tirables, dans
-# l'ordre des enregistrements d'`eventbattle.bin` -- celui du jeu, qui suit
-# le scenario (Hexacorne d'abord, Corvus II en dernier, puis les quetes
-# d'apres-jeu). Aquila et Corvus des cinematiques (800, 801) n'y sont pas :
-# ils restent en place (ZER-74). `verifier_ordre()` le recompare a la ROM.
+# L'ORDRE DU SCENARIO (ZER-80) : les 30 combats de boss d'histoire et de
+# quete tirables, dans l'ordre des enregistrements d'`eventbattle.bin` --
+# celui du jeu, qui suit le scenario (Hexacorne d'abord, Corvus II, puis les
+# six quetes wifi d'apres-jeu, qui y gardent leur place : un seuil vaut aussi
+# pour leurs combats, ZER-100). Aquila et Corvus des cinematiques (800, 801)
+# n'y sont pas : ils restent en place (ZER-74). `verifier_ordre()` le
+# recompare a la ROM.
 ORDRE_HISTOIRE = (300, 301, 302, 303, 304, 305, 306, 307, 308, 310, 309,
                   311, 312, 313, 314, 315, 316, 317, 344, 345, 346, 319, 318,
                   320, 347, 339, 341, 342, 343, 340)
 # Les deux bornes speciales des seuils : des le debut (aucune borne, le
 # comportement d'avant la 1.7) et jamais (la famille n'arrive dans aucun
-# combat d'histoire).
+# combat d'histoire). Pour une FIN (ZER-107), jamais = la famille ne
+# s'arrete pas (le defaut).
 DEBUT, JAMAIS = "debut", "jamais"
 
 
@@ -68,23 +82,34 @@ def position(espece):
         return None
 
 
-def familles_permises(source, seuils):
-    """Les familles de boss qu'un combat peut recevoir (ZER-80).
+def familles_permises(source, seuils, fins=None):
+    """Les familles de boss qu'un combat peut recevoir (ZER-80, ZER-107).
 
-    `seuils` : {'grottes': s, 'legendes': s}, s = DEBUT, JAMAIS ou l'espece
-    du boss d'histoire a partir duquel (inclus) la famille arrive. Un combat
-    hors histoire (grotte, legende) n'a pas de place dans le scenario : il
-    accepte tout."""
-    out = {"histoire", "grottes", "legendes"}
+    `seuils` : {famille: s}, s = DEBUT, JAMAIS ou l'espece du boss d'histoire
+    a partir duquel (inclus) la famille arrive ; `fins` : {famille: f},
+    f = JAMAIS (la famille ne s'arrete pas) ou l'espece a partir de laquelle
+    (incluse) la famille n'est plus tiree. Un combat hors du scenario
+    (grotte, legende) n'y a pas de place : il accepte tout."""
+    out = set(FAMILLES)
     p = position(source)
     if p is None:
         return out
-    for fam, s in seuils.items():
+    for fam, s in (seuils or {}).items():
         if s == DEBUT:
             continue
         if s == JAMAIS or p < ORDRE_HISTOIRE.index(s):
             out.discard(fam)
+    for fam, f in (fins or {}).items():
+        if f != JAMAIS and p >= ORDRE_HISTOIRE.index(f):
+            out.discard(fam)
     return out
+
+
+def combats_sans_famille(seuils, fins=None):
+    """Les boss du scenario dont le combat n'accepte AUCUNE famille avec ces
+    bornes (un reglage impossible), dans l'ordre du scenario."""
+    return [e for e in ORDRE_HISTOIRE
+            if not familles_permises(e, seuils, fins)]
 
 
 def verifier_ordre(eventbattle):
@@ -102,7 +127,8 @@ def verifier_ordre(eventbattle):
 
 
 def categorie(espece):
-    """'histoire', 'grottes', 'legendes', ou None si ce n'est pas un boss."""
+    """'histoire', 'grottes', 'legendes', 'wifi', ou None si ce n'est pas
+    un boss."""
     for nom, ens in FAMILLES.items():
         if espece in ens:
             return nom
@@ -115,8 +141,8 @@ def verifier(pool_boss, eventbattle):
 
     `pool_boss` : les identifiants des vrais boss (randomizer.py) ;
     `eventbattle` : les enregistrements (PrmTable.records) du fichier."""
-    tous = HISTOIRE | GROTTES | LEGENDES
-    if len(tous) != len(HISTOIRE) + len(GROTTES) + len(LEGENDES):
+    tous = TOUS
+    if len(tous) != sum(len(f) for f in FAMILLES.values()):
         raise AssertionError("categories_boss : familles non disjointes")
     if set(pool_boss) != tous:
         raise AssertionError("categories_boss : %d boss au pool, %d ranges ; "
@@ -135,7 +161,8 @@ def verifier(pool_boss, eventbattle):
                 raise AssertionError("categories_boss : espece %d, niveau de "
                                      "legende faux pour l'evenement %d"
                                      % (r.fields[k], evt))
-        attendu = ("grottes" if evt in EVT_GROTTES else
+        attendu = ("wifi" if evt in EVT_WIFI else
+                   "grottes" if evt in EVT_GROTTES else
                    "legendes" if evt in EVT_LEGENDES else "histoire")
         for k in (1, 3, 5):
             c = categorie(r.fields[k])

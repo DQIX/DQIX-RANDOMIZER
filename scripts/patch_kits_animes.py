@@ -133,7 +133,7 @@ def poser(rom, bavard=True, budget=BUDGET_MODELE, modeles=None):
     mod = bytes(rom.files[PA._fid(rom, PA.MOD)])
     lignes = monnames.charger(chemin_vanilla(), "en")
     par_modele = {}
-    for i in PA.eligibles(mod):
+    for i in PA.eligibles(mod, boss=True):
         o = PA.ENTETE + i * PA.MOD_TAILLE + PA.MOD_ACTIONS
         acts = set(struct.unpack_from("<6H", mod, o))
         tirees = acts - set(struct.unpack_from("<6H", vmod, o))
@@ -164,7 +164,8 @@ def poser(rom, bavard=True, budget=BUDGET_MODELE, modeles=None):
         deja = cas_du_bact(bd)
         reels, n = [], 0
         cands = []
-        for t in sorted(techs - deja):
+        bilan["generiques"] += len((techs - deja) & A.GENERIQUES)
+        for t in sorted(techs - deja - A.GENERIQUES):
             c = (A.meilleur_cas(donneurs.get(t, []))
                  or A.meilleur_cas(perso.get(t, [])))
             if c:
@@ -209,7 +210,8 @@ def verifier(rom):
     m1 = _membres(bytes(rom.files[rom.filenames.idOf(ENEMY)]))
     if set(m0) != set(m1):
         raise AssertionError("enemy.gp2 : membres differents")
-    changes = {k for k in m0 if m0[k] != m1[k]}
+    # z060c.mon : le modele du boss secret (zenus_mon, 1.8), refait en entier
+    changes = {k for k in m0 if m0[k] != m1[k] and k != "z060c.mon"}
     for k in changes:
         code = k[:-4]
         f0, f1 = fichiers_narc(m0[k]), fichiers_narc(m1[k])
@@ -227,7 +229,7 @@ def verifier(rom):
     vmod = bytes(van.files[PA._fid(van, PA.MOD)])
     mod = bytes(rom.files[PA._fid(rom, PA.MOD)])
     lignes = monnames.charger(chemin_vanilla(), "en")
-    for i in PA.eligibles(mod):
+    for i in PA.eligibles(mod, boss=True):
         o = PA.ENTETE + i * PA.MOD_TAILLE + PA.MOD_ACTIONS
         tirees = (set(struct.unpack_from("<6H", mod, o))
                   - set(struct.unpack_from("<6H", vmod, o)))

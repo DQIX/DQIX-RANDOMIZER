@@ -438,6 +438,27 @@ T = {
                "magie e abilità scelte una volta, alla creazione della ROM: "
                "tutti gli slime hanno lo stesso kit per tutta la partita, le "
                "abilità con la loro vera animazione")},
+    "actions_boss": {
+        "en": ('Random boss spells and abilities',
+               'drawn at each fight, the plain attack kept (except the two '
+               "cutscene fights); with the monsters' spells or abilities "
+               'ticked, bosses follow the same mode'),
+        "fr": ('Sorts et techniques des boss aléatoires',
+               "tirés à chaque combat, l'attaque simple gardée (sauf les "
+               'deux combats des cinématiques) ; avec les sorts ou '
+               'techniques des monstres cochés, les boss suivent le même mode'),
+        "de": ('Zufällige Zauber und Fähigkeiten der Bosse',
+               'in jedem Kampf gezogen, der einfache Angriff bleibt (außer '
+               'den zwei Kämpfen der Zwischensequenzen); mit den Zaubern oder '
+               'Fähigkeiten der Monster folgen die Bosse demselben Modus'),
+        "es": ('Hechizos y habilidades de los jefes al azar',
+               'elegidos en cada combate, el ataque simple se conserva (salvo '
+               'los dos combates de las cinemáticas); con los hechizos o '
+               'habilidades de los monstruos, los jefes siguen el mismo modo'),
+        "it": ('Magie e abilità dei boss casuali',
+               "estratte a ogni scontro, l'attacco semplice resta (tranne i "
+               'due scontri dei filmati); con magie o abilità dei mostri, i '
+               'boss seguono la stessa modalità')},
     "boutiques": {
         "en": ('Shops',
                'what the 37 shops sell'),
@@ -481,51 +502,53 @@ T = {
                'un armaiolo può vendere erbe e un emporio armature')},
     "boss": {
         "en": ('Boss fights',
-               'every boss fight (story, grottos, legacy bosses) is against '
-               'another boss, picked at random'),
+               'every boss fight (story, Wi-Fi quests, grottos, legacy '
+               'bosses) is against another boss, picked at random'),
         "fr": ('Combats de boss',
-               'chaque combat de boss (histoire, grottes, légendes) se fait '
-               'contre un autre boss, tiré au hasard'),
+               'chaque combat de boss (histoire, quêtes wifi, grottes, '
+               'légendes) se fait contre un autre boss, tiré au hasard'),
         "de": ('Bosskämpfe',
-               'jeder Bosskampf (Geschichte, Grotten, Legenden) findet gegen '
-               'einen anderen, zufälligen Boss statt'),
+               'jeder Bosskampf (Geschichte, WLAN-Quests, Grotten, Legenden) '
+               'findet gegen einen anderen, zufälligen Boss statt'),
         "es": ('Combates contra jefes',
-               'cada combate contra un jefe (historia, grutas, leyendas) es '
-               'contra otro jefe elegido al azar'),
+               'cada combate contra un jefe (historia, misiones wifi, grutas, '
+               'leyendas) es contra otro jefe elegido al azar'),
         "it": ('Scontri con i boss',
-               'ogni scontro con un boss (storia, grotte, leggende) è contro '
-               'un altro boss scelto a caso')},
+               'ogni scontro con un boss (storia, missioni wi-fi, grotte, '
+               'leggende) è contro un altro boss scelto a caso')},
     "boss_familles_egales": {
         "en": ('equal boss families',
-               'story, grotto and legacy bosses come out as often as each '
-               'other'),
+               'story, Wi-Fi quest, grotto and legacy bosses come out as '
+               'often as each other'),
         "fr": ('familles de boss égales',
-               "les boss de l'histoire, des grottes et des légendes sortent "
-               'aussi souvent les uns que les autres'),
+               "les boss de l'histoire, des quêtes wifi, des grottes et des "
+               'légendes sortent aussi souvent les uns que les autres'),
         "de": ('gleiche Boss-Familien',
-               'Geschichts-, Grotten- und Legendenbosse erscheinen gleich oft'),
+               'Geschichts-, WLAN-Quest-, Grotten- und Legendenbosse '
+               'erscheinen gleich oft'),
         "es": ('familias de jefes iguales',
-               'los jefes de la historia, de las grutas y legendarios salen '
-               'con la misma frecuencia'),
+               'los jefes de la historia, de las misiones wifi, de las grutas '
+               'y legendarios salen con la misma frecuencia'),
         "it": ('famiglie di boss alla pari',
-               'i boss della storia, delle grotte e leggendari escono con la '
-               'stessa frequenza')},
+               'i boss della storia, delle missioni wi-fi, delle grotte e '
+               'leggendari escono con la stessa frequenza')},
     "boss_histoire": {
         "en": ('story bosses only',
-               'only story bosses are shuffled; grotto and legacy fights stay '
-               'as they are'),
+               'only story and Wi-Fi quest bosses are shuffled; grotto and '
+               'legacy fights stay as they are'),
         "fr": ("boss de l'histoire seulement",
-               "seuls les boss de l'histoire sont mélangés ; les combats des "
-               'grottes et des légendes ne changent pas'),
+               "seuls les boss de l'histoire et des quêtes wifi sont "
+               'mélangés ; les combats des grottes et des légendes ne '
+               'changent pas'),
         "de": ('nur Geschichtsbosse',
-               'nur die Bosse der Geschichte werden gemischt; Grotten- und '
-               'Legendenkämpfe bleiben gleich'),
+               'nur die Bosse der Geschichte und der WLAN-Quests werden '
+               'gemischt; Grotten- und Legendenkämpfe bleiben gleich'),
         "es": ('solo jefes de la historia',
-               'solo se mezclan los jefes de la historia; los combates de '
-               'grutas y legendarios no cambian'),
+               'solo se mezclan los jefes de la historia y de las misiones '
+               'wifi; los combates de grutas y legendarios no cambian'),
         "it": ('solo boss della storia',
-               'si mescolano solo i boss della storia; gli scontri delle '
-               'grotte e leggendari restano uguali')},
+               'si mescolano solo i boss della storia e delle missioni '
+               'wi-fi; gli scontri delle grotte e leggendari restano uguali')},
     # A PARTIR DE QUEL BOSS (ZER-80) : deux listes deroulantes.
     "seuil_grottes": {
         "en": ('grotto bosses from',
@@ -567,6 +590,88 @@ T = {
                'prima di questo boss della storia, nessuno scontro della '
                'storia riceve un boss leggendario (gli scontri con i boss '
                'delle grotte e leggendari non cambiano)')},
+    "seuil_wifi": {
+        "en": ('Wi-Fi quest bosses from',
+               'before this story boss, story fights never get a Wi-Fi quest '
+               'boss'),
+        "fr": ('boss des quêtes wifi à partir de',
+               "avant ce boss de l'histoire, aucun combat de l'histoire ne "
+               'reçoit un boss des quêtes wifi'),
+        "de": ('WLAN-Quest-Bosse ab',
+               'vor diesem Story-Boss bekommt kein Story-Kampf einen '
+               'WLAN-Quest-Boss'),
+        "es": ('jefes de misiones wifi desde',
+               'antes de este jefe de la historia, ningún combate de la '
+               'historia recibe un jefe de misión wifi'),
+        "it": ('boss delle missioni wi-fi da',
+               'prima di questo boss della storia, nessuno scontro della '
+               'storia riceve un boss delle missioni wi-fi')},
+    # A PARTIR DE QUEL BOSS UNE FAMILLE S'ARRETE (ZER-107) : quatre listes.
+    "fin_histoire": {
+        "en": ('no more story bosses from',
+               'from this story boss on, story fights never get a story boss'),
+        "fr": ("plus de boss de l'histoire à partir de",
+               "à partir de ce boss, les combats de l'histoire ne reçoivent "
+               "plus de boss de l'histoire"),
+        "de": ('keine Geschichtsbosse mehr ab',
+               'ab diesem Story-Boss bekommt kein Story-Kampf mehr einen '
+               'Geschichtsboss'),
+        "es": ('sin jefes de la historia desde',
+               'a partir de este jefe, los combates de la historia ya no '
+               'reciben jefes de la historia'),
+        "it": ('niente più boss della storia da',
+               'da questo boss in poi, gli scontri della storia non ricevono '
+               'più boss della storia')},
+    "fin_grottes": {
+        "en": ('no more grotto bosses from',
+               'from this story boss on, story fights never get a grotto boss'),
+        "fr": ('plus de boss des grottes à partir de',
+               "à partir de ce boss, les combats de l'histoire ne reçoivent "
+               'plus de boss des grottes'),
+        "de": ('keine Grottenbosse mehr ab',
+               'ab diesem Story-Boss bekommt kein Story-Kampf mehr einen '
+               'Grottenboss'),
+        "es": ('sin jefes de las grutas desde',
+               'a partir de este jefe, los combates de la historia ya no '
+               'reciben jefes de las grutas'),
+        "it": ('niente più boss delle grotte da',
+               'da questo boss in poi, gli scontri della storia non ricevono '
+               'più boss delle grotte')},
+    "fin_legendes": {
+        "en": ('no more legacy bosses from',
+               'from this story boss on, story fights never get a legacy boss'),
+        "fr": ('plus de boss des légendes à partir de',
+               "à partir de ce boss, les combats de l'histoire ne reçoivent "
+               'plus de boss des légendes'),
+        "de": ('keine Legendenbosse mehr ab',
+               'ab diesem Story-Boss bekommt kein Story-Kampf mehr einen '
+               'Legendenboss'),
+        "es": ('sin jefes legendarios desde',
+               'a partir de este jefe, los combates de la historia ya no '
+               'reciben jefes legendarios'),
+        "it": ('niente più boss leggendari da',
+               'da questo boss in poi, gli scontri della storia non ricevono '
+               'più boss leggendari')},
+    "fin_wifi": {
+        "en": ('no more Wi-Fi quest bosses from',
+               'from this story boss on, story fights never get a Wi-Fi '
+               'quest boss'),
+        "fr": ('plus de boss des quêtes wifi à partir de',
+               "à partir de ce boss, les combats de l'histoire ne reçoivent "
+               'plus de boss des quêtes wifi'),
+        "de": ('keine WLAN-Quest-Bosse mehr ab',
+               'ab diesem Story-Boss bekommt kein Story-Kampf mehr einen '
+               'WLAN-Quest-Boss'),
+        "es": ('sin jefes de misiones wifi desde',
+               'a partir de este jefe, los combates de la historia ya no '
+               'reciben jefes de misiones wifi'),
+        "it": ('niente più boss delle missioni wi-fi da',
+               'da questo boss in poi, gli scontri della storia non ricevono '
+               'più boss delle missioni wi-fi')},
+    "seuil_sans_fin": {
+        "en": 'never (no end)', "fr": 'jamais (pas de fin)',
+        "de": 'nie (kein Ende)', "es": 'nunca (sin fin)',
+        "it": 'mai (nessuna fine)'},
     "seuil_debut": {
         "en": 'the start', "fr": 'le début', "de": 'Anfang',
         "es": 'el principio', "it": "l'inizio"},
@@ -604,6 +709,27 @@ T = {
         "it": ('boss o mostri',
                'uno scontro con un boss può essere anche contro un mostro '
                'comune')},
+    "escortes_permutees": {
+        "en": ('monsters around bosses: as before',
+               'the ordinary monsters of scripted fights are shuffled among '
+               'themselves (by default, each becomes a different monster '
+               'from the bestiary)'),
+        "fr": ('monstres autour des boss : comme avant',
+               'les monstres ordinaires des combats scriptés sont mélangés '
+               'entre eux (par défaut, chacun devient un monstre différent '
+               'du bestiaire)'),
+        "de": ('Monster neben Bossen: wie bisher',
+               'die gewöhnlichen Monster der geskripteten Kämpfe werden '
+               'untereinander gemischt (standardmäßig wird jedes zu einem '
+               'anderen Monster aus dem Bestiarium)'),
+        "es": ('monstruos junto a los jefes: como antes',
+               'los monstruos normales de los combates guionizados se '
+               'mezclan entre sí (por defecto, cada uno pasa a ser un '
+               'monstruo distinto del bestiario)'),
+        "it": ('mostri accanto ai boss: come prima',
+               'i mostri comuni degli scontri scriptati si mescolano tra '
+               'loro (di base, ognuno diventa un mostro diverso del '
+               'bestiario)')},
     "boss_chaque_combat": {
         "en": ('new boss every attempt',
                'another boss is drawn each time you enter the fight, e.g. '
@@ -620,6 +746,27 @@ T = {
         "it": ('nuovo boss a ogni tentativo',
                'viene estratto un altro boss ogni volta che entri nello '
                'scontro, per esempio dopo una sconfitta (solo con mostri in modalità casuale)')},
+    "embuscades": {
+        "en": ('Chest ambushes: any monster',
+               'a trapped chest releases a monster drawn like a field '
+               'spawn, and some blue and grotto chests hide one (monsters '
+               'in random mode only)'),
+        "fr": ("Coffres-embuscades : n'importe quel monstre",
+               "un coffre piégé libère un monstre tiré comme une apparition "
+               "du terrain, et des coffres bleus et de grottes en cachent un "
+               "(monstres en mode aléatoire seulement)"),
+        "de": ('Kistenfallen: jedes Monster',
+               'eine Kistenfalle setzt ein Monster frei, gezogen wie im '
+               'Gelände, und manche blauen und Grotten-Kisten verbergen eines '
+               '(nur mit Monstern im Zufallsmodus)'),
+        "es": ('Cofres trampa: cualquier monstruo',
+               'un cofre trampa libera un monstruo sorteado como en el mapa, '
+               'y algunos cofres azules y de gruta esconden uno (solo con '
+               'monstruos en modo aleatorio)'),
+        "it": ('Forzieri trappola: qualsiasi mostro',
+               'un forziere trappola libera un mostro estratto come sul '
+               'campo, e alcuni forzieri blu e delle grotte ne nascondono '
+               'uno (solo con mostri in modalità casuale)')},
     "boss_terrain": {
         "en": ('Bosses on the field (experimental)',
                'only 14 bosses (those that already roam the grottoes) can '
@@ -964,6 +1111,22 @@ T = {
                'un objeto a una estrella como mucho del original'),
         "it": ("vicini all'originale",
                "un oggetto a una stella al massimo da quello originale")},
+    "points_livres": {
+        "en": ('rare books',
+               'books (Sword Precis...) come out once in a hundred pickups '
+               'instead of about one in five'),
+        "fr": ('livres rares',
+               "les livres (L'Épée en Résumé...) sortent une fois sur cent "
+               "au lieu d'environ une sur cinq"),
+        "de": ('seltene Bücher',
+               'Bücher kommen nur einmal von hundert statt etwa einmal von '
+               'fünf'),
+        "es": ('libros raros',
+               'los libros salen una vez de cada cien en lugar de una de '
+               'cada cinco'),
+        "it": ('libri rari',
+               'i libri escono una volta su cento invece di circa una su '
+               'cinque')},
     "alchimie": {
         "en": ('Alchemy ingredients',
                'every Krak Pot recipe keeps what it makes and how many of '
@@ -980,6 +1143,23 @@ T = {
         "it": ("Ingredienti dell'alchimia",
                'ogni ricetta del calderone conserva ciò che produce e le '
                'quantità, ma chiede altri oggetti, scelti fra tutti')},
+    "bibliotheques": {
+        "en": ('Recipes in bookshelves',
+               'each recipe book teaches other recipes, never the same one '
+               'twice in the game; each book names what it teaches'),
+        "fr": ('Recettes des bibliothèques',
+               "chaque livre de recettes en apprend d'autres, jamais deux "
+               'fois la même dans le jeu ; chaque livre nomme ce qu\'il '
+               'apprend'),
+        "de": ('Rezepte in Bücherregalen',
+               'jedes Rezeptbuch lehrt andere Rezepte, nie zweimal dasselbe '
+               'im Spiel; jedes Buch nennt, was es lehrt'),
+        "es": ('Recetas de las estanterías',
+               'cada libro de recetas enseña otras, nunca la misma dos veces '
+               'en el juego; cada libro nombra lo que enseña'),
+        "it": ('Ricette delle librerie',
+               'ogni libro di ricette ne insegna altre, mai la stessa due '
+               'volte nel gioco; ogni libro nomina ciò che insegna')},
     "medailles": {
         "en": ("Cap'n Max Meddlin' rewards",
                'his ten milestones and his shop give other items, each '
@@ -1028,6 +1208,22 @@ T = {
         "it": ('numeri originali di minimedaglie',
                "da 4 a 80 per i traguardi, da 3 a 20 nel negozio, come nel "
                'gioco originale')},
+    "medailles_genereux": {
+        "en": ('generous milestones',
+               'milestones at 1, 2, 3 ... 10 mini medals, each giving a 3 to '
+               '5-star item'),
+        "fr": ('paliers généreux',
+               'paliers à 1, 2, 3 ... 10 mini médailles, chacun donne un '
+               'objet de 3 à 5 étoiles'),
+        "de": ('großzügige Stufen',
+               'Stufen bei 1, 2, 3 ... 10 Mini-Medaillen, jede gibt einen '
+               'Gegenstand mit 3 bis 5 Sternen'),
+        "es": ('hitos generosos',
+               'hitos a 1, 2, 3 ... 10 minimedallas, cada uno da un objeto de '
+               '3 a 5 estrellas'),
+        "it": ('traguardi generosi',
+               'traguardi a 1, 2, 3 ... 10 minimedaglie, ognuno dà un oggetto '
+               'da 3 a 5 stelle')},
 
     # --- la sortie -------------------------------------------------------
     "sortie": {
@@ -1309,7 +1505,8 @@ T = {
 # l'interface. Les modes d'apparition (`APPARITIONS`) sont des boutons radio,
 # poses en tete de l'onglet des monstres, sous la case `monstres`.
 ONGLETS = (
-    ("onglet_monstres", (("monstres", 0), ("groupes", 1), ("stats", 0),
+    ("onglet_monstres", (("monstres", 0), ("groupes", 1),
+                         ("embuscades", 1), ("stats", 0),
                          ("stats_chaos", 1), ("stats_combat", 1),
                          ("sorts_monstres", 0), ("sorts_monstres_ajout", 1),
                          ("techniques_monstres", 0),
@@ -1318,18 +1515,23 @@ ONGLETS = (
     ("onglet_boss", (("boss", 0), ("garder_hexacorne", 1),
                      ("boss_familles_egales", 1), ("boss_histoire", 1),
                      ("boss_legacy_tous", 1), ("seuil_grottes", 1),
-                     ("seuil_legendes", 1), ("boss_mixte", 1),
+                     ("seuil_legendes", 1), ("seuil_wifi", 1),
+                     ("fin_histoire", 1), ("fin_grottes", 1),
+                     ("fin_legendes", 1), ("fin_wifi", 1), ("boss_mixte", 1),
+                     ("escortes_permutees", 1),
                      ("boss_chaque_combat", 1), ("boss_terrain", 0),
                      ("stats_boss", 0), ("stats_boss_chaos", 1),
-                     ("stats_boss_combat", 1))),
+                     ("stats_boss_combat", 1), ("actions_boss", 0))),
     ("onglet_objets", (("objets", 0), ("objets_chaos", 1),
                        ("rouges_libres", 1), ("equilibrer_conso", 1),
                        ("butin", 0), ("butin_libre", 1),
                        ("boutiques", 0), ("prix_libres", 1),
                        ("boutiques_chaos", 1), ("points", 0),
-                       ("points_par_rang", 1), ("alchimie", 0),
+                       ("points_par_rang", 1), ("points_livres", 1),
+                       ("alchimie", 0), ("bibliotheques", 0),
                        ("medailles", 0), ("medailles_chaos", 1),
-                       ("medailles_seuils_vanilla", 1))),
+                       ("medailles_seuils_vanilla", 1),
+                       ("medailles_genereux", 1))),
     ("onglet_equipe", (("sorts", 0), ("sorts_chaos", 1), ("aptitudes", 0),
                        ("aptitudes_chaos", 1), ("aptitudes_arme_origine", 1),
                        ("vocations", 0), ("vocations_embauche", 1),
@@ -1338,7 +1540,8 @@ ONGLETS = (
 CASES = tuple(c for _o, cases in ONGLETS for c in cases)
 # LES LISTES DEROULANTES (ZER-80) : des cases de ONGLETS qui ne sont pas des
 # cases a cocher.
-LISTES = ("seuil_grottes", "seuil_legendes")
+LISTES = ("seuil_grottes", "seuil_legendes", "seuil_wifi",
+          "fin_histoire", "fin_grottes", "fin_legendes", "fin_wifi")
 
 # LES 30 BOSS D'HISTOIRE, dans l'ordre de `categories_boss.ORDRE_HISTOIRE`,
 # avec leur nom dans chaque langue du jeu (lus dans la ROM, mon_data_<l>).
@@ -1539,6 +1742,9 @@ T.update({
     "table_histoire": {"en": 'Story %s', "fr": 'Histoire %s',
                        "de": 'Geschichte %s', "es": 'Historia %s',
                        "it": 'Storia %s'},
+    "table_wifi": {"en": 'Wi-Fi quest %s', "fr": 'Quête wifi %s',
+                   "de": 'WLAN-Quest %s', "es": 'Misión wifi %s',
+                   "it": 'Missione wi-fi %s'},
     "table_grottes": {"en": 'Grotto %s', "fr": 'Grotte %s', "de": 'Grotte %s',
                       "es": 'Gruta %s', "it": 'Grotta %s'},
     "table_legendes": {"en": 'Legacy %s', "fr": 'Légende %s',
@@ -1558,6 +1764,9 @@ T.update({
                       "it": 'A ogni visita'},
     "genre_histoire": {"en": 'story', "fr": 'histoire', "de": 'Geschichte',
                        "es": 'historia', "it": 'storia'},
+    "genre_wifi": {"en": 'Wi-Fi quest', "fr": 'quête wifi',
+                   "de": 'WLAN-Quest', "es": 'misión wifi',
+                   "it": 'missione wi-fi'},
     "genre_grottes": {"en": 'grotto', "fr": 'grotte', "de": 'Grotte',
                       "es": 'gruta', "it": 'grotta'},
     "genre_legendes1": {"en": 'legacy 1', "fr": 'légende 1',
@@ -1749,6 +1958,9 @@ T.update({
     "liste_histoire": {"en": 'Story fights', "fr": 'Combats d\'histoire',
                        "de": 'Story-Kämpfe', "es": 'Combates de la historia',
                        "it": 'Combattimenti della storia'},
+    "liste_wifi": {"en": 'Wi-Fi quest bosses', "fr": 'Boss des quêtes wifi',
+                   "de": 'WLAN-Quest-Bosse', "es": 'Jefes de misiones wifi',
+                   "it": 'Boss delle missioni wi-fi'},
     "liste_grottes": {"en": 'Grotto bosses', "fr": 'Boss des grottes',
                       "de": 'Grottenbosse', "es": 'Jefes de grutas',
                       "it": 'Boss delle grotte'},

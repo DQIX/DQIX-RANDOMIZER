@@ -4,9 +4,12 @@ case par case, pour `config_rom`.
 LES CASES. Une par emplacement de monstre d'`eventbattle.bin`, sauf le
 prologue (enregistrement 0, jamais touche, randomizer.PROLOGUE) :
 
-    histoire  32  les boss du scenario et des quetes (Aquila et Corvus des
-                  cinematiques compris, verrouilles : leurs combats sont mis
-                  en scene, randomizer.CINEMATIQUES)
+    histoire  26  les boss du scenario (Aquila et Corvus des cinematiques
+                  compris, verrouilles : leurs combats sont mis en scene,
+                  randomizer.CINEMATIQUES)
+    wifi       6  les boss des quetes telechargees (evenements 27-32,
+                  ZER-100) ; une config d'avant la 1.8 les porte encore
+                  dans `histoire` (32 cases) : `normaliser` les en sort
     grottes   12  les boss des antres (evenements 34-45)
     legendes  45  les boss legendaires, trois niveaux (evenements 46-84) ;
                   les trois combats de Mortamor portent trois boss chacun
@@ -46,9 +49,11 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import categories_boss as CB
 
 CHEMIN = "data/event/eventbattle.bin"
-TABLES = ("histoire", "grottes", "legendes", "autres")
+TABLES = ("histoire", "wifi", "grottes", "legendes", "autres")
+TABLES_BOSS = TABLES[:-1]
 TIRAGES = ("fixe", "visite")
 PROLOGUE_ENREG = 0
+COMBAT_SECRET = 144              # combat_zenus.COMBAT : le boss secret, hors de la config
 CINEMATIQUES = (800, 801)
 ENREG_CINEMATIQUES = (12, 26)         # evenements 131 et 135
 VIDE = 0xFFFFFFFF
@@ -69,13 +74,30 @@ ANTRES = frozenset((e, 0) for e in CB.EVT_GROTTES)
 
 # --- lecture -----------------------------------------------------------------
 
-def _table(rom):
+def _sans_combat_secret(d):
+    """eventbattle SANS le combat du boss secret (1.8, ajoute en dernier apres
+    la config) : PrmTable lit mal le DERNIER enregistrement de ce fichier
+    (GARDE-FOUS), et le combat 144 deplacait ce defaut du 143 vers lui. Le
+    retirer rend les octets d'avant le boss, donc la meme lecture (06/11)."""
+    import nitro_script as N
+    _h, ins = N.lire(d)
+    if ins and ins[-1][1] and ins[-1][1][0][1] == COMBAT_SECRET:
+        return N.ecrire(ins[:-1]), True
+    return d, False
+
+
+def _table(rom, ecriture=False):
     from prmtable import PrmTable
-    return PrmTable(rom.files[rom.filenames.idOf(CHEMIN)])
+    d, secret = _sans_combat_secret(bytes(rom.files[rom.filenames.idOf(CHEMIN)]))
+    if secret and ecriture:
+        raise ValueError("eventbattle porte deja le boss secret : la config "
+                         "s'applique avant lui")
+    return PrmTable(d)
 
 
 def _famille(evt):
-    return ("grottes" if evt in CB.EVT_GROTTES else
+    return ("wifi" if evt in CB.EVT_WIFI else
+            "grottes" if evt in CB.EVT_GROTTES else
             "legendes" if evt in CB.EVT_LEGENDES else "histoire")
 
 
@@ -98,6 +120,8 @@ def cases(records, ids=None):
     for r, rec in enumerate(records):
         if r == PROLOGUE_ENREG or rec.tag != 0x64 or len(rec.fields) != 9:
             continue
+        if rec.fields[0] == COMBAT_SECRET:
+            continue          # le boss secret (1.8) : pose apres la config, jamais tire
         for k in range(3):
             v = rec.fields[1 + 2 * k]
             if (r, k) in boss:
@@ -107,10 +131,10 @@ def cases(records, ids=None):
     return [(t, r, k, e) for t in TABLES for r, k, e in out[t]]
 
 
-NB = dict(histoire=32, grottes=12, legendes=45, autres=20)
+NB = dict(histoire=26, wifi=6, grottes=12, legendes=45, autres=20)
 # LA FORME DE LA SECTION, pour l'onglet (comme patch_medailles.FORME). Les
 # deux cases des cinematiques : leurs rangs dans la table `histoire`.
-_HIST = [r for r in ENREG_BOSS if r < 43]
+_HIST = [r for r in ENREG_BOSS if r < 33]
 FORME = dict(tables=tuple((t, NB[t]) for t in TABLES),
              champs=(("espece", "espece"), ("tirage", "tirage")),
              verrous={("histoire", _HIST.index(r), c)
@@ -127,7 +151,7 @@ def noms(rom, langue="en"):
 
 
 def genre(espece):
-    """'histoire', 'grottes', 'legendes1/2/3' ou 'monstre'."""
+    """'histoire', 'wifi', 'grottes', 'legendes1/2/3' ou 'monstre'."""
     c = CB.categorie(espece)
     if c == "legendes":
         return "legendes%d" % (3 if espece in LEGENDES_NIV3 else
@@ -142,13 +166,13 @@ def especes_choisissables(rom, langue="en", verrous=True):
     from monstres_nommes import MONSTRES
     ids = _ids(rom)
     nm = noms(rom, langue)
-    boss = set(CB.HISTOIRE | CB.GROTTES | CB.LEGENDES)
+    boss = set(CB.TOUS)
     if verrous:
         boss -= set(CINEMATIQUES)
     bestiaire = {ids[i] for i in MONSTRES if i < len(ids)}
     out = [(i, nm.get(i, "#%d" % i), genre(i)) for i in boss | bestiaire]
-    rang = {"histoire": 0, "grottes": 1, "legendes1": 2, "legendes2": 2,
-            "legendes3": 2, "monstre": 3}
+    rang = {"histoire": 0, "wifi": 1, "grottes": 2, "legendes1": 3,
+            "legendes2": 3, "legendes3": 3, "monstre": 4}
     return sorted(out, key=lambda x: (rang[x[2]], x[1].lower(), x[0]))
 
 
@@ -192,7 +216,7 @@ def visites(rom):
         return set()
     t = b[o + 4 + 2 * patch_blob.ANTRE_N:]
     nf, _m, _r, nevt = t[0], t[1], t[2], t[3]
-    if not 1 <= nf <= 3 or nevt != TB.NEVT:
+    if not 1 <= nf <= 4 or nevt != TB.NEVT:
         raise ValueError("dq9rand.bin : table des boss illisible")
     masques = TB.relire(t)[2]
     return {(e, k) for e in range(len(masques)) for k in range(3)
@@ -218,6 +242,27 @@ def _greffe_posee(b):
     return False
 
 
+def normaliser(section):
+    """La section d'une config d'avant la 1.8 (ZER-100) : les six combats
+    wifi y sont dans `histoire` (32 cases). Rend une section aux tables
+    d'aujourd'hui, sans toucher a l'originale ; les autres telles quelles."""
+    if not isinstance(section, dict) or "wifi" in section:
+        return section
+    hist = section.get("histoire")
+    if not isinstance(hist, list) or len(hist) != NB["histoire"] + NB["wifi"]:
+        return section
+
+    def wifi(l):
+        try:
+            return int(l["evenement"]) in CB.EVT_WIFI
+        except (KeyError, TypeError, ValueError):
+            return False
+    out = dict(section)
+    out["histoire"] = [l for l in hist if not wifi(l)]
+    out["wifi"] = [l for l in hist if wifi(l)]
+    return out
+
+
 def _visites_section(section):
     return {(l["evenement"], l["emplacement"] - 1)
             for t in TABLES for l in section.get(t, ())
@@ -228,7 +273,7 @@ def pool_defaut(garder_premier=False, legacy_tous=False):
     """Le pool de `--boss` seul (randomizer.py : cibles_boss), trie."""
     garde = set(CINEMATIQUES) | ({300} if garder_premier else set())
     exclus = set() if legacy_tous else CB.LEGENDES_HAUTES
-    return sorted((CB.HISTOIRE | CB.GROTTES | CB.LEGENDES) - garde - exclus)
+    return sorted(CB.TOUS - garde - exclus)
 
 
 def preparer_blob(section, antres, tirage, blob, defaut):
@@ -240,7 +285,7 @@ def preparer_blob(section, antres, tirage, blob, defaut):
     que les options : rien ne change, la ROM est celle des options."""
     import tirage_boss as TB
     from config_rom import ConfigInvalide
-    voulu = _visites_section(section)
+    voulu = _visites_section(normaliser(section))
     if voulu and not blob:
         raise ConfigInvalide("boss : << tire a chaque visite >> demande le "
                              "blob (monstres en mode aleatoire)")
@@ -272,14 +317,14 @@ def interdits(rom):
 
 def tirer_section(rom, graine, langue="en", garder_premier=True, egales=False,
                   histoire=False, mixte=False, chaque_combat=False,
-                  legacy_tous=False, seuils=None, blob=True):
+                  legacy_tous=False, seuils=None, fins=None, blob=True):
     """Tire la categorie seule (rom vanilla, non modifiee) avec les options
     de l'onglet Boss, par tirage_boss.plan. Les monstres ordinaires des
     combats scriptes restent ceux de la vanilla."""
     import tirage_boss as TB
     records = _table(rom).records
     garde = set(CINEMATIQUES) | ({300} if garder_premier else set())
-    pool = sorted((CB.HISTOIRE | CB.GROTTES | CB.LEGENDES) - garde)
+    pool = sorted(CB.TOUS - garde)
     monstres = []
     if mixte:
         from patch_hasard import especes_tirables
@@ -289,7 +334,10 @@ def tirer_section(rom, graine, langue="en", garder_premier=True, egales=False,
         egales=egales and not histoire, mixte=mixte,
         chaque_combat=chaque_combat and blob,
         exclus=frozenset() if legacy_tous or histoire else CB.LEGENDES_HAUTES,
-        seuils=None if histoire else seuils)
+        seuils=None if histoire else seuils,
+        fins=None if histoire else fins,
+        # un ticket par nom (ZER-112), comme le randomizer
+        nom_de=None if legacy_tous else noms(rom, "en"))
     vis = set()
     if table and blob:
         m = TB.relire(table)[2]
@@ -297,7 +345,7 @@ def tirer_section(rom, graine, langue="en", garder_premier=True, egales=False,
                if m[e] & (1 << k)}
     sec = exporter(rom, langue)
     nm = noms(rom, langue)
-    for t in TABLES[:3]:
+    for t in TABLES_BOSS:
         for l in sec[t]:
             e = corresp.get(l["espece"], l["espece"])
             l.update(espece=e, nom=nm.get(e, ""),
@@ -326,7 +374,8 @@ def appliquer(rom, section, verrous=True, vanilla=None):
     aux combats des cinematiques ou y emmene leurs boss. Rend le nombre de
     cases changees."""
     from config_rom import ConfigInvalide
-    t = _table(rom)
+    section = normaliser(section)
+    t = _table(rom, ecriture=True)
     records = t.records
     ids = _valides(rom)
     attendu = {}
