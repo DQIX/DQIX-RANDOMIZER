@@ -1000,3 +1000,45 @@ A scripted fight keeps `mon_btldata` drop classes (`+2`/`+3`, class 0 = always) 
 record 437 with rare item 20030, class 0 → "[boss] laisse tomber un coffre au trésor ! … Il renferme un éclair de
 [boss] !". With `--butin-combat`, the overlay-23 graft (§90.2) replaces any non-zero item; register `r0` is dead after
 both sites (`ldr r0, [sp, #0xc]` follows). Overlay 23 is full up to `0x02200160` (the page graft ends there).
+
+## 115. The overlay manager, and overlay 11 missing from a new game (7 November 2026, ZER-119)
+
+**The symptom.** The published 1.8 froze at the first battle of every new game (the prologue fight, cruelcumber and
+slimes with Aquila): ARM9 PC stuck at `0xFFFF0108`, `lr` `0x02189674`. Same input on BizHawk: vanilla and 1.7 (Balanced,
+seed 118) open the battle; 1.8 freezes with the seed alone, and without `--vocation-depart`, `--butin-combat` or
+`--place --blob`. The charm graft (§113) sits behind overlay 11 (`0x02188B80`) and its battle sites branch into it.
+
+**The loaded-overlay table** is in ITCM at **`0x01FFD364`**, one signed byte per slot (slot 0 = overlays 0-6 at
+`0x021536E0`, 1 = 7-14 at `0x021842A0`, 2 = 15-21 at `0x0218B5A0`, 3 = 22-30 at `0x021D8A40`, 4 = 31-32 at
+`0x02200160`, 5 = 33-34 at `0x022A2180`), `0xFF` = empty. In the prologue battle (vanilla): `00 09 11 19 20 21`
+(overlays 0, 9, 17, 25, 32, 33).
+
+**The manager (ARM9).**
+
+| address | role |
+|---|---|
+| `0x020A1904(id)` | 1 if the overlay is the one loaded in its slot |
+| `0x020A1950(id)` | synchronous load: returns at once if already loaded, otherwise unloads the slot's overlay (`0x020A1BC4`), loads, starts it (static initialisers run inside, under a busy flag: a load from an initialiser would wait forever), writes the table |
+| `0x020A1A50(id)` | second loader (used by overlays 33/34 for the battle overlays 24/25) |
+| `0x020A1BC4(id)`, `0x020A1CDC(id)` | unload |
+| `0x020A1E08(k)` | screen stack push: loads `table[k]` (`0x020F1962`, filled at run time, zero in the image) and records `k` (stack `0x02109DAE`, count `0x02109DA4`, at most 8) |
+| `0x020A1E64` | stack pop: reloads the overlay of the previous entry |
+
+**Who loads what, new game (vanilla, write watch on the four entry points).** Title: 29, 33, 32, 20, 16, 17, then the
+field entry of overlay 17 (`0x021B2574`) loads **11** (frame 1301). Character creation (overlay 21, `0x0218B618`)
+loads **9 over 11** (frame 2208). The prologue field restarts overlay 17 (`0x020011E4`) and **does not reload 11**.
+Battle (frame 12737): push of overlay 0 (`lr` `0x020A1E38`), then 26, then 24 and 25 by `0x020A1A50`. Other loaders of
+the 7-14 slot: overlay 3 (village) loads 9 (Patty's), 17 loads 8 (Stella's window), 12, 14 (bestiary), 10; overlay 2
+loads 13. Overlay 0 is the only slot-0 overlay loaded for battles only.
+
+**The fix (`scripts/patch_charme.py`, `EMPILER`).** `0x020A1E08` rewritten in place, same 92 bytes: the stack-overflow
+assertion (`cmp #8 ; blo ; bl 0x020C9BF0`) and a redundant `ldrb` give the room for `cmp r5, #0 ; moveq r0, #11 ;
+bleq 0x020A1950` after the load, so pushing overlay 0 also loads overlay 11 (a no-op when it is there, i.e. every
+loaded game). The three literals keep their addresses; no static reference into the function
+(`zone_libre.py 0x020A1E0C 0x58`). Measured: new game → prologue battle plays (Balanced 118 `348bebf0`, seed alone
+`43d37e5f`); the secret boss battle bench gives the same 140 frames as the published ROM; `diff_roms.py` sees only
+ARM9 `0x020A1E08..0x020A1E54`, layout unchanged. Probe: `scripts/lua/partie_neuve.lua` (published ROM → GEL, fixed → OK).
+
+**Party records at fixed addresses.** Member objects at `0x020F384C + i × 0x964` (hero first; Aquila as the second in
+the prologue); the HP record (`[actor+0x138]`) is the object `+0x94`: `+0` HP, `+2` MP, `+4` max HP, `+6` max MP
+(`0x020F38E0`, `0x020F4244`, ...).

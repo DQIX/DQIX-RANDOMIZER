@@ -312,6 +312,65 @@ SITES = (
 # l'ARM9 : l'entree OP_EFFACER de la table de sauts
 SITE_ARM9 = (SITE_EFFACER, "b #0x206f9f4", "g_effacer", "b")
 
+# L'OVERLAY 11 AU DEBUT DE CHAQUE COMBAT (ZER-119, 07/11/2026). La greffe vit
+# derriere l'overlay 11, mais la place 7-14 n'est pas toujours a lui : la
+# creation du personnage y charge l'overlay 9 (ovl21 0x0218B618) et le terrain
+# du prologue demarre SANS recharger le 11 ; le recrutement chez Tulipe
+# (ovl3), la fenetre de Stella (8), le bestiaire (14) font de meme. Les sites
+# du combat sautaient alors dans le code d'un autre overlay : gel au premier
+# combat de toute partie neuve (PC 0xFFFF0108). Mesure par guet du chargeur
+# (0x020A1950) sur une partie neuve vanilla : le combat empile l'overlay 0 par
+# 0x020A1E08 (image 12737), place 7-14 = 9 ; table des overlays charges en ITCM
+# 0x01FFD364 (un octet par place).
+# CORRECTIF : la fonction d'empilement 0x020A1E08 est reecrite EN PLACE (aucune
+# place neuve) : quand l'overlay empile est le 0 (le combat, le seul de la place
+# 0-6 a n'etre charge qu'en combat, research §113), elle charge aussi le 11 par
+# le chargeur du jeu, qui ne fait rien s'il est deja la (cas de toutes les
+# parties chargees). La place vient de l'assertion de debordement de la pile
+# (`cmp #8 ; blo ; bl 0x020C9BF0`, jamais atteinte) et d'un `ldrb` redondant ;
+# les trois litteraux restent a leurs adresses. Aucune reference statique a
+# l'interieur de la fonction (`zone_libre.py 0x020A1E0C 0x58`).
+EMPILER = 0x020A1E08
+EMPILER_ORIGINE = bytes.fromhex(
+    "10402de9" "44109fe5" "0040a0e1" "0000d1e5" "080050e3" "0000003a" "729f00eb"
+    "070054e3" "1080bd28" "28009fe5" "d40090e1" "c5feffeb" "18009fe5" "1c109fe5"
+    "0020d0e5" "0240c1e7" "0010d0e5" "011081e2" "0010c0e5" "1080bde8"
+    "a49d1002" "62190f02" "ae9d1002")
+CHARGER = 0x020A1950            # chargeur synchrone d'overlay (r0 = id)
+OVL_COMBAT = 0
+EMPILER_LITTERAUX = (0x02109DA4, 0x020F1962, 0x02109DAE)   # compte, table, pile
+
+
+def _empiler():
+    """Les 92 octets de 0x020A1E08 : 20 instructions puis les 3 litteraux d'origine."""
+    from patch_hasard import assembler
+    lignes = [
+        "push {r3, r4, r5, lr}",
+        "mov r4, r0",
+        "cmp r4, #7",
+        "pophs {r3, r4, r5, pc}",
+        "ldr r0, [pc, #{L1}]",           # table des ecrans
+        "ldrsb r5, [r0, r4]",            # r5 = l'overlay empile
+        "mov r0, r5",
+        "bl #%d" % CHARGER,
+        "cmp r5, #%d" % OVL_COMBAT,
+        "moveq r0, #%d" % OVL,
+        "bleq #%d" % CHARGER,            # le combat : l'overlay 11 aussi
+        "ldr r0, [pc, #{L0}]",           # compte de la pile
+        "ldr r1, [pc, #{L2}]",           # la pile
+        "ldrb r2, [r0]",
+        "strb r4, [r1, r2]",
+        "add r2, r2, #1",
+        "strb r2, [r0]",
+        "pop {r3, r4, r5, pc}",
+        "mov r0, r0",
+        "mov r0, r0",
+    ]
+    b = assembler(lignes, EMPILER, EMPILER_LITTERAUX)
+    if len(b) != len(EMPILER_ORIGINE) or b[80:] != EMPILER_ORIGINE[80:]:
+        raise SystemExit("empilement : litteraux deplaces")
+    return b
+
 
 def _essai(lignes):
     """ZENUS_ESSAI : 999 PV a chaque menu, 999 a chaque coup porte a un monstre."""
@@ -1584,6 +1643,11 @@ def patcher(rom, action, bavard=True):
     if lu != attendu:
         raise SystemExit("ARM9 : a %#010x attendu %r, lu %r" % (site, attendu, lu))
     arm9[site - BASE_ARM9:site - BASE_ARM9 + 4] = assembler(["%s #%d" % (ins, etiq[e])], site)
+    # l'overlay 11 charge au debut de chaque combat (ZER-119)
+    p = EMPILER - BASE_ARM9
+    if bytes(arm9[p:p + len(EMPILER_ORIGINE)]) != EMPILER_ORIGINE:
+        raise SystemExit("ARM9 : fonction d'empilement %#010x inattendue" % EMPILER)
+    arm9[p:p + len(EMPILER_ORIGINE)] = _empiler()
     rom.arm9 = bytes(arm9)
     if bavard:
         print("  charme   : %d o a %#010x (etat %#010x), action %#x, sites %s"
@@ -1858,9 +1922,14 @@ def verifier(rom, action):
             raise AssertionError("overlay %d : %#010x lit %r" % (k, site, lu))
     from patch_monde_vide import _arm9_clair, BASE_ARM9
     site, _a, e, ins = SITE_ARM9
-    lu = _desas(bytes(_arm9_clair(rom)), BASE_ARM9, site)
+    arm9 = bytes(_arm9_clair(rom))
+    lu = _desas(arm9, BASE_ARM9, site)
     if lu != "%s #%#x" % (ins, etiq[e]):
         raise AssertionError("ARM9 : %#010x lit %r" % (site, lu))
+    p = EMPILER - BASE_ARM9
+    if arm9[p:p + len(EMPILER_ORIGINE)] != _empiler():
+        raise AssertionError("ARM9 : l'empilement %#010x ne charge pas l'overlay 11 (ZER-119)"
+                             % EMPILER)
     return True
 
 
