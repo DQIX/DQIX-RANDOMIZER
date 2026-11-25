@@ -177,19 +177,25 @@ class OngletCreer(object):
         self.table.bind("<Button-1>", self._clic)
         self.table.bind("<MouseWheel>", lambda _e: self._fermer_editeur())
 
-        aide = ttk.Label(droite, foreground="#666", wraplength=760,
-                         justify="left")
-        aide.pack(anchor="w", pady=(4, 0))
-        app._poser(aide, "creer_aide_table")
+        # PETIT ECRAN (ZER-121) : les trois lignes d'aide s'ancrent en bas,
+        # AVANT le tableau dans l'ordre d'empilement ; quand la place manque,
+        # c'est le tableau qui retrecit (il a son ascenseur), pas elles qui
+        # disparaissent. Empilees du bas vers le haut : etat, aide_cat, aide.
+        self.etat = ttk.Label(droite, foreground="#666", wraplength=760,
+                              justify="left")
+        self.etat.pack(side="bottom", anchor="w", pady=(2, 0),
+                       before=cadre_t)
+        app._poser(self.etat, "creer_attente")
         # l'aide propre a la categorie (FORME["aide"]), sous l'aide generale
         self.aide_cat = ttk.Label(droite, foreground="#444", wraplength=760,
                                   justify="left")
-        self.aide_cat.pack(anchor="w", pady=(2, 0))
+        self.aide_cat.pack(side="bottom", anchor="w", pady=(2, 0),
+                           before=cadre_t)
         app._poser(self.aide_cat, brut="")
-        self.etat = ttk.Label(droite, foreground="#666", wraplength=760,
-                              justify="left")
-        self.etat.pack(anchor="w", pady=(2, 0))
-        app._poser(self.etat, "creer_attente")
+        aide = ttk.Label(droite, foreground="#666", wraplength=760,
+                         justify="left")
+        aide.pack(side="bottom", anchor="w", pady=(4, 0), before=cadre_t)
+        app._poser(aide, "creer_aide_table")
         self.retraduire()
 
     # ------------------------------------------------------------ affichage

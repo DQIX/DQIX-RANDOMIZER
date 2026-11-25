@@ -182,6 +182,9 @@ MERES = {"groupes": "monstres", "app_aleatoire": "monstres",
 
 class Application(object):
 
+    # None : decide par la hauteur de l'ecran ; True / False : force (essais)
+    compact = None
+
     def __init__(self, racine):
         self.racine = racine
         self.file = queue.Queue()
@@ -195,14 +198,114 @@ class Application(object):
         self._textes = {}
 
         racine.title(TITRE)
-        racine.minsize(560, 560)
+        # PETIT ECRAN (ZER-121) : la fenetre demandait 1529 x 1088 px, plus
+        # haut qu'un ecran 1080p ; sur un portable ou en 125-150 %, le bouton
+        # Randomize sortait de l'ecran. Les onglets defilent maintenant, le
+        # bas (sortie, bouton, journal) reste fixe, et la taille d'ouverture
+        # est bornee a l'ecran.
+        racine.minsize(480, 400)
+        self._toiles = []
+        # MODE COMPACT : sous 900 px d'ecran (portable 768p, ou 1080p a
+        # 125-150 %), la zone de depot, le journal et les espacements
+        # retrecissent, pour laisser de la place aux onglets.
+        # La hauteur se compte a 96 ppp : si Windows met l'appli a l'echelle
+        # (150 %), l'ecran annonce toujours 1080 px mais tout est 1,5 x plus
+        # grand ; sinon, l'ecran annonce deja la hauteur reduite.
+        if self.compact is None:
+            ppp = float(racine.winfo_fpixels("1i")) or 96.0
+            self.compact = racine.winfo_screenheight() * 96.0 / ppp < 900
         self._construire()
         # LE PREREGLAGE AFFICHE DOIT ETRE LE PREREGLAGE APPLIQUE. Sans cet appel,
         # la fenetre s'ouvrait sur « Balanced » avec les sorts et les arbres
         # decoches : un joueur qui cliquait directement sur Randomize n'avait
         # pas ce que l'ecran annoncait (vu sur une capture, 24 septembre).
         self.appliquer_prereglage()
+        self._ajuster_a_l_ecran()
+        racine.bind_all("<MouseWheel>", self._molette)
         racine.after(100, self._vider_file)
+
+    # ------------------------------------------------------ la taille (ZER-121)
+
+    def _esp(self, n):
+        """Un espacement, reduit en mode compact."""
+        return max(2, n // 3) if self.compact else n
+
+    def _page_defilante(self, onglets):
+        """Un onglet qui defile : un cadre exterieur (celui qu'on ajoute au
+        Notebook), une toile et son ascenseur, et le cadre interieur ou l'on
+        range les cases. Rend (exterieur, interieur)."""
+        fond = ttk.Style(self.racine).lookup("TFrame", "background") or None
+        exterieur = ttk.Frame(onglets)
+        toile = tk.Canvas(exterieur, highlightthickness=0, borderwidth=0,
+                          background=fond)
+        asc = ttk.Scrollbar(exterieur, orient="vertical", command=toile.yview)
+        toile.configure(yscrollcommand=asc.set)
+        asc.pack(side="right", fill="y")
+        toile.pack(side="left", fill="both", expand=True)
+        page = ttk.Frame(toile, padding=10)
+        fen = toile.create_window(0, 0, window=page, anchor="nw")
+        page.bind("<Configure>", lambda _e: toile.configure(
+            scrollregion=(0, 0, page.winfo_reqwidth(),
+                          page.winfo_reqheight())))
+        toile.bind("<Configure>",
+                   lambda e: toile.itemconfigure(fen, width=e.width))
+        self._toiles.append((toile, page))
+        return exterieur, page
+
+    def _toile_sous(self, widget):
+        """La toile defilante qui contient `widget`, ou None."""
+        toiles = {str(t): t for t, _p in self._toiles}
+        while widget is not None:
+            if str(widget) in toiles:
+                return toiles[str(widget)]
+            widget = getattr(widget, "master", None)
+        return None
+
+    def _molette(self, e):
+        """La molette fait defiler l'onglet sous le pointeur, s'il deborde."""
+        try:
+            w = self.racine.winfo_containing(e.x_root, e.y_root)
+        except (KeyError, tk.TclError):
+            return None
+        toile = self._toile_sous(w)
+        if toile is None or toile.yview() == (0.0, 1.0):
+            return None
+        pas = -e.delta / 120.0
+        pas = int(pas) if abs(pas) >= 1 else (1 if pas > 0 else -1)
+        toile.yview_scroll(pas, "units")
+        return "break"
+
+    def _ajuster_a_l_ecran(self):
+        """Chaque toile prend la taille de son contenu (sur un grand ecran,
+        rien ne defile), puis la fenetre est bornee a l'ecran, barre des
+        taches comprise, et centree."""
+        r = self.racine
+        # UNE LARGEUR FIXE, pas celle du contenu : le detail des cases passe
+        # a la ligne a la largeur de la page, donc la page suit la toile ; si
+        # la toile suivait la page, la fenetre s'elargissait jusqu'a ce que
+        # plus rien ne passe a la ligne (1546 px mesures).
+        for toile, _page in self._toiles:
+            toile.configure(width=760)
+        r.update_idletasks()
+        for toile, page in self._toiles:
+            toile.configure(height=page.winfo_reqheight())
+        r.update_idletasks()
+        ecran_l, ecran_h = r.winfo_screenwidth(), r.winfo_screenheight()
+        # la barre de titre et la barre des taches ne sont pas dans reqheight
+        largeur = min(r.winfo_reqwidth(), ecran_l - 40)
+        hauteur = min(r.winfo_reqheight(), ecran_h - 110)
+        x = max(0, (ecran_l - largeur) // 2)
+        y = max(0, (ecran_h - 110 - hauteur) // 2)
+        r.geometry("%dx%d+%d+%d" % (largeur, hauteur, x, y))
+
+    @staticmethod
+    def _detail_qui_passe_a_la_ligne(ligne, detail, devant):
+        """Le detail d'une case passe a la ligne a la largeur de la fenetre,
+        au lieu de l'elargir (ZER-121)."""
+        def ajuster(_e=None):
+            reste = ligne.winfo_width() - sum(w.winfo_width() for w in devant)
+            detail.configure(wraplength=max(160, reste - 12))
+        ligne.bind("<Configure>", ajuster, add="+")
 
     # ----------------------------------------------------------- les langues
 
@@ -284,6 +387,10 @@ class Application(object):
                     variable.set(v)
             self.choix_manuel()
         menu.bind("<<ComboboxSelected>>", choisi)
+        # LA MOLETTE NE CHANGE PAS UN SEUIL (ZER-121) : sur une liste
+        # deroulante, elle changeait le choix en passant ; elle fait defiler
+        # l'onglet, comme ailleurs.
+        menu.bind("<MouseWheel>", lambda e: (self._molette(e), "break")[1])
         self._listes.append((menu, variable))
         self._remplir_liste(menu, variable)
         # le detail est long : il passe a la ligne au lieu d'elargir la fenetre
@@ -291,6 +398,7 @@ class Application(object):
                       justify="left")
         d.pack(side="left")
         self._poser(d, cle, partie=1)
+        self._detail_qui_passe_a_la_ligne(ligne, d, (t, menu))
         return menu
 
     def _case(self, page, cle, variable, retrait, valeur=None):
@@ -304,11 +412,13 @@ class Application(object):
         else:
             c = ttk.Radiobutton(ligne, variable=variable, value=valeur,
                                 command=self.choix_manuel)
-        c.pack(side="left")
+        c.pack(side="left", anchor="n")
         self._poser(c, cle, partie=0)
-        d = ttk.Label(ligne, foreground="#666")
-        d.pack(side="left")
+        d = ttk.Label(ligne, foreground="#666", wraplength=460,
+                      justify="left")
+        d.pack(side="left", anchor="n", pady=(1, 0))
         self._poser(d, cle, partie=1)
+        self._detail_qui_passe_a_la_ligne(ligne, d, (c,))
         return c
 
     def _etat_cases_blob(self):
@@ -347,7 +457,7 @@ class Application(object):
     # ------------------------------------------------------------------ vue
 
     def _construire(self):
-        cadre = ttk.Frame(self.racine, padding=14)
+        cadre = ttk.Frame(self.racine, padding=self._esp(14))
         cadre.pack(fill="both", expand=True)
         cadre.columnconfigure(0, weight=1)
 
@@ -365,17 +475,17 @@ class Application(object):
 
         # --- la ROM -------------------------------------------------------
         self.zone = tk.Label(
-            cadre, height=4, relief="ridge", borderwidth=2,
+            cadre, height=2 if self.compact else 4, relief="ridge", borderwidth=2,
             fg="#444", cursor="hand2")
         self._poser(self.zone, "zone_vide")
-        self.zone.grid(row=1, column=0, sticky="ew", pady=(6, 0))
+        self.zone.grid(row=1, column=0, sticky="ew", pady=(self._esp(6), 0))
         self.zone.bind("<Button-1>", lambda _e: self.choisir_rom())
         if DND_FILES is not None:
             self.zone.drop_target_register(DND_FILES)
             self.zone.dnd_bind("<<Drop>>", self._depose)
 
         barre = ttk.Frame(cadre)
-        barre.grid(row=2, column=0, sticky="ew", pady=(6, 0))
+        barre.grid(row=2, column=0, sticky="ew", pady=(self._esp(6), 0))
         b = ttk.Button(barre, command=self.choisir_rom)
         b.pack(side="left")
         self._poser(b, "parcourir")
@@ -392,7 +502,7 @@ class Application(object):
 
         # --- la graine ----------------------------------------------------
         g = ttk.Frame(cadre)
-        g.grid(row=3, column=0, sticky="ew", pady=(14, 0))
+        g.grid(row=3, column=0, sticky="ew", pady=(self._esp(14), 0))
         e = ttk.Label(g)
         e.pack(side="left")
         self._poser(e, "graine")
@@ -413,7 +523,7 @@ class Application(object):
         # demande du joueur, 24 septembre -- l'utilisateur n'a pas a savoir ce
         # que faisait telle version.
         p = ttk.Frame(cadre)
-        p.grid(row=4, column=0, sticky="ew", pady=(14, 0))
+        p.grid(row=4, column=0, sticky="ew", pady=(self._esp(14), 0))
         self.prereglage = tk.StringVar(value="balanced")
         e = ttk.Label(p)
         e.pack(side="left")
@@ -436,7 +546,10 @@ class Application(object):
             "TNotebook.Tab", padding=(12, 4),
             font=(base["family"], abs(base["size"]) + 2, "bold"))
         onglets = ttk.Notebook(cadre)
-        onglets.grid(row=6, column=0, sticky="ew", pady=(8, 0))
+        # L'ONGLET PREND LA PLACE QUI RESTE (ZER-121) : c'est lui qui retrecit
+        # sur un petit ecran ; le haut et le bas gardent leur hauteur.
+        onglets.grid(row=6, column=0, sticky="nsew", pady=(self._esp(8), 0))
+        cadre.rowconfigure(6, weight=1)
         self._onglets = []
         self.monstres = tk.BooleanVar(value=True)
         self.objets = tk.BooleanVar(value=True)
@@ -548,9 +661,9 @@ class Application(object):
         self._cases_blob = []
         self._cases_filles = []
         for titre, cases in L.ONGLETS:
-            page = ttk.Frame(onglets, padding=10)
-            onglets.add(page, text=self._t(titre))
-            self._onglets.append((onglets, page, titre))
+            exterieur, page = self._page_defilante(onglets)
+            onglets.add(exterieur, text=self._t(titre))
+            self._onglets.append((onglets, exterieur, titre))
             for cle, retrait in cases:
                 if cle in L.LISTES:
                     c = self._liste(page, cle, getattr(self, cle), retrait)
@@ -578,22 +691,29 @@ class Application(object):
                      lambda _e: self._libelle_bouton())
 
         # --- sortie --------------------------------------------------------
-        s = ttk.LabelFrame(cadre, padding=10)
+        s = ttk.LabelFrame(cadre, padding=self._esp(10))
         self._poser(s, "sortie")
-        s.grid(row=7, column=0, sticky="ew", pady=(12, 0))
+        s.grid(row=7, column=0, sticky="ew", pady=(self._esp(12), 0))
         self.patch = tk.BooleanVar(value=False)
         # ON NE PROPOSE PAS CE QU'ON NE SAIT PAS FAIRE. `xdelta3` n'est pas
         # embarque (binaire GPL) : sans lui, la case echouerait apres vingt-cinq
         # secondes de construction. On la desactive d'emblee, en disant
         # pourquoi. La recherche se fait dans un fil, pour ne pas retarder
         # l'ouverture de la fenetre -- elle importe `randomizer`.
-        self.case_patch = ttk.Checkbutton(s, variable=self.patch,
+        ligne_p = ttk.Frame(s)
+        ligne_p.pack(fill="x", anchor="w")
+        self.case_patch = ttk.Checkbutton(ligne_p, variable=self.patch,
                                           state="disabled")
         self._poser(self.case_patch, "case_patch")
-        self.case_patch.pack(anchor="w")
-        self.etat_patch = ttk.Label(s, foreground="#666")
+        self.case_patch.pack(side="left")
+        # en mode compact, l'etat de xdelta3 a cote de la case, pas dessous
+        self.etat_patch = ttk.Label(ligne_p if self.compact else s,
+                                    foreground="#666")
         self._poser(self.etat_patch, "xdelta_cherche")
-        self.etat_patch.pack(anchor="w")
+        if self.compact:
+            self.etat_patch.pack(side="left", padx=(8, 0))
+        else:
+            self.etat_patch.pack(anchor="w")
         threading.Thread(target=self._chercher_xdelta, daemon=True).start()
         self.dossier = ttk.Label(s, foreground="#666", wraplength=700)
         self._poser(self.dossier, "dossier_defaut")
@@ -601,19 +721,18 @@ class Application(object):
 
         # --- action --------------------------------------------------------
         a = ttk.Frame(cadre)
-        a.grid(row=8, column=0, sticky="ew", pady=(14, 0))
+        a.grid(row=8, column=0, sticky="ew", pady=(self._esp(14), 0))
         self.bouton = ttk.Button(a, command=self.lancer, state="disabled")
         self._poser(self.bouton, "lancer")
         self.bouton.pack(side="left")
         self.progres = ttk.Progressbar(a, mode="determinate", length=260)
         self.progres.pack(side="left", padx=12)
 
-        self.journal = tk.Text(cadre, height=5, wrap="none", state="disabled",
+        self.journal = tk.Text(cadre, height=2 if self.compact else 5, wrap="none", state="disabled",
                                font=("Consolas", 9))
-        self.journal.grid(row=9, column=0, sticky="nsew", pady=(12, 0))
-        cadre.rowconfigure(9, weight=1)
+        self.journal.grid(row=9, column=0, sticky="nsew", pady=(self._esp(12), 0))
         ascenseur = ttk.Scrollbar(cadre, command=self.journal.yview)
-        ascenseur.grid(row=9, column=1, sticky="ns", pady=(12, 0))
+        ascenseur.grid(row=9, column=1, sticky="ns", pady=(self._esp(12), 0))
         self.journal.configure(yscrollcommand=ascenseur.set)
 
     # ----------------------------------------------------------- la ROM
