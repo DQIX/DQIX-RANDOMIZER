@@ -1,6 +1,6 @@
 # Dragon Quest IX Randomizer
 
-Version 1.8.1
+Version 1.8.2
 
 A randomizer for **Dragon Quest IX: Sentinels of the Starry Skies** (Nintendo DS).
 Drop your ROM on the application, pick what to shuffle, and play a new game:
